@@ -170,12 +170,68 @@
 
   /* INTRO (nueva partida) */
   #newgame { padding: 0; background: #000; }
+  #settings { z-index: 60; }   /* ajustes por encima de la intro */
   #introCanvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
   [data-layout=portrait] #introCanvas { top: 50%; height: auto; transform: translateY(-50%); object-fit: contain; }   /* formato cine en vertical */
-  .intro-back { position: absolute; top: calc(var(--px) * 4 + env(safe-area-inset-top)); right: calc(var(--px) * 4 + env(safe-area-inset-right)); z-index: 2; }
-  .intro-sub { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--px) * 16 + env(safe-area-inset-bottom)); z-index: 2; pointer-events: none; max-width: 96vw; }
+  .intro-top {
+    position: absolute; z-index: 3; top: calc(var(--px) * 3 + env(safe-area-inset-top));
+    right: calc(var(--px) * 3 + env(safe-area-inset-right));
+    display: flex; gap: calc(var(--px) * 2); align-items: center;
+  }
+  .intro-icon-btn {
+    background: rgba(0, 0, 0, .42); border: calc(var(--px) * 0.5) solid rgba(232, 224, 208, .28);
+    padding: calc(var(--px) * 1.5); margin: 0; cursor: pointer; line-height: 0; font-size: 0;
+    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  }
+  .intro-icon-btn:focus { outline: none; }
+  .intro-icon-btn:focus-visible { border-color: rgba(255, 90, 74, .7); }
+  .intro-icon-btn:active { transform: translateY(1px); opacity: .85; }
+  .intro-icon-btn canvas { display: block; width: calc(10 * var(--px)); height: calc(10 * var(--px)); }
+  .intro-sub {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: calc(var(--px) * 16 + env(safe-area-inset-bottom)); z-index: 2;
+    cursor: pointer; max-width: 96vw; background: none; border: 0; padding: 0; line-height: 0;
+  }
+  .intro-sub[hidden] { display: none !important; }
+  .intro-hud-phone {
+    position: absolute; z-index: 3;
+    right: calc(var(--px) * 4 + env(safe-area-inset-right));
+    bottom: calc(var(--px) * 4 + env(safe-area-inset-bottom));
+    background: rgba(0, 0, 0, .35); border: calc(var(--px) * 0.5) solid rgba(232, 224, 208, .22);
+    padding: calc(var(--px) * 1.5); line-height: 0;
+  }
+  .intro-hud-phone canvas { display: block; width: calc(12 * var(--px)); height: calc(18 * var(--px)); }
+  /* ventana estática del smartphone (UI) */
+  #phoneUI {
+    position: absolute; inset: 0; z-index: 4;
+    display: none; align-items: center; justify-content: center; flex-direction: column; gap: calc(var(--px) * 4);
+    background: rgba(0, 0, 0, .55);
+    padding: max(3vw, env(safe-area-inset-top)) max(3vw, env(safe-area-inset-right)) max(3vw, env(safe-area-inset-bottom)) max(3vw, env(safe-area-inset-left));
+  }
+  #phoneUI.open { display: flex; animation: fadein .15s steps(3, end); }
+  .phone-device {
+    position: relative; line-height: 0;
+    filter: drop-shadow(0 calc(var(--px) * 2) 0 rgba(0,0,0,.55)) drop-shadow(0 calc(var(--px) * 6) calc(var(--px) * 10) rgba(0,0,0,.45));
+  }
+  #phoneUICanvas {
+    display: block;
+    height: min(68dvh, calc(100dvh - 5rem), calc(240 * var(--px)));
+    width: auto;
+    aspect-ratio: 240 / 480;
+    image-rendering: pixelated; image-rendering: crisp-edges; cursor: default;
+  }
+  /* Interruptor izquierdo del chasis → apagar móvil */
+  .phone-side-btn {
+    position: absolute; left: 0; top: 24%;
+    width: calc(var(--px) * 3.5); height: calc(var(--px) * 12);
+    padding: 0; margin: 0; cursor: pointer; z-index: 1;
+    background: transparent; border: 0;
+  }
+  .phone-side-btn:focus { outline: none; }
+  .phone-side-btn:focus-visible { outline: calc(var(--px) * 0.5) solid rgba(255, 90, 74, .7); outline-offset: calc(var(--px) * 0.5); }
+  .phone-side-btn:active { filter: brightness(1.15); }
 
-  @media (prefers-reduced-motion: reduce) { .overlay.open { animation: none; } #scene { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .overlay.open { animation: none; } #phoneUI.open { animation: none; } #scene { transition: none; } }
 </style>
 </head>
 <body>
@@ -186,8 +242,7 @@
     <h1 class="title"><canvas id="titleCanvas" role="img" aria-label="phanteru's daemon"></canvas></h1>
 
     <nav class="menu-buttons" id="menuButtons" aria-label="Menú principal">
-      <!-- NUEVO JUEGO desactivado por ahora (solo se publica la tragaperras): quitar "hidden" para volver a activarlo -->
-      <button class="btn" id="btnNew" type="button" data-label="NUEVO JUEGO" aria-label="Nuevo juego" hidden></button>
+      <button class="btn" id="btnNew" type="button" data-label="NUEVO JUEGO" aria-label="Nuevo juego"></button>
       <button class="btn" id="btnSettings" type="button" data-label="AJUSTES" aria-label="Ajustes"></button>
       <button class="btn" id="btnExit" type="button" data-label="SALIR" aria-label="Salir"></button>
     </nav>
@@ -226,8 +281,20 @@
   <!-- Nueva partida: introducción (sala vacía, viento y fecha) -->
   <div class="overlay" id="newgame" role="dialog" aria-modal="true" aria-label="Nueva partida">
     <canvas id="introCanvas" role="img" aria-label="Una sala vieja y vacía; la luz se refleja en el espejo"></canvas>
-    <canvas id="introSub" class="intro-sub" role="img" aria-label="24 de septiembre de 2026"></canvas>
-    <button class="btn intro-back" id="newgameBack" type="button" data-label="MENU" aria-label="Volver al menú"></button>
+    <button type="button" class="intro-sub" id="introSubBtn" aria-label="Saltar diálogo" hidden>
+      <canvas id="introSub" role="img" aria-label="Subtítulo"></canvas>
+    </button>
+    <div class="intro-top">
+      <button type="button" class="intro-icon-btn" id="introSettings" aria-label="Ajustes"></button>
+      <button type="button" class="intro-icon-btn" id="introMenu" aria-label="Menú principal"></button>
+    </div>
+    <button class="btn intro-hud-phone" id="hudPhone" type="button" aria-label="Abrir teléfono" hidden></button>
+    <div id="phoneUI" role="dialog" aria-modal="true" aria-label="Teléfono">
+      <div class="phone-device">
+        <canvas id="phoneUICanvas" width="240" height="480" role="img" aria-label="Pantalla del teléfono"></canvas>
+        <button type="button" class="phone-side-btn" id="phoneUIClose" aria-label="Apagar teléfono" title="Apagar"></button>
+      </div>
+    </div>
   </div>
 
   <!-- Despedida -->
@@ -1202,6 +1269,11 @@
       hover() { blip(180, 0.05, 'square', 0.06); },
       click() { blip(120, 0.14, 'sawtooth', 0.16, 45); },
       test()  { blip(440, 0.08, 'square', 0.12); },
+      notify() {                                                   // tono de notificación del móvil
+        blip(988, 0.07, 'sine', 0.11);
+        setTimeout(() => blip(1319, 0.09, 'sine', 0.13), 100);
+        setTimeout(() => blip(988, 0.05, 'sine', 0.08), 220);
+      },
       coinDrop() { blip(1400, 0.05, 'triangle', 0.08); setTimeout(() => blip(1900, 0.08, 'triangle', 0.07), 55); },
       coinIn()   { blip(900, 0.1, 'square', 0.08, 350); setTimeout(() => blip(150, 0.06, 'square', 0.1), 110); },
       coinTick() { blip(1600 + Math.random() * 400, 0.04, 'triangle', 0.05); },
@@ -1219,20 +1291,60 @@
 
   /* ---------- ventanas ---------- */
   const menu = $('menuButtons');
-  let current = null, opener = null;
+  let current = null, opener = null, settingsStacked = false;
   function openOverlay(el, focusEl, from) {
     current = el; opener = from || document.activeElement;
     el.classList.add('open'); menu.inert = true;
     (focusEl || el.querySelector('button')).focus();
   }
+  function closePhoneUI() { $('phoneUI').classList.remove('open'); }
+  function powerOffPhone() {
+    const done = () => closePhoneUI();
+    if (window.PDPhone && window.PDPhone.powerOff) window.PDPhone.powerOff(done);
+    else done();
+  }
+  function openPhoneUI() {
+    // No reset: el chat/progreso del móvil se conserva entre aperturas
+    if (window.PDPhone) window.PDPhone.open();
+    $('phoneUI').classList.add('open');
+    const b = $('phoneUIClose'); if (b) b.focus();
+  }
+  function closeSettings() {
+    $('settings').classList.remove('open');
+    if (settingsStacked) {
+      settingsStacked = false;
+      const b = $('introSettings'); if (b) b.focus();
+      return;
+    }
+    current = null; menu.inert = false;
+    if (opener && opener.focus) opener.focus();
+  }
+  function openSettings(from) {
+    const focusEl = $('volume');
+    if (current && current.id === 'newgame') {
+      settingsStacked = true;
+      $('settings').classList.add('open');
+      focusEl.focus();
+      return;
+    }
+    openOverlay($('settings'), focusEl, from || $('btnSettings'));
+  }
   function closeOverlay() {
     if (!current) return;
-    if (current.id === 'newgame' && window.PDIntro) window.PDIntro.stop();
+    if (settingsStacked) { closeSettings(); return; }
+    if (current.id === 'newgame') {
+      closePhoneUI();
+      if (window.PDIntro) window.PDIntro.stop();
+    }
+    if (current.id === 'settings') { closeSettings(); return; }
     current.classList.remove('open'); current = null; menu.inert = false;
     if (opener && opener.focus) opener.focus();
   }
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && current && (current.id === 'settings' || current.id === 'confirm' || current.id === 'newgame')) closeOverlay();
+    if (e.key === 'Escape' && $('phoneUI').classList.contains('open')) { powerOffPhone(); return; }
+    if (e.key === 'Escape' && ($('settings').classList.contains('open'))) { closeSettings(); return; }
+    // Escape no cierra la partida (newgame): evita perder progreso por pulsación accidental
+    if (e.key === 'Escape' && current && current.id === 'confirm') closeOverlay();
     if (!current && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
       const bs = [...menu.querySelectorAll('button:not([hidden])')];
       let i = bs.indexOf(document.activeElement);
@@ -1240,21 +1352,47 @@
       bs[i].focus();
     }
   });
-  ['settings', 'confirm'].forEach(id => $(id).addEventListener('pointerdown', e => { if (e.target === $(id)) closeOverlay(); }));
+  ['settings', 'confirm'].forEach(id => $(id).addEventListener('pointerdown', e => {
+    if (e.target !== $(id)) return;
+    if (id === 'settings') closeSettings(); else closeOverlay();
+  }));
   document.querySelectorAll('.btn').forEach(b => {
     b.addEventListener('mouseenter', () => GameAudio.hover());
     b.addEventListener('focus', () => GameAudio.hover());
     b.addEventListener('click', () => GameAudio.click());
   });
 
+  /* iconos intro: engranaje + menú */
+  function paintIconBtn(btn, draw) {
+    if (!btn || btn.querySelector('canvas')) return;
+    const c = document.createElement('canvas'); c.width = 10; c.height = 10;
+    draw(c.getContext('2d'));
+    btn.append(c);
+  }
+  paintIconBtn($('introSettings'), g => {                             // engranaje minimal
+    g.fillStyle = 'rgba(232,224,208,0.85)';
+    g.fillRect(4, 0, 2, 2); g.fillRect(4, 8, 2, 2); g.fillRect(0, 4, 2, 2); g.fillRect(8, 4, 2, 2);
+    g.fillRect(1, 1, 2, 2); g.fillRect(7, 1, 2, 2); g.fillRect(1, 7, 2, 2); g.fillRect(7, 7, 2, 2);
+    g.fillRect(3, 3, 4, 4); g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(4, 4, 2, 2);
+  });
+  paintIconBtn($('introMenu'), g => {                                 // casita / menú
+    g.fillStyle = 'rgba(232,224,208,0.85)';
+    g.fillRect(4, 1, 2, 1); g.fillRect(3, 2, 4, 1); g.fillRect(2, 3, 6, 1); g.fillRect(1, 4, 8, 1);
+    g.fillRect(2, 5, 6, 4); g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(4, 7, 2, 2);
+  });
+
   /* ---------- Nuevo juego ---------- */
   $('btnNew').addEventListener('click', () => {
     if ($('btnNew').hidden) return;
-    openOverlay($('newgame'), $('newgameBack'), $('btnNew'));
+    openOverlay($('newgame'), $('introSettings'), $('btnNew'));
     if (window.PDIntro) window.PDIntro.start();
     document.dispatchEvent(new CustomEvent('pd:newgame'));   // gancho para cuando exista el juego
   });
-  $('newgameBack').addEventListener('click', closeOverlay);
+  $('introMenu').addEventListener('click', () => { GameAudio.click(); closeOverlay(); });
+  $('introSettings').addEventListener('click', () => { GameAudio.click(); openSettings($('introSettings')); });
+  $('hudPhone').addEventListener('click', () => openPhoneUI());
+  $('phoneUIClose').addEventListener('click', () => { GameAudio.click(); powerOffPhone(); });
+  $('phoneUI').addEventListener('pointerdown', e => { if (e.target === $('phoneUI')) powerOffPhone(); });
 
   /* ---------- Ajustes (volumen) ---------- */
   const slider = $('volume'), out = $('volumeOut');
@@ -1270,8 +1408,8 @@
   slider.addEventListener('input', () => applyVolume(+slider.value, true));
   $('volDown').addEventListener('click', () => applyVolume(+slider.value - 10, true));
   $('volUp').addEventListener('click', () => applyVolume(+slider.value + 10, true));
-  $('btnSettings').addEventListener('click', () => openOverlay($('settings'), slider, $('btnSettings')));
-  $('settingsClose').addEventListener('click', closeOverlay);
+  $('btnSettings').addEventListener('click', () => openSettings($('btnSettings')));
+  $('settingsClose').addEventListener('click', closeSettings);
   const fsOK = document.fullscreenEnabled || document.webkitFullscreenEnabled;      // iPhone no lo permite: se oculta
   if (!fsOK) $('fsRow').style.display = 'none';
   $('btnFull').addEventListener('click', () => {
@@ -1309,7 +1447,7 @@
   // geometría del espejo (la usa el dibujo estático y el reflejo animado)
   const MX0 = 92, MY0 = 18, MW = 124, MH = 48;
   const GX = MX0 + 6, GY = MY0 + 6, GW = MW - 12, GH = MH - 12;     // cristal
-  let bg = null, vig = null;
+  let bg = null, bgBare = null, vig = null;
 
   function build() {
     bg = document.createElement('canvas'); bg.width = W; bg.height = H;
@@ -1509,6 +1647,13 @@
     // ---------- tinte sepia general ----------
     b.globalCompositeOperation = 'multiply'; b.fillStyle = 'rgb(226,204,168)'; b.fillRect(0, 0, W, H); b.globalCompositeOperation = 'source-over';
 
+    // sala sin móvil (para cuando se recoge)
+    bgBare = document.createElement('canvas'); bgBare.width = W; bgBare.height = H;
+    bgBare.getContext('2d').drawImage(bg, 0, 0);
+
+    // móvil cocido en el fondo (tiembla con la escena; no flota encima)
+    bakePhoneOnto(b);
+
     // ---------- viñeta ----------
     vig = document.createElement('canvas'); vig.width = W; vig.height = H;
     const v = vig.getContext('2d'), g = v.createRadialGradient(W / 2, H * 0.52, 40, W / 2, H * 0.52, 210);
@@ -1516,86 +1661,949 @@
     v.fillStyle = g; v.fillRect(0, 0, W, H);
   }
 
-  // ---------- cronología ----------
-  // La voz dice la fecha a los VOICE_AT s; el subtítulo va con ella letra a letra.
-  // CUES = segundo del audio en que suena cada letra (medido sobre la forma de onda; null = espacio):
-  //        vein-ti | cua-tro | de | s-e-p-t-ie-m-b-r-e | de | dos | mil | vein-ti | séis
-  const FADE = 3.5, VOICE_AT = 4.4, VOICE_WAIT = 2.5, LEAD = 0.05, LFADE = 0.15, SUB_OUT = 13.5, OUT_DUR = 1.6;
-  const SUB_TEXT = '24 de septiembre de 2026';
-  const CUES = [0.22, 0.63, null, 1.02, 1.06, null, 1.12, 1.21, 1.27, 1.41, 1.46, 1.50, 1.56, 1.70, 1.74, 1.77, null, 1.83, 1.87, null, 1.92, 2.30, 2.56, 2.89];
-  const VOICE_URLS = (document.createElement('audio').canPlayType('audio/webm; codecs="opus"') ? ['assets/voice-date.webm'] : []).concat('assets/voice-date.mp3');
-  const WIND = 0.9, WIND_DUCK = 0.45;                    // el viento baja mientras habla la voz
-  const subCv = document.getElementById('introSub'), sctx = subCv.getContext('2d');
-  let SUB = '';
-  function initSub() {
-    const PD = window.PD; if (!PD) return;
-    SUB = PD.norm(SUB_TEXT);
-    subCv.width = PD.measure(SUB) + 2; subCv.height = 9;
-    subCv.style.width = `calc(${subCv.width} * var(--px))`;
+  // ---------- móvil en el sofá (parte del fondo; click solo tras la línea del salón) ----------
+  const PH = { x: 150, y: 112, bw: 11, bh: 16, ang: -0.72 };
+  let phoneTaken = false, phoneHover = false, phoneReady = false;
+  let vibeT0 = null, vibeDone = false, vibeNotified = false;
+  function vibeActive(introT) {
+    if (phoneTaken || vibeDone || vibeT0 == null) return false;
+    const dt = introT - vibeT0;
+    const bursts = [[0, 0.2], [0.38, 0.58], [0.76, 0.96]];
+    if (dt > 1.05) { vibeDone = true; return false; }
+    return bursts.some(([a, b]) => dt >= a && dt <= b);
   }
-  function drawSub(st) {                                  // subtítulo progresivo, letra a letra al ritmo de la voz
-    const PD = window.PD; if (!PD || !SUB) return;
+
+  function drawPhoneSpriteOn(g, ox, oy, lit, vibe, t) {
+    const bw = PH.bw, bh = PH.bh;
+    g.fillStyle = 'rgba(0,0,0,0.5)';
+    g.fillRect(ox + 1, oy + bh - 1, bw - 1, 2);
+    g.fillRect(ox + 2, oy + bh + 1, bw - 2, 1);
+    g.fillStyle = '#12141a';
+    g.fillRect(ox + 1, oy, bw - 2, bh);
+    g.fillRect(ox, oy + 1, bw, bh - 2);
+    g.fillStyle = '#2a2e38'; g.fillRect(ox + 1, oy, bw - 2, 1);
+    g.fillStyle = '#08090c'; g.fillRect(ox + 1, oy + bh - 1, bw - 2, 1);
+    g.fillStyle = '#3a3e48';
+    g.fillRect(ox - 1, oy + 4, 1, 2);
+    g.fillRect(ox - 1, oy + 7, 1, 3);
+    g.fillRect(ox + bw, oy + 6, 1, 4);
+    const sx = ox + 1, sy = oy + 1, sw = bw - 2, sh = bh - 2;
+    if (lit) {
+      g.fillStyle = '#071018'; g.fillRect(sx, sy, sw, sh);
+      g.fillStyle = '#0c1a2c'; g.fillRect(sx, sy + 4, sw, 5);
+      g.fillStyle = '#102238'; g.fillRect(sx, sy + 9, sw, 4);
+      const blink = vibe && (Math.floor(t * 6) % 2);
+      g.fillStyle = blink ? '#343c50' : '#252b3a';
+      g.fillRect(sx + 1, sy + 1, sw - 2, 2);
+      g.fillStyle = '#4aa0e0'; g.fillRect(sx + 1, sy + 1, 1, 1);
+      g.fillStyle = '#7f8fa3'; g.fillRect(sx + 3, sy + 1, 3, 1);
+      g.fillStyle = '#252b3a'; g.fillRect(sx + 1, sy + 3, sw - 2, 1);
+      g.fillStyle = '#e07060'; g.fillRect(sx + 1, sy + 3, 1, 1);
+      const ix = sx + 1, iy = sy + 5, iw = sw - 2, ih = 5;
+      g.fillStyle = '#030406'; g.fillRect(ix, iy, iw, ih);
+      g.fillStyle = '#e8eef6';
+      g.fillRect(ix + 1, iy + 1, 1, 3);
+      g.fillRect(ix + 3, iy + 1, 2, 1); g.fillRect(ix + 3, iy + 1, 1, 3);
+      g.fillRect(ix + 3, iy + 2, 2, 1); g.fillRect(ix + 4, iy + 2, 1, 2);
+      g.fillRect(ix + 3, iy + 3, 2, 1);
+      g.fillRect(ix + 6, iy + 1, 1, 1); g.fillRect(ix + 6, iy + 3, 1, 1);
+      g.fillRect(ix + 8, iy + 1, 2, 1); g.fillRect(ix + 8, iy + 1, 1, 3);
+      g.fillRect(ix + 9, iy + 1, 1, 3); g.fillRect(ix + 8, iy + 3, 2, 1);
+      g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(sx, sy, 1, sh);
+      g.fillStyle = '#c5ced8'; g.fillRect(sx + 2, sy + sh - 1, sw - 4, 1);
+    } else {
+      g.fillStyle = '#080a10'; g.fillRect(sx, sy, sw, sh);
+    }
+  }
+  function bakePhoneOnto(g) {
+    const cx = PH.x, cy = PH.y;
+    g.fillStyle = 'rgba(110,170,220,0.14)';
+    g.fillRect(cx - 1, cy + 6, 16, 2);
+    g.fillStyle = 'rgba(110,170,220,0.05)';
+    g.fillRect(cx - 2, cy + 8, 18, 2);
+    g.save();
+    g.translate(cx + 6, cy + 7);
+    g.rotate(PH.ang);
+    drawPhoneSpriteOn(g, -Math.floor(PH.bw / 2), -Math.floor(PH.bh / 2), true, false, 0);
+    g.restore();
+  }
+  // Parpadeo/luz de notificación encima del fondo (mismo offset que el temblor)
+  function drawPhoneVibe(sceneJy, t) {
+    if (phoneTaken) return;
+    const blink = Math.floor(t * 6) % 2;
+    const cx = PH.x, cy = PH.y + sceneJy;
+    ctx.fillStyle = `rgba(110,170,220,${blink ? 0.32 : 0.18})`;
+    ctx.fillRect(cx - 1, cy + 6, 16, 2);
+    ctx.fillStyle = `rgba(110,170,220,${blink ? 0.14 : 0.06})`;
+    ctx.fillRect(cx - 2, cy + 8, 18, 2);
+    ctx.save();
+    ctx.translate(cx + 6, cy + 7);
+    ctx.rotate(PH.ang);
+    drawPhoneSpriteOn(ctx, -Math.floor(PH.bw / 2), -Math.floor(PH.bh / 2), true, true, t);
+    ctx.restore();
+  }
+  function phoneHit(px, py) {
+    if (phoneTaken || !phoneReady) return false;
+    return Math.hypot(px - (PH.x + 6), py - (PH.y + 7)) < 12;
+  }
+
+  // icono HUD minimalista + pantalla estática del smartphone
+  function paintHudIcon() {
+    const btn = document.getElementById('hudPhone'); if (!btn || btn.querySelector('canvas')) return;
+    const c = document.createElement('canvas'); c.width = 12; c.height = 18;
+    const g = c.getContext('2d');
+    const P = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+    // silueta simple
+    P(3, 1, 6, 1, 'rgba(232,224,208,0.9)');
+    P(2, 2, 8, 13, 'rgba(232,224,208,0.9)');
+    P(3, 15, 6, 1, 'rgba(232,224,208,0.9)');
+    P(3, 3, 6, 11, 'rgba(0,0,0,0.55)');
+    P(5, 16, 2, 1, 'rgba(232,224,208,0.7)');
+    // punto notificación
+    P(8, 2, 2, 2, '#d10a0a');
+    btn.append(c);
+  }
+  /* ---------- UI del smartphone HD (240×480) minimalista + tipografía 5×7 ---------- */
+  const PhoneApp = (() => {
+    const PW = 240, PHU = 480, CODE = '6767';
+    const FROM = 'Danielon135';
+    const MSG = 'Gordo vamos a la casa de apuestas o que';
+    const REPLY = 'Daniel me acabo de despertar puto gordo esperate.';
+    const REPLY2 = 'Gordo, luego quedamos para las 6 si quieres.';
+    const REPLY_OK = 'ok';
+    const PIN_DOTS = [[78, 112], [106, 112], [134, 112], [162, 112]];
+    const KEYS = [
+      ['1', 56, 178], ['2', 120, 178], ['3', 184, 178],
+      ['4', 56, 242], ['5', 120, 242], ['6', 184, 242],
+      ['7', 56, 306], ['8', 120, 306], ['9', 184, 306],
+      ['0', 120, 370]
+    ];
+    const KEY_R = 26;
+    let screen = 'lock', pin = '', hits = [], shakeT = 0, flashKey = null, flashUntil = 0;
+    let imgs = { lock: null, pin: null, chat: null }, ready = false;
+    let anim = null, rafId = 0, chatRaf = 0, dragY0 = null, chatReveal = 1, poweringOff = false;
+    // unlocked: ya entró al chat; chatSeq persiste al apagar
+    // idle → typing → sent → waiting → awaitOk → typing → done
+    let unlocked = false, chatSeq = 'idle', chatTyped = 0, chatT0 = 0, firstBubble = null;
+    let typeTarget = REPLY, sentReply = false, sentOk = false;
+    const c = () => document.getElementById('phoneUICanvas');
+    const easeOutCubic = u => 1 - Math.pow(1 - u, 3);
+    const easeInOut = u => u < .5 ? 4*u*u*u : 1 - Math.pow(-2*u+2, 3)/2;
+    const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Fuente 5×7 densa (legible y pequeña en 180px de ancho)
+    const MF = {
+      '0':'XXXXX|X...X|X...X|X...X|X...X|X...X|XXXXX',
+      '1':'..X..|XXX..|..X..|..X..|..X..|..X..|XXXXX',
+      '2':'XXXXX|....X|....X|XXXXX|X....|X....|XXXXX',
+      '3':'XXXXX|....X|....X|XXXXX|....X|....X|XXXXX',
+      '4':'X...X|X...X|X...X|XXXXX|....X|....X|....X',
+      '5':'XXXXX|X....|X....|XXXXX|....X|....X|XXXXX',
+      '6':'XXXXX|X....|X....|XXXXX|X...X|X...X|XXXXX',
+      '7':'XXXXX|....X|...X.|..X..|..X..|..X..|..X..',
+      '8':'XXXXX|X...X|X...X|XXXXX|X...X|X...X|XXXXX',
+      '9':'XXXXX|X...X|X...X|XXXXX|....X|....X|XXXXX',
+      'A':'.XXX.|X...X|X...X|XXXXX|X...X|X...X|X...X',
+      'B':'XXXX.|X...X|X...X|XXXX.|X...X|X...X|XXXX.',
+      'C':'.XXXX|X....|X....|X....|X....|X....|.XXXX',
+      'D':'XXXX.|X...X|X...X|X...X|X...X|X...X|XXXX.',
+      'E':'XXXXX|X....|X....|XXXX.|X....|X....|XXXXX',
+      'F':'XXXXX|X....|X....|XXXX.|X....|X....|X....',
+      'G':'.XXXX|X....|X....|X.XXX|X...X|X...X|.XXXX',
+      'H':'X...X|X...X|X...X|XXXXX|X...X|X...X|X...X',
+      'I':'XXXXX|..X..|..X..|..X..|..X..|..X..|XXXXX',
+      'J':'..XXX|...X.|...X.|...X.|...X.|X..X.|.XX..',
+      'K':'X...X|X..X.|X.X..|XX...|X.X..|X..X.|X...X',
+      'L':'X....|X....|X....|X....|X....|X....|XXXXX',
+      'M':'X...X|XX.XX|X.X.X|X...X|X...X|X...X|X...X',
+      'N':'X...X|XX..X|X.X.X|X..XX|X...X|X...X|X...X',
+      'O':'.XXX.|X...X|X...X|X...X|X...X|X...X|.XXX.',
+      'P':'XXXX.|X...X|X...X|XXXX.|X....|X....|X....',
+      'Q':'.XXX.|X...X|X...X|X...X|X.X.X|X..X.|.XX.X',
+      'R':'XXXX.|X...X|X...X|XXXX.|X.X..|X..X.|X...X',
+      'S':'.XXXX|X....|X....|.XXX.|....X|....X|XXXX.',
+      'T':'XXXXX|..X..|..X..|..X..|..X..|..X..|..X..',
+      'U':'X...X|X...X|X...X|X...X|X...X|X...X|.XXX.',
+      'V':'X...X|X...X|X...X|X...X|X...X|.X.X.|..X..',
+      'W':'X...X|X...X|X...X|X.X.X|X.X.X|XX.XX|X...X',
+      'X':'X...X|X...X|.X.X.|..X..|.X.X.|X...X|X...X',
+      'Y':'X...X|X...X|.X.X.|..X..|..X..|..X..|..X..',
+      'Z':'XXXXX|....X|...X.|..X..|.X...|X....|XXXXX',
+      // minúsculas (solo chat)
+      'a':'.....|.....|.XXX.|....X|.XXXX|X...X|.XXXX',
+      'b':'X....|X....|XXXX.|X...X|X...X|X...X|XXXX.',
+      'c':'.....|.....|.XXXX|X....|X....|X....|.XXXX',
+      'd':'....X|....X|.XXXX|X...X|X...X|X...X|.XXXX',
+      'e':'.....|.....|.XXX.|X...X|XXXXX|X....|.XXXX',
+      'f':'..XX.|.X..X|.X...|XXX..|.X...|.X...|.X...',
+      'g':'.....|.....|.XXXX|X...X|X...X|.XXXX|....X|.XXX.',
+      'h':'X....|X....|XXXX.|X...X|X...X|X...X|X...X',
+      'i':'..X..|.....|XXX..|..X..|..X..|..X..|XXXXX',
+      'j':'...X.|.....|..XXX|...X.|...X.|...X.|X..X.|.XX..',
+      'k':'X....|X....|X..X.|X.X..|XX...|X.X..|X...X',
+      'l':'XXX..|..X..|..X..|..X..|..X..|..X..|XXXXX',
+      'm':'.....|.....|XX.X.|X.X.X|X.X.X|X.X.X|X...X',
+      'n':'.....|.....|XXXX.|X...X|X...X|X...X|X...X',
+      'o':'.....|.....|.XXX.|X...X|X...X|X...X|.XXX.',
+      'p':'.....|.....|XXXX.|X...X|X...X|XXXX.|X....|X....',
+      'q':'.....|.....|.XXXX|X...X|X...X|.XXXX|....X|....X',
+      'r':'.....|.....|X.XX.|XX..X|X....|X....|X....',
+      's':'.....|.....|.XXXX|X....|.XXX.|....X|XXXX.',
+      't':'.X...|.X...|XXXXX|.X...|.X...|.X..X|..XX.',
+      'u':'.....|.....|X...X|X...X|X...X|X..XX|.XXXX',
+      'v':'.....|.....|X...X|X...X|X...X|.X.X.|..X..',
+      'w':'.....|.....|X...X|X...X|X.X.X|X.X.X|.X.X.',
+      'x':'.....|.....|X...X|.X.X.|..X..|.X.X.|X...X',
+      'y':'.....|.....|X...X|X...X|X...X|.XXXX|....X|.XXX.',
+      'z':'.....|.....|XXXXX|...X.|..X..|.X...|XXXXX',
+      '.':'.....|.....|.....|.....|.....|..X..|..X..',
+      ',':'.....|.....|.....|.....|..X..|..X..|.X...',
+      ':':'.....|..X..|..X..|.....|..X..|..X..|.....',
+      '!':'..X..|..X..|..X..|..X..|..X..|.....|..X..',
+      '?':'.XXX.|X...X|....X|...X.|..X..|.....|..X..',
+      '-':'.....|.....|.....|XXXXX|.....|.....|.....',
+      "'":'..X..|..X..|.X...|.....|.....|.....|.....',
+      ' ':'.....'
+    };
+    const mNorm = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    const mNormLo = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    function mW(ch) { return ch === ' ' ? 3 : 5; }
+    function mMeasure(t) {
+      t = mNorm(t); let w = 0;
+      for (let i = 0; i < t.length; i++) w += mW(t[i]) + (i < t.length - 1 ? 1 : 0);
+      return w;
+    }
+    function mMeasureLo(t) {
+      t = mNormLo(t); let w = 0;
+      for (let i = 0; i < t.length; i++) w += mW(t[i]) + (i < t.length - 1 ? 1 : 0);
+      return w;
+    }
+    function mText(g, t, x, y, col) {
+      t = mNorm(t); g.fillStyle = col; let cx = x;
+      for (const ch of t) {
+        const rows = (MF[ch] || MF['?']).split('|');
+        rows.forEach((row, ry) => {
+          for (let i = 0; i < row.length; i++) if (row[i] === 'X') g.fillRect(cx + i, y + ry, 1, 1);
+        });
+        cx += mW(ch) + 1;
+      }
+      return cx - x;
+    }
+    // Tipografía en minúsculas — solo chat
+    function mTextLo(g, t, x, y, col) {
+      t = mNormLo(t); g.fillStyle = col; let cx = x;
+      for (const ch of t) {
+        const rows = (MF[ch] || MF[ch.toUpperCase()] || MF['?']).split('|');
+        rows.forEach((row, ry) => {
+          for (let i = 0; i < row.length; i++) if (row[i] === 'X') g.fillRect(cx + i, y + ry, 1, 1);
+        });
+        cx += mW(ch) + 1;
+      }
+      return cx - x;
+    }
+    function mWrap(text, maxW) {
+      const words = mNorm(text).split(' '); const lines = []; let cur = '';
+      for (const w of words) {
+        const n = cur ? cur + ' ' + w : w;
+        if (mMeasure(n) > maxW) { if (cur) lines.push(cur); cur = w; } else cur = n;
+      }
+      if (cur) lines.push(cur); return lines;
+    }
+    function mWrapLo(text, maxW) {
+      const words = mNormLo(text).split(' '); const lines = []; let cur = '';
+      for (const w of words) {
+        const n = cur ? cur + ' ' + w : w;
+        if (mMeasureLo(n) > maxW) { if (cur) lines.push(cur); cur = w; } else cur = n;
+      }
+      if (cur) lines.push(cur); return lines;
+    }
+
+    function reset() {
+      // Solo al empezar partida nueva — borra conversación
+      screen = 'lock'; pin = ''; hits = []; shakeT = 0; anim = null; dragY0 = null;
+      flashKey = null; chatReveal = 1; poweringOff = false;
+      unlocked = false; chatSeq = 'idle'; chatTyped = 0; chatT0 = 0; firstBubble = null;
+      typeTarget = REPLY; sentReply = false; sentOk = false;
+      if (rafId) cancelAnimationFrame(rafId); rafId = 0;
+      if (chatRaf) cancelAnimationFrame(chatRaf); chatRaf = 0;
+    }
+    function suspend() {
+      // Apagar UI sin perder chat / desbloqueo
+      anim = null; hits = []; pin = ''; shakeT = 0; flashKey = null; dragY0 = null;
+      poweringOff = false;
+      if (rafId) cancelAnimationFrame(rafId); rafId = 0;
+      if (chatRaf) cancelAnimationFrame(chatRaf); chatRaf = 0;
+    }
+    function powerOff(done) {
+      if (poweringOff) return;
+      poweringOff = true; anim = null; hits = [];
+      if (rafId) cancelAnimationFrame(rafId); rafId = 0;
+      if (chatRaf) cancelAnimationFrame(chatRaf); chatRaf = 0;
+      const cv = c();
+      const finish = () => { suspend(); if (done) done(); };
+      if (!cv || reduce()) { finish(); return; }
+      const g = cv.getContext('2d');
+      const t0 = performance.now(), dur = 220;
+      const step = () => {
+        const u = Math.min(1, (performance.now() - t0) / dur);
+        g.fillStyle = `rgba(0,0,0,${u})`;
+        g.fillRect(0, 0, PW, PHU);
+        if (u < 1) requestAnimationFrame(step);
+        else finish();
+      };
+      requestAnimationFrame(step);
+    }
+    function hit(x, y, w, h, fn) { hits.push({ x, y, w, h, fn }); }
+
+    function loadImg(src) {
+      return new Promise(res => {
+        const im = new Image();
+        im.onload = () => res(im);
+        im.onerror = () => res(null);
+        im.src = src + '?v=hd2';
+      });
+    }
+    function ensureAssets(cb) {
+      if (ready) return cb();
+      Promise.all([
+        loadImg('assets/phone-lock.png'),
+        loadImg('assets/phone-pin.png'),
+        loadImg('assets/phone-chat.png')
+      ]).then(([a, b, d]) => {
+        imgs.lock = a; imgs.pin = b; imgs.chat = d; ready = true; cb();
+      });
+    }
+    function sprite(name) { return imgs[name]; }
+
+    function paintLockExtras(g) {
+      // solo nombre + preview (sin etiquetas de app ni chevrons)
+      mText(g, FROM, 92, 220, '#1a1a1e');
+      const prev = mWrap(MSG, 100);
+      mText(g, prev[0] || '', 92, 232, '#6a6e76');
+      if (prev[1]) mText(g, prev[1], 92, 242, '#6a6e76');
+    }
+
+    function paintPinFills(g) {
+      const ox = shakeT && performance.now() < shakeT
+        ? ((Math.floor(performance.now() / 35) % 2) ? 3 : -3) : 0;
+      g.fillStyle = '#f0f2f5';
+      for (let i = 0; i < pin.length && i < 4; i++) {
+        const [x, y] = PIN_DOTS[i];
+        g.beginPath(); g.arc(x + ox, y, 6, 0, Math.PI * 2); g.fill();
+      }
+      if (flashKey && performance.now() < flashUntil) {
+        const k = KEYS.find(e => e[0] === flashKey) || (flashKey === '<' ? ['<', 184, 370] : null);
+        if (k) {
+          g.globalAlpha = 0.25;
+          g.fillStyle = '#fff';
+          g.beginPath(); g.arc(k[1], k[2], KEY_R - 2, 0, Math.PI * 2); g.fill();
+          g.globalAlpha = 1;
+        }
+      }
+    }
+
+    function bubbleSize(text, maxW) {
+      const lines = mWrapLo(text, maxW);
+      const lh = 10, padX = 7, padY = 6;
+      const tw = Math.max(...lines.map(mMeasureLo), 24);
+      const bw = Math.min(178, tw + padX * 2);
+      const bh = padY * 2 + lines.length * lh - 1;
+      return { lines, bw, bh, padX, padY, lh };
+    }
+    function drawInBubble(g, text, x, y, alpha) {
+      const { lines, bw, bh, padX, padY, lh } = bubbleSize(text, 148);
+      g.globalAlpha = alpha == null ? 1 : alpha;
+      g.fillStyle = '#ffffff';
+      roundRect(g, x, y, bw, bh, 7); g.fill();
+      g.fillRect(x - 3, y + 8, 4, 4);
+      lines.forEach((ln, i) => mTextLo(g, ln, x + padX, y + padY + i * lh, '#121418'));
+      g.globalAlpha = 1;
+      return { x, y, w: bw, h: bh };
+    }
+    function paintOutAt(g, text, y, alpha) {
+      const { lines, bw, bh, padX, padY, lh } = bubbleSize(text, 148);
+      const x = PW - 26 - bw;
+      g.globalAlpha = alpha == null ? 1 : alpha;
+      g.fillStyle = '#dcf8c6';
+      roundRect(g, x, y, bw, bh, 7); g.fill();
+      g.fillRect(x + bw - 1, y + 8, 4, 4);
+      lines.forEach((ln, i) => mTextLo(g, ln, x + padX, y + padY + i * lh, '#121418'));
+      g.globalAlpha = 1;
+      return bh;
+    }
+    function paintTyping(g, y, t) {
+      const bw = 48, bh = 26, x = 28;
+      g.fillStyle = '#ffffff';
+      roundRect(g, x, y, bw, bh, 9); g.fill();
+      g.fillRect(x - 3, y + 8, 4, 4);
+      const phase = Math.floor(t / 280) % 3;
+      for (let i = 0; i < 3; i++) {
+        const on = i <= phase;
+        g.fillStyle = on ? '#5a6068' : '#c4c8ce';
+        g.beginPath();
+        g.arc(x + 13 + i * 11, y + 13, on ? 3 : 2.5, 0, Math.PI * 2);
+        g.fill();
+      }
+      return bh;
+    }
+    // Campo de escritura del sprite (antes del botón enviar)
+    const COMPOSE = { x: 32, y: 418, w: 138, h: 28, tx: 38, ty: 427, maxW: 118 };
+    function paintComposer(g, draft) {
+      if (!draft) return;
+      let shown = mNormLo(draft);
+      while (shown.length > 1 && mMeasureLo(shown) > COMPOSE.maxW) shown = shown.slice(1);
+      mTextLo(g, shown, COMPOSE.tx, COMPOSE.ty, '#2a2e34');
+      if (Math.floor(performance.now() / 400) % 2 === 0) {
+        const cx = Math.min(COMPOSE.tx + mMeasureLo(shown) + 2, COMPOSE.x + COMPOSE.w - 4);
+        g.fillStyle = '#2a2e34';
+        g.fillRect(cx, 426, 1, 9);
+      }
+    }
+    function paintChatText(g) {
+      mTextLo(g, FROM, 66, 42, '#ffffff');
+      const now = performance.now();
+      let y = 82 + Math.floor((1 - chatReveal) * 10);
+      g.globalAlpha = chatReveal;
+      firstBubble = drawInBubble(g, MSG, 28, y, 1);
+      g.globalAlpha = 1;
+      y = firstBubble.y + firstBubble.h + 10;
+
+      if (chatSeq === 'typing') {
+        paintComposer(g, typeTarget.slice(0, chatTyped));
+      }
+
+      // 1ª respuesta enviada
+      if (sentReply) y += paintOutAt(g, REPLY, y, 1) + 10;
+
+      if (chatSeq === 'waiting') {
+        paintTyping(g, y, now - chatT0);
+        return;
+      }
+
+      // mensaje de Daniel (quedamos a las 6)
+      const showReply2 = chatSeq === 'awaitOk' || chatSeq === 'done' || sentOk || (chatSeq === 'typing' && sentReply);
+      if (showReply2) {
+        const b = drawInBubble(g, REPLY2, 28, y, 1);
+        y = b.y + b.h + 10;
+      }
+
+      // "ok" enviado
+      if (sentOk) paintOutAt(g, REPLY_OK, y, 1);
+    }
+    function roundRect(g, x, y, w, h, r) {
+      g.beginPath();
+      g.moveTo(x + r, y);
+      g.arcTo(x + w, y, x + w, y + h, r);
+      g.arcTo(x + w, y + h, x, y + h, r);
+      g.arcTo(x, y + h, x, y, r);
+      g.arcTo(x, y, x + w, y, r);
+      g.closePath();
+    }
+    function startReply() {
+      if (screen !== 'chat' || anim) return;
+      if (chatSeq === 'idle') typeTarget = REPLY;
+      else if (chatSeq === 'awaitOk') typeTarget = REPLY_OK;
+      else return;
+      chatSeq = 'typing'; chatTyped = 0; chatT0 = performance.now();
+      runChatSeq();
+    }
+    function runChatSeq() {
+      if (chatRaf) cancelAnimationFrame(chatRaf);
+      const step = () => {
+        if (poweringOff || screen !== 'chat') return;
+        const now = performance.now();
+        if (chatSeq === 'typing') {
+          const elapsed = now - chatT0;
+          let target = 0, acc = 0;
+          for (let i = 0; i < typeTarget.length; i++) {
+            acc += typeDelay(i, typeTarget[i]);
+            if (elapsed >= acc) target = i + 1; else break;
+          }
+          if (reduce()) target = typeTarget.length;
+          chatTyped = target;
+          frame();
+          if (chatTyped >= typeTarget.length) {
+            if (typeTarget === REPLY) { sentReply = true; chatSeq = 'sent'; }
+            else {
+              sentOk = true; chatSeq = 'done'; frame();
+              // breve pausa viendo el "ok" → apaga y oculta HUD (siguiente escena de texto aparte)
+              const wait = reduce() ? 120 : 700;
+              setTimeout(() => {
+                document.dispatchEvent(new CustomEvent('pd:phone-chat-done'));
+              }, wait);
+              return;
+            }
+            chatT0 = now;
+            chatRaf = requestAnimationFrame(step);
+            return;
+          }
+          chatRaf = requestAnimationFrame(step);
+          return;
+        }
+        if (chatSeq === 'sent') {
+          frame();
+          if (now - chatT0 > (reduce() ? 80 : 480)) {
+            chatSeq = 'waiting'; chatT0 = now;
+          }
+          chatRaf = requestAnimationFrame(step);
+          return;
+        }
+        if (chatSeq === 'waiting') {
+          frame();
+          if (now - chatT0 > (reduce() ? 200 : 1600)) {
+            chatSeq = 'awaitOk'; chatT0 = now;
+            frame();
+            return;
+          }
+          chatRaf = requestAnimationFrame(step);
+          return;
+        }
+      };
+      chatRaf = requestAnimationFrame(step);
+    }
+
+    function paintScreen(g, name, extras) {
+      g.clearRect(0, 0, PW, PHU);
+      const im = sprite(name);
+      if (im) g.drawImage(im, 0, 0);
+      if (extras) extras(g);
+    }
+
+    function bindPinHits() {
+      KEYS.forEach(([k, x, y]) => hit(x - KEY_R, y - KEY_R, KEY_R * 2, KEY_R * 2, () => onKey(k)));
+      hit(158, 344, 52, 52, () => onKey('<'));
+    }
+
+    function onKey(k) {
+      if (anim) return;
+      flashKey = k; flashUntil = performance.now() + 90;
+      if (k === '<') pin = pin.slice(0, -1);
+      else if (pin.length < 4) {
+        pin += k;
+        if (pin.length === 4) {
+          if (pin === CODE) startAnim('toChat');
+          else {
+            pin = ''; shakeT = performance.now() + 380;
+            const GA = window.GameAudio; if (GA) GA.click();
+          }
+        }
+      }
+      frame();
+    }
+    function goPin() {
+      if (anim || screen !== 'lock') return;
+      pin = ''; startAnim('toPin');
+    }
+    function enterChat(firstTime) {
+      screen = 'chat'; pin = ''; unlocked = true;
+      if (firstTime) {
+        chatReveal = reduce() ? 1 : 0;
+        if (chatReveal < 1) revealChat();
+        else { frame(); resumeChatAnim(); }
+      } else {
+        chatReveal = 1; frame(); resumeChatAnim();
+      }
+    }
+    function typeDelay(i, ch) {
+      return ch === ' ' ? 90 : /[.,!]/.test(ch) ? 140 : 36 + (i % 5) * 4;
+    }
+    function resumeChatAnim() {
+      if (chatSeq === 'typing') {
+        let acc = 0;
+        for (let i = 0; i < chatTyped; i++) acc += typeDelay(i, typeTarget[i]);
+        chatT0 = performance.now() - acc;
+        runChatSeq();
+      } else if (chatSeq === 'sent' || chatSeq === 'waiting') {
+        chatT0 = performance.now();
+        runChatSeq();
+      }
+    }
+    function startAnim(type) {
+      if (reduce()) {
+        if (type === 'toPin') { screen = 'pin'; anim = null; frame(); }
+        else enterChat(true);
+        return;
+      }
+      anim = {
+        type,
+        t0: performance.now(),
+        dur: type === 'toPin' ? 520 : 580
+      };
+      tick();
+    }
+    function tick() {
+      rafId = requestAnimationFrame(() => {
+        if (!anim) return;
+        const u = Math.min(1, (performance.now() - anim.t0) / anim.dur);
+        const e = anim.type === 'toPin' ? easeOutCubic(u) : easeInOut(u);
+        frame(e);
+        if (u >= 1) {
+          if (anim.type === 'toPin') { screen = 'pin'; anim = null; frame(); }
+          else { anim = null; enterChat(true); }
+        } else tick();
+      });
+    }
+    function revealChat() {
+      const t0 = performance.now(), dur = 420;
+      const step = () => {
+        const u = Math.min(1, (performance.now() - t0) / dur);
+        chatReveal = easeOutCubic(u);
+        frame();
+        if (u < 1) requestAnimationFrame(step);
+        else resumeChatAnim();
+      };
+      requestAnimationFrame(step);
+    }
+
+    function makeLayer(name, extras) {
+      const o = document.createElement('canvas'); o.width = PW; o.height = PHU;
+      const og = o.getContext('2d'); og.imageSmoothingEnabled = false;
+      paintScreen(og, name, extras);
+      return o;
+    }
+
+    function frame(progress) {
+      const cv = c(); if (!cv) return;
+      const g = cv.getContext('2d');
+      g.imageSmoothingEnabled = false;
+      hits = [];
+      const p = progress == null ? 1 : progress;
+
+      if (anim) {
+        const from = anim.type === 'toPin' ? 'lock' : 'pin';
+        const to = anim.type === 'toPin' ? 'pin' : 'chat';
+        const fromEx = from === 'lock' ? paintLockExtras : (from === 'pin' ? paintPinFills : null);
+        const toEx = to === 'pin' ? paintPinFills : (to === 'chat' ? paintChatText : null);
+        const a = makeLayer(from, fromEx), b = makeLayer(to, toEx);
+        g.clearRect(0, 0, PW, PHU);
+        if (anim.type === 'toPin') {
+          // slide vertical + ligera sombra
+          g.drawImage(a, 0, -Math.floor(p * PHU));
+          g.globalAlpha = Math.min(1, p * 1.2);
+          g.drawImage(b, 0, Math.floor((1 - p) * PHU));
+          g.globalAlpha = 1;
+        } else {
+          // crossfade con ligero zoom
+          g.globalAlpha = 1 - p;
+          g.drawImage(a, 0, 0);
+          g.globalAlpha = p;
+          const z = 1 + (1 - p) * 0.04;
+          const dw = PW * z, dh = PHU * z;
+          g.drawImage(b, (PW - dw) / 2, (PHU - dh) / 2, dw, dh);
+          g.globalAlpha = 1;
+        }
+      } else if (screen === 'lock') {
+        paintScreen(g, 'lock', paintLockExtras);
+        hit(34, 190, 172, 80, goPin);
+        hit(90, 430, 60, 28, goPin);
+        cv.style.cursor = 'pointer';
+      } else if (screen === 'pin') {
+        paintScreen(g, 'pin', paintPinFills);
+        bindPinHits();
+        cv.style.cursor = 'pointer';
+        if ((shakeT && performance.now() < shakeT) || (flashKey && performance.now() < flashUntil)) {
+          requestAnimationFrame(() => frame());
+        }
+      } else {
+        paintScreen(g, 'chat', paintChatText);
+        if ((chatSeq === 'idle' || chatSeq === 'awaitOk') && chatReveal > 0.9) {
+          hit(COMPOSE.x, COMPOSE.y, COMPOSE.w, COMPOSE.h, startReply);
+          cv.style.cursor = 'pointer';
+        } else {
+          cv.style.cursor = 'default';
+        }
+      }
+
+      cv.setAttribute('aria-label',
+        screen === 'lock' ? 'Desliza hacia arriba o toca la notificacion'
+          : screen === 'pin' ? 'Introduce el codigo 6767'
+            : (chatSeq === 'idle' || chatSeq === 'awaitOk') ? 'Toca el campo de texto para responder'
+              : 'Chat con ' + FROM);
+    }
+
+    function canvasPos(e) {
+      const cv = c(); const r = cv.getBoundingClientRect();
+      return { x: (e.clientX - r.left) * (PW / r.width), y: (e.clientY - r.top) * (PHU / r.height) };
+    }
+    function uiOpen() {
+      const el = document.getElementById('phoneUI');
+      return el && el.classList.contains('open');
+    }
+    function onPointer(e) {
+      if (!uiOpen() || anim || poweringOff) return;
+      const p = canvasPos(e);
+      if (screen === 'lock' && p.y > 400) { dragY0 = p.y; return; }
+      for (let i = hits.length - 1; i >= 0; i--) {
+        const h = hits[i];
+        if (p.x >= h.x && p.x < h.x + h.w && p.y >= h.y && p.y < h.y + h.h) {
+          const GA = window.GameAudio; if (GA) GA.click();
+          h.fn(); e.preventDefault(); return;
+        }
+      }
+    }
+    function onMove(e) {
+      if (!uiOpen() || anim || poweringOff) return;
+      const p = canvasPos(e), cv = c();
+      if (dragY0 != null && screen === 'lock') {
+        if (dragY0 - p.y > 28) { dragY0 = null; goPin(); }
+        return;
+      }
+      cv.style.cursor = hits.some(h => p.x >= h.x && p.x < h.x + h.w && p.y >= h.y && p.y < h.y + h.h) ? 'pointer' : 'default';
+    }
+    function onUp() { dragY0 = null; }
+    function bind() {
+      const cv = c(); if (!cv || cv.dataset.bound) return;
+      cv.dataset.bound = '1';
+      cv.addEventListener('pointerdown', onPointer);
+      cv.addEventListener('pointermove', onMove);
+      cv.addEventListener('pointerup', onUp);
+      cv.addEventListener('pointercancel', onUp);
+    }
+    function render() { ensureAssets(() => frame()); }
+    function open() {
+      poweringOff = false;
+      // Si ya desbloqueó, vuelve al chat con el historial intacto
+      if (unlocked) screen = 'chat';
+      else if (screen !== 'pin') screen = 'lock';
+      pin = '';
+      ensureAssets(() => {
+        frame();
+        if (screen === 'chat') resumeChatAnim();
+      });
+    }
+    return { reset, render, open, bind, powerOff };
+  })();
+  window.PDPhone = PhoneApp;
+
+  // ---------- cronología (líneas de voz + subtítulos sincronizados) ----------
+  // CUES = segundo del audio en que suena cada letra (null = espacio). El reloj lo marca el audio oído.
+  const FADE = 3.5, FIRST_AT = 4.4, VOICE_WAIT = 2.5, LEAD = 0.05, LFADE = 0.15, OUT_DUR = 1.2, GAP = 0.9;
+  const WIND = 0.9, WIND_DUCK = 0.45;
+  const canWebm = !!document.createElement('audio').canPlayType('audio/webm; codecs="opus"');
+  const LINES = [
+    {
+      text: '24 de septiembre de 2026',
+      key: 'voice',
+      urls: (canWebm ? ['assets/voice-date.webm'] : []).concat('assets/voice-date.mp3'),
+      // vein-ti | cua-tro | de | s-e-p-t-ie-m-b-r-e | de | dos | mil | vein-ti | séis
+      cues: [0.22, 0.63, null, 1.02, 1.06, null, 1.12, 1.21, 1.27, 1.41, 1.46, 1.50, 1.56, 1.70, 1.74, 1.77, null, 1.83, 1.87, null, 1.92, 2.30, 2.56, 2.89],
+      cueEnd: 2.89
+    },
+    {
+      text: 'Eran las 4 de la tarde, desperte despues de escuchar un ruido extraño',
+      key: 'voice2',
+      urls: (canWebm ? ['assets/voice-part1-2.webm'] : []).concat('assets/voice-part1-2.mp3'),
+      cues: [0.1, 0.18, 0.25, 0.33, null, 0.64, 0.7, 0.76, null, 0.9, null, 1.06, 1.12, null, 1.22, 1.29, null, 1.38, 1.41, 1.45, 1.48, 1.51, 1.55, null, 2.12, 2.2, 2.28, 2.35, 2.43, 2.51, 2.58, 2.66, null, 2.92, 2.98, 3.03, 3.09, 3.15, 3.21, 3.26, null, 3.44, 3.51, null, 3.7, 3.74, 3.78, 3.81, 3.85, 3.89, 3.92, 3.96, null, 4.0, 4.05, null, 4.1, 4.14, 4.17, 4.21, 4.24, null, 4.28, 4.3, 4.33, 4.35, 4.37, 4.39, 4.42],
+      cueEnd: 4.42
+    },
+    {
+      text: 'Entonces fui al salón. Recuerdo dejar el móvil anoche encima del sofá.',
+      key: 'voice3',
+      urls: (canWebm ? ['assets/voice-part1-3.webm'] : []).concat('assets/voice-part1-3.mp3'),
+      cues: [0.08, 0.13, 0.18, 0.23, 0.28, 0.33, 0.38, 0.43, null, 0.58, 0.63, 0.67, null, 1.02, 1.08, null, 1.16, 1.23, 1.29, 1.36, 1.43, 1.49, null, 2.48, 2.53, 2.58, 2.62, 2.67, 2.72, 2.76, 2.81, null, 2.88, 2.92, 2.96, 3.0, 3.04, null, 3.16, 3.21, null, 3.28, 3.33, 3.38, 3.44, 3.49, null, 3.56, 3.62, 3.67, 3.73, 3.79, 3.84, null, 4.04, 4.07, 4.1, 4.13, 4.16, 4.19, null, 4.3, 4.35, 4.41, null, 4.48, 4.56, 4.65, 4.73, 4.82],
+      cueEnd: 4.90,
+      vibrate: true
+    }
+  ];
+  const subCv = document.getElementById('introSub'), sctx = subCv.getContext('2d');
+  const subBtn = document.getElementById('introSubBtn');
+  let SUB = '', CUES = null, SUB_OUT = 0, lastT = 0;
+  function setSubLine(L) {
+    const PD = window.PD; if (!PD) return;
+    SUB = PD.norm(L.text);
+    if (L.cues) CUES = L.cues;
+    else {
+      CUES = []; let t = 0;
+      for (const ch of SUB) { if (ch === ' ') CUES.push(null); else { CUES.push(t); t += L.letterDt || 0.055; } }
+    }
+    const last = CUES.reduce((m, v) => v == null ? m : Math.max(m, v), 0);
+    SUB_OUT = (L.cueEnd != null ? L.cueEnd : last) + 0.45 + (L.hold || 0);
+    const padX = 5, padY = 3;
+    subCv.width = PD.measure(SUB) + padX * 2; subCv.height = 7 + padY * 2;
+    subCv.style.width = `calc(${subCv.width} * var(--px))`;
+    subCv.setAttribute('aria-label', L.text);
+    if (subBtn) { subBtn.hidden = false; subBtn.setAttribute('aria-label', 'Saltar: ' + L.text); }
+  }
+  function clearSub() {
+    SUB = ''; CUES = null;
+    if (subBtn) subBtn.hidden = true;
+    sctx && subCv && sctx.clearRect(0, 0, subCv.width, subCv.height);
+  }
+  function drawSub(lt) {                                  // subtítulo progresivo + fondo; click = saltar línea
+    const PD = window.PD; if (!PD || !SUB || !CUES) return;
     sctx.clearRect(0, 0, subCv.width, subCv.height);
-    const out = 1 - clamp((st - SUB_OUT) / OUT_DUR, 0, 1);
-    let x = 1;
+    const out = 1 - clamp((lt - SUB_OUT) / OUT_DUR, 0, 1);
+    if (out <= 0) return;
+    // fondo semi-transparente
+    sctx.globalAlpha = 0.72 * out;
+    sctx.fillStyle = '#000';
+    sctx.fillRect(0, 0, subCv.width, subCv.height);
+    sctx.globalAlpha = 0.35 * out;
+    sctx.fillStyle = '#1a1010';
+    sctx.fillRect(1, 1, subCv.width - 2, subCv.height - 2);
+    const padX = 5, padY = 3;
+    let x = padX, any = false;
     for (let i = 0; i < SUB.length; i++) {
-      const ch = SUB[i], a = CUES[i] == null ? 0 : clamp((st - (VOICE_AT + CUES[i]) + LEAD) / LFADE, 0, 1) * out;
-      if (a > 0) { sctx.globalAlpha = a; PD.drawText(sctx, ch, x + 1, 2, 'rgba(0,0,0,0.9)'); PD.drawText(sctx, ch, x, 1, '#e8e0d0'); }
+      const ch = SUB[i], a = CUES[i] == null ? 0 : clamp((lt - CUES[i] + LEAD) / LFADE, 0, 1) * out;
+      if (a > 0) {
+        any = true;
+        sctx.globalAlpha = a;
+        PD.drawText(sctx, ch, x + 1, padY + 1, 'rgba(0,0,0,0.9)');
+        PD.drawText(sctx, ch, x, padY, '#e8e0d0');
+      }
       x += PD.measure(ch) + 1;
     }
     sctx.globalAlpha = 1;
+    if (subBtn) subBtn.style.cursor = any ? 'pointer' : 'default';
   }
 
   let running = false, t0 = 0, raf = 0, wind = null, ended = false;
-  let voiceBuf = null, voice = null, voiceAt = 0, voiceOff = false, lag = 0, windLvl = WIND;
+  let lineI = 0, lineStart = 0, voice = null, voiceAt = 0, voiceOff = false, lag = 0, windLvl = WIND, waiting = false;
   const A = () => window.GameAudio;
   function windTo(level, dur) { windLvl = level; if (wind) wind.fade(level, dur); }
+  function audioDur(L) {
+    const end = (L.cueEnd != null ? L.cueEnd : SUB_OUT) + 0.35;
+    return L.buf ? Math.min(L.buf.duration, Math.max(end, L.cueEnd || 0)) : end;
+  }
+  function setHud(on) {
+    const b = document.getElementById('hudPhone');
+    if (!b) return;
+    if (on) { paintHudIcon(); b.hidden = false; }
+    else { b.hidden = true; }
+  }
+  // Tras enviar "ok": cierra el móvil y quita el icono (temp.) hasta la siguiente escena
+  document.addEventListener('pd:phone-chat-done', () => {
+    setHud(false);
+    const done = () => {
+      const ui = document.getElementById('phoneUI');
+      if (ui) ui.classList.remove('open');
+    };
+    if (window.PDPhone && window.PDPhone.powerOff) window.PDPhone.powerOff(done);
+    else done();
+  });
+  function takePhone() {
+    if (phoneTaken || !running || !phoneReady) return;
+    phoneTaken = true; vibeDone = true; phoneHover = false;
+    cv.style.cursor = '';
+    setHud(true);
+    const GA = A(); if (GA) { GA.init(); GA.notify(); }
+  }
+  function advanceLine(t) {
+    if (voice) { voice.stop(); voice = null; }
+    if (windLvl !== WIND) windTo(WIND, 1.2);
+    voiceOff = false; lag = 0; waiting = false;
+    lineI++;
+    if (lineI >= LINES.length) {
+      clearSub();
+      if (!ended) { ended = true; document.dispatchEvent(new CustomEvent('pd:intro-end')); }
+      return;
+    }
+    lineStart = t + GAP;
+    clearSub();
+  }
+  function skipLine() {
+    if (!running || ended || !CUES) return;
+    advanceLine(lastT);
+  }
   function start() {
     if (!bg) build();
-    initSub();
-    running = true; ended = false; t0 = performance.now() / 1000;
-    voice = null; voiceOff = false; lag = 0; windLvl = WIND;
+    PhoneApp.reset(); PhoneApp.bind(); PhoneApp.render();
+    running = true; ended = false; phoneTaken = false; phoneHover = false; phoneReady = false;
+    vibeT0 = null; vibeDone = false; vibeNotified = false;
+    t0 = performance.now() / 1000; lastT = 0;
+    lineI = 0; lineStart = FIRST_AT; voice = null; voiceOff = false; lag = 0; windLvl = WIND; waiting = false;
+    clearSub();
+    setHud(false);
+    const ui = document.getElementById('phoneUI'); if (ui) ui.classList.remove('open');
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
     const GA = A(); if (!GA) { voiceOff = true; return; }
-    GA.loadURL('voice', VOICE_URLS).then(buf => { voiceBuf = buf; }).catch(() => { voiceOff = true; });
-    GA.loadURL('wind', 'assets/wind.mp3').then(buf => { if (running && !wind) wind = GA.loop(buf, 5, windLvl); }).catch(() => {});   // viento de fondo (volumen general)
+    LINES.forEach(L => { if (L.urls) GA.loadURL(L.key, L.urls).then(buf => { L.buf = buf; }).catch(() => { L.failed = true; }); });
+    GA.loadURL('wind', 'assets/wind.mp3').then(buf => { if (running && !wind) wind = GA.loop(buf, 5, windLvl); }).catch(() => {});
   }
   function stop() {
-    running = false; cancelAnimationFrame(raf);
+    running = false; cancelAnimationFrame(raf); phoneTaken = false; phoneHover = false; phoneReady = false;
+    vibeT0 = null; vibeDone = false; vibeNotified = false;
+    cv.style.cursor = '';
+    clearSub();
+    setHud(false);
+    const ui = document.getElementById('phoneUI'); if (ui) ui.classList.remove('open');
     if (wind) { wind.stop(1.2); wind = null; }
     if (voice) { voice.stop(); voice = null; }
   }
-  // Reloj del subtítulo (en segundos de la intro). Con voz, lo marca el audio que se está oyendo:
-  // así letra y sonido van juntos aunque el audio tarde en cargar, el móvil tenga latencia o se pause.
-  function subClock(t) {
-    const GA = A();
-    if (!voice && !voiceOff && t >= VOICE_AT) {
+  if (subBtn) subBtn.addEventListener('click', e => { e.preventDefault(); skipLine(); });
+  function introCanvasPos(e) {
+    const r = cv.getBoundingClientRect();
+    const portrait = document.documentElement.getAttribute('data-layout') === 'portrait';
+    const scale = portrait
+      ? Math.min(r.width / W, r.height / H)
+      : Math.max(r.width / W, r.height / H);
+    const dw = W * scale, dh = H * scale;
+    const ox = (r.width - dw) / 2, oy = (r.height - dh) / 2;
+    return { x: (e.clientX - r.left - ox) / scale, y: (e.clientY - r.top - oy) / scale };
+  }
+  cv.addEventListener('pointermove', e => {
+    if (!running || phoneTaken) return;
+    const p = introCanvasPos(e);
+    const h = phoneHit(p.x, p.y);
+    if (h !== phoneHover) { phoneHover = h; cv.style.cursor = h ? 'pointer' : ''; }
+  });
+  cv.addEventListener('pointerdown', e => {
+    if (!running || phoneTaken) return;
+    const p = introCanvasPos(e);
+    if (phoneHit(p.x, p.y)) { takePhone(); e.preventDefault(); }
+  });
+  // Reloj local de la línea actual (0 = inicio de su voz/texto). Con audio, lo marca lo que se oye.
+  function lineClock(t) {
+    const GA = A(), L = LINES[lineI];
+    if (!L) return 0;
+    if (t < lineStart) return -1;
+    if (!CUES) setSubLine(L);
+    // Lore: el móvil solo se puede coger al llegar a la línea del salón
+    if (lineI >= 2) phoneReady = true;
+    if (L.vibrate && vibeT0 == null && !phoneTaken) {
+      vibeT0 = t;
+      if (!vibeNotified && GA) { vibeNotified = true; GA.init(); GA.notify(); }
+    }
+
+    if (L.urls && !voice && !voiceOff && !L.failed) {
       const c = GA && GA.context;
-      if (voiceBuf && c && c.state === 'running') {
+      if (L.buf && c && c.state === 'running') {
         voiceAt = c.currentTime + 0.06;
-        voice = GA.play(voiceBuf, voiceAt, 1);
+        voice = GA.play(L.buf, voiceAt, 1);
         windTo(WIND_DUCK, 0.4);
-      } else if (t >= VOICE_AT + VOICE_WAIT) voiceOff = true;   // no ha cargado a tiempo: el texto sigue sin voz
+        waiting = false;
+      } else if (t >= lineStart + VOICE_WAIT) voiceOff = true;
+      else { waiting = true; lag = t - lineStart; return 0; }
     }
+
+    let lt;
     if (voice) {
-      const st = VOICE_AT + GA.heard() - voiceAt;
-      if (windLvl !== WIND && st >= VOICE_AT + voiceBuf.duration + 0.3) windTo(WIND, 2.5);
-      return st;
+      lt = GA.heard() - voiceAt;
+      if (windLvl !== WIND && lt >= audioDur(L)) windTo(WIND, 2.0);
+    } else {
+      lt = t - lineStart - lag;
     }
-    if (!voiceOff && t >= VOICE_AT) { lag = t - VOICE_AT; return VOICE_AT; }   // esperando a la voz: el texto también espera
-    return t - lag;
+
+    // fin de línea → hueco → siguiente (o fin de intro)
+    if (lt >= SUB_OUT + OUT_DUR) {
+      advanceLine(t);
+      return -1;
+    }
+    return lt;
   }
 
   const poly = pts => { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.fill(); };
   function frame(now) {
     if (!running) return;
-    const t = now / 1000 - t0, n = hash(Math.floor(t * 18));
+    const t = now / 1000 - t0; lastT = t;
+    const n = hash(Math.floor(t * 18));
     const dip = n > 0.955 ? 0.4 : 0, lvl = (1 - dip) * (0.92 + 0.08 * Math.sin(t * 1.7));
+    const buzzing = vibeActive(t);
 
-    // temblor de proyector
+    // temblor de proyector (el móvil va en el fondo → tiembla con la sala)
     const jy = hash(Math.floor(t * 12) * 3.1) > 0.9 ? 1 : 0;
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-    ctx.drawImage(bg, 0, jy);
+    ctx.drawImage(phoneTaken && bgBare ? bgBare : bg, 0, jy);
 
     // ambiente oscuro
     ctx.fillStyle = `rgba(0,0,0,${0.2 + dip * 0.45})`; ctx.fillRect(0, 0, W, H);
@@ -1641,6 +2649,9 @@
     }
     ctx.restore();
 
+    // solo el parpadeo de notificación (el sprite base ya está en el fondo)
+    if (buzzing) drawPhoneVibe(jy, t);
+
     ctx.drawImage(vig, 0, 0);
 
     // grano de película, rayones y motas
@@ -1648,19 +2659,16 @@
     if (hash(Math.floor(t * 24) * 1.7) > 0.975) { ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.fillRect(Math.floor(hash(Math.floor(t * 24)) * W), 0, 1, H); }
     if (hash(Math.floor(t * 9) * 4.1) > 0.9) { ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(Math.floor(hash(Math.floor(t * 9)) * W), Math.floor(hash(Math.floor(t * 9) + 7) * H), 2, 1); }
 
-    const st = subClock(t);
-    drawSub(st);
+    const lt = lineClock(t);
+    if (lt >= 0) drawSub(lt);
 
     // entrada desde negro
     const black = 1 - ease(clamp(t / FADE, 0, 1));
     if (black > 0) { ctx.fillStyle = `rgba(0,0,0,${black})`; ctx.fillRect(0, 0, W, H); }
 
-    // fin de la introducción (la escena sigue con el viento hasta volver al menú)
-    if (!ended && st >= SUB_OUT + OUT_DUR) { ended = true; document.dispatchEvent(new CustomEvent('pd:intro-end')); }
-
     raf = requestAnimationFrame(frame);
   }
-  window.PDIntro = { start, stop };
+  window.PDIntro = { start, stop, skipLine };
 })();
 </script>
 </body>
