@@ -15,6 +15,7 @@
     --blood: #d10a0a;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; width: 100%; overscroll-behavior: none; }
   body {
     position: fixed; inset: 0;                         /* sin scroll ni "rebote" en móvil */
@@ -180,7 +181,8 @@
     <h1 class="title"><canvas id="titleCanvas" role="img" aria-label="phanteru's daemon"></canvas></h1>
 
     <nav class="menu-buttons" id="menuButtons" aria-label="Menú principal">
-      <button class="btn" id="btnNew" type="button" data-label="NUEVO JUEGO" aria-label="Nuevo juego"></button>
+      <!-- NUEVO JUEGO desactivado por ahora (solo se publica la tragaperras): quitar "hidden" para volver a activarlo -->
+      <button class="btn" id="btnNew" type="button" data-label="NUEVO JUEGO" aria-label="Nuevo juego" hidden></button>
       <button class="btn" id="btnSettings" type="button" data-label="AJUSTES" aria-label="Ajustes"></button>
       <button class="btn" id="btnExit" type="button" data-label="SALIR" aria-label="Salir"></button>
     </nav>
@@ -725,7 +727,7 @@
     for (let i = play.coins.length - 1; i >= 0; i--) {
       const c = play.coins[i];
       if (c.state === 'idle' && Math.hypot(p.x - c.x, p.y - c.y) <= 9 + TP) {
-        c.state = 'drag'; c.ox = c.x - p.x; c.oy = c.y - p.y - (e.pointerType === 'touch' ? 10 : 0); play.drag = c;   // en táctil la moneda queda sobre el dedo
+        c.state = 'drag'; c.x = p.x; c.y = p.y; play.drag = c;           // la moneda se centra justo donde está el dedo o el ratón
         try { cv.setPointerCapture(e.pointerId); } catch (_) {}
         cv.style.cursor = 'grabbing'; e.preventDefault(); return;
       }
@@ -734,7 +736,7 @@
   });
   cv.addEventListener('pointermove', e => {
     const p = toLogical(e);
-    if (play.drag) { play.drag.x = clamp(p.x + play.drag.ox, 4, W - 4); play.drag.y = clamp(p.y + play.drag.oy, 4, H - 4); return; }
+    if (play.drag) { play.drag.x = clamp(p.x, 4, W - 4); play.drag.y = clamp(p.y, 4, H - 4); return; }
     hoverGreen = inRect(p, GREEN);
     let cur = hoverGreen ? 'pointer' : '';
     if (!cur && mode === 'play' && play.state !== 'closing') {
@@ -1215,7 +1217,7 @@
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && current && (current.id === 'settings' || current.id === 'confirm' || current.id === 'newgame')) closeOverlay();
     if (!current && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
-      const bs = [...menu.querySelectorAll('button')];
+      const bs = [...menu.querySelectorAll('button:not([hidden])')];
       let i = bs.indexOf(document.activeElement);
       i = i < 0 ? 0 : (i + (e.key === 'ArrowRight' ? 1 : bs.length - 1)) % bs.length;
       bs[i].focus();
@@ -1230,6 +1232,7 @@
 
   /* ---------- Nuevo juego ---------- */
   $('btnNew').addEventListener('click', () => {
+    if ($('btnNew').hidden) return;
     openOverlay($('newgame'), $('newgameBack'), $('btnNew'));
     if (window.PDIntro) window.PDIntro.start();
     document.dispatchEvent(new CustomEvent('pd:newgame'));   // gancho para cuando exista el juego
