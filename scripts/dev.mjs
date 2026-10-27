@@ -1,7 +1,7 @@
 // Servidor local sencillo para desarrollo: http://localhost:8080 (sirve src/)
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
 const root = path.resolve('src'), port = process.env.PORT || 8080;
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mp3': 'audio/mpeg', '.png': 'image/png', '.css': 'text/css' };
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mp3': 'audio/mpeg', '.webm': 'audio/webm', '.png': 'image/png', '.css': 'text/css' };
 http.createServer((req, res) => {
   let p = path.join(root, decodeURIComponent(req.url.split('?')[0]));
   if (!p.startsWith(root)) { res.writeHead(403); return res.end(); }

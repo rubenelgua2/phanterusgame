@@ -41,6 +41,7 @@
     width: 100%; height: 100%; max-width: none;
     z-index: 0;
   }
+  #scene { transform-origin: 0 0; transition: transform .6s cubic-bezier(.2, .8, .2, 1); }   /* zoom a la máquina al jugar */
   #scene.fade-edges {                       /* en vertical (móvil) la escena se funde con el negro */
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
             mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
@@ -75,6 +76,15 @@
     left: auto; right: calc(5vw + env(safe-area-inset-right)); bottom: auto; top: 50%;
     transform: translateY(-50%); gap: calc(var(--px) * 3);
   }
+  /* MINIJUEGO de la slot: fuera título y botones (en móvil tapaban las monedas), solo queda VOLVER en la esquina */
+  .title, .menu-buttons, .slot-exit { transition: opacity .35s, visibility .35s; }
+  #menu.slot-play .title, #menu.slot-play .menu-buttons { opacity: 0; visibility: hidden; }
+  .slot-exit {
+    position: absolute; z-index: 12; opacity: 0; visibility: hidden;
+    top: calc(var(--px) * 4 + env(safe-area-inset-top)); right: calc(var(--px) * 4 + env(safe-area-inset-right));
+  }
+  #menu.slot-play .slot-exit { opacity: 1; visibility: visible; }
+
   .btn {
     background: none; border: 0; padding: 0; margin: 0;
     line-height: 0; font-size: 0; cursor: pointer;
@@ -159,7 +169,7 @@
   .intro-back { position: absolute; top: calc(var(--px) * 4 + env(safe-area-inset-top)); right: calc(var(--px) * 4 + env(safe-area-inset-right)); z-index: 2; }
   .intro-sub { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--px) * 16 + env(safe-area-inset-bottom)); z-index: 2; pointer-events: none; max-width: 96vw; }
 
-  @media (prefers-reduced-motion: reduce) { .overlay.open { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .overlay.open { animation: none; } #scene { transition: none; } }
 </style>
 </head>
 <body>
@@ -174,6 +184,7 @@
       <button class="btn" id="btnSettings" type="button" data-label="AJUSTES" aria-label="Ajustes"></button>
       <button class="btn" id="btnExit" type="button" data-label="SALIR" aria-label="Salir"></button>
     </nav>
+    <button class="btn slot-exit" id="slotExit" type="button" data-label="VOLVER" aria-label="Dejar la tragaperras"></button>
   </main>
 
   <!-- Ajustes -->
@@ -511,6 +522,7 @@
   const snd = (name, ...a) => { const A = window.GameAudio; if (A && A[name]) A[name](...a); };
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const TP = matchMedia('(pointer: coarse)').matches ? 4 : 0;       // margen extra de toque en móvil
+  const buzz = p => { if (TP && navigator.vibrate) try { navigator.vibrate(p); } catch (_) {} };   // vibración en móvil (Android)
   const GREEN = { x: MX + 36 - TP, y: MY + 68 - TP, w: 10 + 2 * TP, h: 10 + 2 * TP };
   const SLOT = { x: MX + 26 - TP, y: MY + 78 - TP, w: 24 + 2 * TP, h: 12 + TP };
   const SLOTX = MX + 38, SLOTY = MY + 81, SLOT_TOP = MY + 87;
@@ -548,12 +560,13 @@
     play.recs = reels.map(q => makeSettleRec(reelPos(q, ta) % N, ts, false));
     Object.assign(play, { credits: 0, state: 'idle', lever0: -99, win: null, result: null, parts: [], drag: null, stopped: [true, true, true] });
     play.coins = [0, 1, 2].map(i => ({ home: { x: MX + 28 + i * 10, y: MY + 95 }, x: MX + 38, y: MY + 95, state: 'pop', t0: ts + 0.35 + i * 0.22, dropped: false }));
-    mode = 'play';
+    mode = 'play'; setFocus(true);
   }
   function endPlay(ts) {
     if (mode !== 'play' || play.state === 'closing') return;
     play.recs = play.recs.map(q => makeSettleRec(recPos(q, ts) % N, ts, true));
     Object.assign(play, { coins: [], drag: null, state: 'closing', credits: 0, win: null, parts: [] });
+    setFocus(false);
   }
   const canPull = ts => mode === 'play' && play.state === 'idle' && play.credits > 0 && ts >= lastFinish();
   function pull(ts) {
@@ -561,14 +574,14 @@
     play.credits--; play.lever0 = ts; play.state = 'spinning'; play.nextTick = ts + 0.3; play.stopped = [false, false, false];
     play.result = { idx };
     play.recs = play.recs.map((q, i) => makeSpinRec(q.target % N, ts, i, idx[i]));
-    snd('lever');
+    snd('lever'); buzz(30);
   }
   function finishSpin(ts) {
     const res = evaluate(play.result.idx);
     if (res.amount > 0) {
       const ti = Math.min(0.12, 1.4 / res.amount);
       play.win = { amount: res.amount, given: 0, nextTick: ts + 0.25, ti, end: ts + 0.25 + res.amount * ti + 0.9, jackpot: !!res.three && res.id === 0 };
-      play.state = 'win'; snd('win', res.amount >= 10);
+      play.state = 'win'; snd('win', res.amount >= 10); buzz(res.amount >= 10 ? [60, 50, 60, 50, 120] : [40, 40, 40]);
       const n = Math.min(12, 2 + Math.floor(res.amount / 3));
       for (let i = 0; i < n; i++) play.parts.push({ x: MX + 38, y: MY + 94, vx: (Math.random() - 0.5) * 90, vy: -70 - Math.random() * 70, gy: G + 2 + Math.random() * 12, born: ts + i * 0.05 });
     } else { play.state = 'lose'; play.until = ts + 1.0; snd('lose'); }
@@ -675,8 +688,28 @@
       cv.classList.remove('fade-edges');
     }
     cv.style.width = W * s + 'px'; cv.style.height = H * s + 'px'; cv.style.left = left + 'px'; cv.style.top = top + 'px';
+    cv.style.transform = focus ? focusTransform(s, left, top, vw, vh) : '';
   }
   window.addEventListener('pd:layout', layoutScene);
+
+  // Al jugar, la cámara se acerca a la máquina (más grande = más fácil de tocar) y se esconden título y botones
+  let focus = false;
+  const menuEl = document.getElementById('menu'), exitBtn = document.getElementById('slotExit');
+  const BOX = { x: MX - 5, y: MY - 5, w: 101, h: 110 };      // máquina + palanca + bandeja de monedas
+  function focusTransform(s, left, top, vw, vh) {
+    const m = 8, eb = exitBtn.getBoundingClientRect();
+    const fit = (y0) => clamp(Math.min((vw - 2 * m) / (BOX.w * s), (vh - y0 - m) / (BOX.h * s)), 1, 1.6);
+    let y0 = m, z = fit(y0);
+    if (vw / 2 + z * s * BOX.w / 2 > eb.left - m) { y0 = eb.bottom + m; z = fit(y0); }   // no meterse debajo de VOLVER
+    const tx = vw / 2 - left - z * s * (BOX.x + BOX.w / 2), ty = (y0 + vh - m) / 2 - top - z * s * (BOX.y + BOX.h / 2);
+    return `translate(${tx}px, ${ty}px) scale(${z})`;
+  }
+  function setFocus(on) {
+    focus = on; menuEl.classList.toggle('slot-play', on);
+    if (on && document.activeElement && menuEl.contains(document.activeElement)) document.activeElement.blur();
+    layoutScene();
+  }
+  exitBtn.addEventListener('click', () => endPlay(nowS()));
   function leverHit(p, ts) {
     const lp = leverPos(ts - play.lever0 + 0.15);
     const bx = MX + 88, by = MY + 17 + 50 * lp, ax = MX + 78, ay = MY + 44;     // bola y arranque de la palanca
@@ -715,7 +748,7 @@
     const c = play.drag; if (!c) return;
     play.drag = null; const ts = nowS();
     c.fx = c.x; c.fy = c.y; c.t0 = ts;
-    if (inRect({ x: c.x, y: c.y }, SLOT)) { c.state = 'insert'; snd('coinIn'); } else c.state = 'return';
+    if (inRect({ x: c.x, y: c.y }, SLOT)) { c.state = 'insert'; snd('coinIn'); buzz(15); } else c.state = 'return';
     cv.style.cursor = '';
   };
   cv.addEventListener('pointerup', endDrag);
@@ -1114,21 +1147,38 @@
       src.buffer = buf; src.loop = true;
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(level == null ? 1 : level, t + (fadeIn || 1));
       src.connect(g); g.connect(master); src.start();
-      return { stop(fadeOut) {
-        const n = ctx.currentTime, f = fadeOut || 0.5;
-        g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(g.gain.value, n); g.gain.linearRampToValueAtTime(0, n + f);
-        try { src.stop(n + f + 0.05); } catch (e) {}
-      } };
+      const to = (v, f) => { const n = ctx.currentTime; g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(g.gain.value, n); g.gain.linearRampToValueAtTime(v, n + f); };
+      return {
+        fade(level, dur) { to(level, dur || 0.5); },
+        stop(fadeOut) { const f = fadeOut || 0.5; to(0, f); try { src.stop(ctx.currentTime + f + 0.05); } catch (e) {} }
+      };
     }
-    function loadURL(key, url) {
+    function loadURL(key, url) {                            // url puede ser una lista: se prueba cada formato en orden
       if (bufs[key]) return Promise.resolve(bufs[key]);
       init();
-      return fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-        .then(ab => new Promise((res, rej) => ctx.decodeAudioData(ab, b => { bufs[key] = b; res(b); }, rej)))
-        .then(b => b);
+      const urls = [].concat(url);
+      const get = i => fetch(urls[i]).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+        .then(ab => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)))
+        .catch(e => { if (i + 1 < urls.length) return get(i + 1); throw e; });
+      return get(0).then(b => (bufs[key] = b));
+    }
+    // sonido de una vez (voces), programado en el reloj de audio para poder sincronizarlo
+    function play(buf, when, level) {
+      init();
+      const src = ctx.createBufferSource(), g = ctx.createGain();
+      src.buffer = buf; g.gain.value = level == null ? 1 : level;
+      src.connect(g); g.connect(master); src.start(when || 0);
+      return { stop() { try { src.stop(); } catch (e) {} } };
+    }
+    // instante (reloj de audio) que está saliendo AHORA por el altavoz, descontando la latencia del dispositivo
+    function heard() {
+      const o = ctx.getOutputTimestamp && ctx.getOutputTimestamp();
+      const h = o && o.performanceTime > 0 ? o.contextTime + (performance.now() - o.performanceTime) / 1000
+                                           : ctx.currentTime - (ctx.outputLatency || ctx.baseLatency || 0);
+      return Math.min(h, ctx.currentTime);                 // con el audio en pausa el reloj se queda quieto
     }
     return {
-      init, setVolume, blip, loadB64, loadURL, loop,
+      init, setVolume, blip, loadB64, loadURL, loop, play, heard,
       get volume() { return vol; }, get master() { return master; }, get context() { return ctx; },
       hover() { blip(180, 0.05, 'square', 0.06); },
       click() { blip(120, 0.14, 'sawtooth', 0.16, 45); },
@@ -1225,7 +1275,7 @@
   'use strict';
   /* =====================================================================
      INTRODUCCIÓN: una sala vieja y vacía. El espejo refleja la luz y no deja ver nada.
-     Entra desde negro, suena el viento y aparece la fecha letra a letra.
+     Entra desde negro, suena el viento y una voz dice la fecha mientras aparece letra a letra.
      ===================================================================== */
   const W = 320, H = 180;
   const cv = document.getElementById('introCanvas');
@@ -1447,22 +1497,29 @@
   }
 
   // ---------- cronología ----------
-  const FADE = 3.5, SUB_START = 4.6, STEP = 0.11, LFADE = 0.55, SUB_OUT = 13.5, OUT_DUR = 1.6;
+  // La voz dice la fecha a los VOICE_AT s; el subtítulo va con ella letra a letra.
+  // CUES = segundo del audio en que suena cada letra (medido sobre la forma de onda; null = espacio):
+  //        vein-ti | cua-tro | de | s-e-p-t-ie-m-b-r-e | de | dos | mil | vein-ti | séis
+  const FADE = 3.5, VOICE_AT = 4.4, VOICE_WAIT = 2.5, LEAD = 0.05, LFADE = 0.15, SUB_OUT = 13.5, OUT_DUR = 1.6;
+  const SUB_TEXT = '24 de septiembre de 2026';
+  const CUES = [0.22, 0.63, null, 1.02, 1.06, null, 1.12, 1.21, 1.27, 1.41, 1.46, 1.50, 1.56, 1.70, 1.74, 1.77, null, 1.83, 1.87, null, 1.92, 2.30, 2.56, 2.89];
+  const VOICE_URLS = (document.createElement('audio').canPlayType('audio/webm; codecs="opus"') ? ['assets/voice-date.webm'] : []).concat('assets/voice-date.mp3');
+  const WIND = 0.9, WIND_DUCK = 0.45;                    // el viento baja mientras habla la voz
   const subCv = document.getElementById('introSub'), sctx = subCv.getContext('2d');
   let SUB = '';
   function initSub() {
     const PD = window.PD; if (!PD) return;
-    SUB = PD.norm('24 de septiembre de 2026');
+    SUB = PD.norm(SUB_TEXT);
     subCv.width = PD.measure(SUB) + 2; subCv.height = 9;
     subCv.style.width = `calc(${subCv.width} * var(--px))`;
   }
-  function drawSub(t) {                                   // subtítulo progresivo, letra a letra
+  function drawSub(st) {                                  // subtítulo progresivo, letra a letra al ritmo de la voz
     const PD = window.PD; if (!PD || !SUB) return;
     sctx.clearRect(0, 0, subCv.width, subCv.height);
-    const out = 1 - clamp((t - SUB_OUT) / OUT_DUR, 0, 1);
+    const out = 1 - clamp((st - SUB_OUT) / OUT_DUR, 0, 1);
     let x = 1;
     for (let i = 0; i < SUB.length; i++) {
-      const ch = SUB[i], a = clamp((t - (SUB_START + i * STEP)) / LFADE, 0, 1) * out;
+      const ch = SUB[i], a = CUES[i] == null ? 0 : clamp((st - (VOICE_AT + CUES[i]) + LEAD) / LFADE, 0, 1) * out;
       if (a > 0) { sctx.globalAlpha = a; PD.drawText(sctx, ch, x + 1, 2, 'rgba(0,0,0,0.9)'); PD.drawText(sctx, ch, x, 1, '#e8e0d0'); }
       x += PD.measure(ch) + 1;
     }
@@ -1470,15 +1527,44 @@
   }
 
   let running = false, t0 = 0, raf = 0, wind = null, ended = false;
+  let voiceBuf = null, voice = null, voiceAt = 0, voiceOff = false, lag = 0, windLvl = WIND;
+  const A = () => window.GameAudio;
+  function windTo(level, dur) { windLvl = level; if (wind) wind.fade(level, dur); }
   function start() {
     if (!bg) build();
     initSub();
     running = true; ended = false; t0 = performance.now() / 1000;
+    voice = null; voiceOff = false; lag = 0; windLvl = WIND;
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
-    const A = window.GameAudio;                           // viento de fondo (pasa por el volumen general)
-    if (A) A.loadURL('wind', 'assets/wind.mp3').then(buf => { if (running && !wind) wind = A.loop(buf, 5, 0.9); }).catch(() => {});
+    const GA = A(); if (!GA) { voiceOff = true; return; }
+    GA.loadURL('voice', VOICE_URLS).then(buf => { voiceBuf = buf; }).catch(() => { voiceOff = true; });
+    GA.loadURL('wind', 'assets/wind.mp3').then(buf => { if (running && !wind) wind = GA.loop(buf, 5, windLvl); }).catch(() => {});   // viento de fondo (volumen general)
   }
-  function stop() { running = false; cancelAnimationFrame(raf); if (wind) { wind.stop(1.2); wind = null; } }
+  function stop() {
+    running = false; cancelAnimationFrame(raf);
+    if (wind) { wind.stop(1.2); wind = null; }
+    if (voice) { voice.stop(); voice = null; }
+  }
+  // Reloj del subtítulo (en segundos de la intro). Con voz, lo marca el audio que se está oyendo:
+  // así letra y sonido van juntos aunque el audio tarde en cargar, el móvil tenga latencia o se pause.
+  function subClock(t) {
+    const GA = A();
+    if (!voice && !voiceOff && t >= VOICE_AT) {
+      const c = GA && GA.context;
+      if (voiceBuf && c && c.state === 'running') {
+        voiceAt = c.currentTime + 0.06;
+        voice = GA.play(voiceBuf, voiceAt, 1);
+        windTo(WIND_DUCK, 0.4);
+      } else if (t >= VOICE_AT + VOICE_WAIT) voiceOff = true;   // no ha cargado a tiempo: el texto sigue sin voz
+    }
+    if (voice) {
+      const st = VOICE_AT + GA.heard() - voiceAt;
+      if (windLvl !== WIND && st >= VOICE_AT + voiceBuf.duration + 0.3) windTo(WIND, 2.5);
+      return st;
+    }
+    if (!voiceOff && t >= VOICE_AT) { lag = t - VOICE_AT; return VOICE_AT; }   // esperando a la voz: el texto también espera
+    return t - lag;
+  }
 
   const poly = pts => { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.fill(); };
   function frame(now) {
@@ -1542,14 +1628,15 @@
     if (hash(Math.floor(t * 24) * 1.7) > 0.975) { ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.fillRect(Math.floor(hash(Math.floor(t * 24)) * W), 0, 1, H); }
     if (hash(Math.floor(t * 9) * 4.1) > 0.9) { ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(Math.floor(hash(Math.floor(t * 9)) * W), Math.floor(hash(Math.floor(t * 9) + 7) * H), 2, 1); }
 
-    drawSub(t);
+    const st = subClock(t);
+    drawSub(st);
 
     // entrada desde negro
     const black = 1 - ease(clamp(t / FADE, 0, 1));
     if (black > 0) { ctx.fillStyle = `rgba(0,0,0,${black})`; ctx.fillRect(0, 0, W, H); }
 
     // fin de la introducción (la escena sigue con el viento hasta volver al menú)
-    if (!ended && t >= SUB_OUT + OUT_DUR) { ended = true; document.dispatchEvent(new CustomEvent('pd:intro-end')); }
+    if (!ended && st >= SUB_OUT + OUT_DUR) { ended = true; document.dispatchEvent(new CustomEvent('pd:intro-end')); }
 
     raf = requestAnimationFrame(frame);
   }
