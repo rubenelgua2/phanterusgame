@@ -3,3 +3,6 @@ dist/
 *.zip
 .DS_Store
 Thumbs.db
+
+# contexto privado en texto plano: NUNCA se sube (solo la version cifrada .enc)
+contexto.md
