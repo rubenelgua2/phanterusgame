@@ -43,9 +43,19 @@
     z-index: 0;
   }
   #scene { transform-origin: 0 0; transition: transform .6s cubic-bezier(.2, .8, .2, 1); }   /* zoom a la máquina al jugar */
-  #scene.fade-edges {                       /* en vertical (móvil) la escena se funde con el negro */
+  /* si la escena no llega a un borde de la pantalla, se funde con el negro por ese lado */
+  #scene.fade-y {
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
             mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
+  }
+  #scene.fade-x {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%);
+            mask-image: linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%);
+  }
+  #scene.fade-x.fade-y {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%), linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
+            mask-image: linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%), linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
+    -webkit-mask-composite: source-in; mask-composite: intersect;
   }
   .vignette {
     position: absolute; inset: 0; z-index: 5; pointer-events: none;
@@ -58,7 +68,8 @@
   .title { position: relative; z-index: 10; line-height: 0; font-size: 0; user-select: none; }
   #titleCanvas { display: block; }
 
-  /* BOTONES pixel art (cada botón contiene dos canvas: normal y resaltado) */
+  /* BOTONES pixel art (cada botón contiene dos canvas: normal y resaltado)
+     Siempre centrados bajo la máquina; la altura exacta la fija el script (composición centrada) */
   .menu-buttons {
     position: absolute; z-index: 10;
     left: 50%; bottom: calc(4vh + env(safe-area-inset-bottom)); transform: translateX(-50%);
@@ -70,12 +81,6 @@
   [data-layout=portrait] .menu-buttons {
     flex-direction: column; align-items: center; flex-wrap: nowrap;
     bottom: calc(3dvh + env(safe-area-inset-bottom)); gap: calc(var(--px) * 3);
-  }
-  /* móvil en horizontal: columna a la derecha para no tapar la máquina */
-  [data-layout=landscape-short] .menu-buttons {
-    flex-direction: column; align-items: center; flex-wrap: nowrap;
-    left: auto; right: calc(5vw + env(safe-area-inset-right)); bottom: auto; top: 50%;
-    transform: translateY(-50%); gap: calc(var(--px) * 3);
   }
   /* MINIJUEGO de la slot: fuera título y botones (en móvil tapaban las monedas), solo queda VOLVER en la esquina */
   .title, .menu-buttons, .slot-exit { transition: opacity .35s, visibility .35s; }
@@ -675,20 +680,29 @@
     const rc = cv.getBoundingClientRect();
     return { x: (e.clientX - rc.left) * W / rc.width, y: (e.clientY - rc.top) * H / rc.height };
   }
-  // Escena adaptable: horizontal = llena la pantalla; vertical (móvil) = recorta a la máquina y se funde con el negro
+  // Composición centrada: título, máquina y botones en columna, centrados en horizontal (el cuerpo de la
+  // máquina, x = 160, en el centro exacto) y con el mismo espacio arriba, entre ellos y abajo.
+  // Si para que todo respire la escena no llega a cubrir la pantalla, se funde con el negro por los bordes.
+  const menuEl = document.getElementById('menu'), navEl = document.getElementById('menuButtons');
+  const titleEl = document.getElementById('titleCanvas'), exitBtn = document.getElementById('slotExit');
+  const MACH_TOP = MY - 1, MACH_H = G + 3 - MACH_TOP;          // de las bombillas a la sombra en el suelo
+  const safe = document.createElement('div');                  // lee las zonas seguras (notch, barra de gestos)
+  safe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)';
+  document.body.appendChild(safe);
   function layoutScene() {
-    const vw = innerWidth, vh = innerHeight, mode = document.documentElement.dataset.layout;
-    let s, left, top;
-    if (mode === 'portrait') {
-      s = Math.min(vw / 150, (vh * 0.75) / H);
-      left = vw / 2 - 166 * s;
-      const tb = document.getElementById('titleCanvas').getBoundingClientRect().bottom;
-      top = Math.max((vh - H * s) / 2, tb + 6 - 52 * s);
-      cv.classList.add('fade-edges');
-    } else {
-      s = Math.max(vw / W, vh / H); left = (vw - W * s) / 2; top = (vh - H * s) / 2;
-      cv.classList.remove('fade-edges');
-    }
+    const vw = innerWidth, vh = innerHeight, portrait = document.documentElement.dataset.layout === 'portrait';
+    const cs = getComputedStyle(safe), st = parseFloat(cs.paddingTop) || 0, sb = parseFloat(cs.paddingBottom) || 0;
+    const room = vh - st - sb - titleEl.getBoundingClientRect().height - navEl.getBoundingClientRect().height;
+    const gmin = Math.max(10, vh * 0.035);
+    let s = portrait ? Math.min(vw / 135, 0.42 * vh / MACH_H)                     // vertical: la máquina y un poco de sala
+                     : Math.min(Math.max(vw / W, vh / H), 0.5 * vh / MACH_H);     // horizontal: llena la pantalla si cabe
+    s = Math.max(0.5, Math.min(s, (room - 4 * gmin) / MACH_H));
+    const gap = (room - MACH_H * s) / 4, mTop = st + 2 * gap + titleEl.getBoundingClientRect().height;
+    const left = vw / 2 - (W / 2) * s, top = mTop - MACH_TOP * s;
+    menuEl.style.paddingTop = st + gap + 'px';
+    navEl.style.top = mTop + MACH_H * s + gap + 'px'; navEl.style.bottom = 'auto';
+    cv.classList.toggle('fade-x', left > 0.5 || left + W * s < vw - 0.5);
+    cv.classList.toggle('fade-y', top > 0.5 || top + H * s < vh - 0.5);
     cv.style.width = W * s + 'px'; cv.style.height = H * s + 'px'; cv.style.left = left + 'px'; cv.style.top = top + 'px';
     cv.style.transform = focus ? focusTransform(s, left, top, vw, vh) : '';
   }
@@ -696,7 +710,6 @@
 
   // Al jugar, la cámara se acerca a la máquina (más grande = más fácil de tocar) y se esconden título y botones
   let focus = false;
-  const menuEl = document.getElementById('menu'), exitBtn = document.getElementById('slotExit');
   const BOX = { x: MX - 5, y: MY - 5, w: 101, h: 110 };      // máquina + palanca + bandeja de monedas
   function focusTransform(s, left, top, vw, vh) {
     const m = 8, eb = exitBtn.getBoundingClientRect();
@@ -922,10 +935,10 @@
   }
 
   /* ---------- botones pixel art ---------- */
-  function makeBtnCanvas(label, hover) {
+  function makeBtnCanvas(label, hover, minInner) {
     const B = 3, arrow = 6, padX = 3, padY = 4;
     const tw = measure(label);
-    const inner = Math.max(tw + 2 * (arrow + padX), 22);
+    const inner = Math.max(tw + 2 * (arrow + padX), 22, minInner || 0);
     const w = inner + 2 * B, h = 8 + 2 * padY + 2 * B;
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const x = c.getContext('2d');
@@ -950,10 +963,13 @@
     c.style.width = `calc(${w} * var(--px))`;
     return c;
   }
+  // los botones del menú principal miden todos lo mismo (el ancho del más largo visible): columna/fila armónica
+  const MENU_INNER = Math.max(0, ...[...document.querySelectorAll('#menuButtons .btn[data-label]:not([hidden])')]
+    .map(b => measure(norm(b.dataset.label)) + 2 * (6 + 3)));
   document.querySelectorAll('.btn[data-label]').forEach(b => {
-    const label = norm(b.dataset.label);
-    const n = makeBtnCanvas(label, false); n.className = 'n';
-    const h = makeBtnCanvas(label, true);  h.className = 'h';
+    const label = norm(b.dataset.label), minInner = b.closest('#menuButtons') ? MENU_INNER : 0;
+    const n = makeBtnCanvas(label, false, minInner); n.className = 'n';
+    const h = makeBtnCanvas(label, true, minInner);  h.className = 'h';
     b.append(n, h);
   });
   document.querySelectorAll('[data-px]').forEach(el => renderPx(el, el.dataset.px));
@@ -1080,7 +1096,8 @@
       const lines = portrait ? ["phanteru's", 'daemon'] : ["phanteru's daemon"], k = lines.join('|');
       if (k !== key) { S = build(lines); key = k; cv.width = S.W; cv.height = S.H; cv.style.width = `calc(${S.W} * var(--tpx))`; }
       const dpr = window.devicePixelRatio || 1;
-      let ts = Math.min(innerWidth * (portrait ? 0.92 : 0.86) / S.W, innerHeight * (portrait ? 0.26 : 0.36) / S.H);
+      const hk = portrait ? 0.26 : mode === 'landscape-short' ? 0.22 : 0.28;   // alto máximo del título (deja aire a la máquina)
+      let ts = Math.min(innerWidth * (portrait ? 0.92 : 0.86) / S.W, innerHeight * hk / S.H);
       ts = Math.max(1 / dpr, Math.floor(ts * dpr) / dpr);               // píxeles enteros de pantalla = bordes nítidos
       root.style.setProperty('--tpx', ts + 'px');
     }
