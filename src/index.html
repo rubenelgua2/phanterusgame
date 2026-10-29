@@ -137,6 +137,7 @@
   .vol-label { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: calc(var(--px) * 3); line-height: 0; font-size: 0; }
   .vol-label .px { margin: 0; }
   .vol-row { display: flex; align-items: center; gap: calc(var(--px) * 3); }
+  .warn-lines { display: flex; flex-direction: column; align-items: center; gap: calc(var(--px) * 2); line-height: 0; font-size: 0; }
 
   /* slider */
   input[type=range] {
@@ -252,6 +253,8 @@
     <h1 class="title"><canvas id="titleCanvas" role="img" aria-label="phanteru's daemon"></canvas></h1>
 
     <nav class="menu-buttons" id="menuButtons" aria-label="Menú principal">
+      <!-- CONTINUAR solo aparece si hay una partida guardada -->
+      <button class="btn" id="btnContinue" type="button" data-label="CONTINUAR" aria-label="Continuar partida" hidden></button>
       <button class="btn" id="btnNew" type="button" data-label="NUEVO JUEGO" aria-label="Nuevo juego"></button>
       <button class="btn" id="btnSettings" type="button" data-label="AJUSTES" aria-label="Ajustes"></button>
       <button class="btn" id="btnExit" type="button" data-label="SALIR" aria-label="Salir"></button>
@@ -294,6 +297,23 @@
       <div class="row-actions" style="margin-top:0">
         <button class="btn" id="confirmYes" type="button" data-label="SI" aria-label="Sí"></button>
         <button class="btn" id="confirmNo" type="button" data-label="NO" aria-label="No"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Aviso: empezar partida nueva borra la guardada (solo se puede tener una) -->
+  <div class="overlay" id="confirmNew" role="dialog" aria-modal="true" aria-label="Si empiezas una partida nueva, perderás la anterior. ¿Estás seguro?">
+    <div class="panel">
+      <h2 data-px="AVISO" data-scale="2" data-color="#d10a0a"></h2>
+      <div class="warn-lines">
+        <span data-px="SI EMPIEZAS UNA" data-color="#c9b8b8"></span>
+        <span data-px="PARTIDA NUEVA," data-color="#c9b8b8"></span>
+        <span data-px="PERDERÁS LA ANTERIOR." data-color="#c9b8b8"></span>
+        <span data-px="¿ESTÁS SEGURO?" data-color="#ff5a4a"></span>
+      </div>
+      <div class="row-actions">
+        <button class="btn" id="confirmNewYes" type="button" data-label="SI" aria-label="Sí, empezar partida nueva"></button>
+        <button class="btn" id="confirmNewNo" type="button" data-label="NO" aria-label="No"></button>
       </div>
     </div>
   </div>
@@ -1053,7 +1073,7 @@
     return c;
   }
   // los botones del menú principal miden todos lo mismo (el ancho del más largo visible): columna/fila armónica
-  const MENU_INNER = Math.max(0, ...[...document.querySelectorAll('#menuButtons .btn[data-label]:not([hidden])')]
+  const MENU_INNER = Math.max(0, ...[...document.querySelectorAll('#menuButtons .btn[data-label]:not([hidden]), #btnContinue')]
     .map(b => measure(norm(b.dataset.label)) + 2 * (6 + 3)));
   document.querySelectorAll('.btn[data-label]').forEach(b => {
     const label = norm(b.dataset.label), minInner = b.closest('#menuButtons') ? MENU_INNER : 0;
@@ -1441,6 +1461,18 @@
   }, { passive: true }));
   document.addEventListener('visibilitychange', () => { const c = GameAudio.context; if (!c) return; if (document.hidden) c.suspend(); else c.resume(); });   // silencio al salir de la app
 
+  /* ---------- PARTIDA GUARDADA: una sola, en este navegador ----------
+     Se guarda sola en puntos clave de la historia (de momento: al irse la luz en el salón).
+     "v" es la versión del formato: si el juego cambia y una partida vieja ya no encaja, se descarta. */
+  const PDSave = (() => {
+    const KEY = 'pd_save', V = 1;
+    function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); return s && s.v === V ? s : null; } catch (e) { return null; } }
+    function save(data) { try { localStorage.setItem(KEY, JSON.stringify(Object.assign({ v: V, ts: Date.now() }, data))); } catch (e) {} }
+    function clear() { try { localStorage.removeItem(KEY); } catch (e) {} }
+    return { load, save, clear, get exists() { return !!load(); } };
+  })();
+  window.PDSave = PDSave;
+
   /* ---------- ventanas ---------- */
   const menu = $('menuButtons');
   let current = null, opener = null, settingsStacked = false;
@@ -1452,7 +1484,7 @@
   }
   // música SOLO en el menú (también con Ajustes o ¿Salir? encima); al entrar en la partida o en la despedida se corta en el acto
   function updateMusic() {
-    if (!current || current.id === 'settings' || current.id === 'confirm') MenuMusic.start(); else MenuMusic.stop(0.15);
+    if (!current || ['settings', 'confirm', 'confirmNew'].includes(current.id)) MenuMusic.start(); else MenuMusic.stop(0.15);
   }
   function closePhoneUI() { $('phoneUI').classList.remove('open'); }
   function powerOffPhone() {
@@ -1496,14 +1528,15 @@
     }
     if (current.id === 'settings') { closeSettings(); return; }
     current.classList.remove('open'); current = null; menu.inert = false;
-    if (opener && opener.focus) opener.focus();
+    refreshContinue();                                        // al volver al menú puede haber una partida recién guardada
+    if (opener && opener.focus && !opener.hidden) opener.focus();
     updateMusic();
   }
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && $('phoneUI').classList.contains('open')) { powerOffPhone(); return; }
     if (e.key === 'Escape' && ($('settings').classList.contains('open'))) { closeSettings(); return; }
     // Escape no cierra la partida (newgame): evita perder progreso por pulsación accidental
-    if (e.key === 'Escape' && current && current.id === 'confirm') closeOverlay();
+    if (e.key === 'Escape' && current && (current.id === 'confirm' || current.id === 'confirmNew')) closeOverlay();
     if (!current && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
       const bs = [...menu.querySelectorAll('button:not([hidden])')];
       let i = bs.indexOf(document.activeElement);
@@ -1511,7 +1544,7 @@
       bs[i].focus();
     }
   });
-  ['settings', 'confirm'].forEach(id => $(id).addEventListener('pointerdown', e => {
+  ['settings', 'confirm', 'confirmNew'].forEach(id => $(id).addEventListener('pointerdown', e => {
     if (e.target !== $(id)) return;
     if (id === 'settings') closeSettings(); else closeOverlay();
   }));
@@ -1540,13 +1573,33 @@
     g.fillRect(2, 5, 6, 4); g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(4, 7, 2, 2);
   });
 
-  /* ---------- Nuevo juego ---------- */
-  $('btnNew').addEventListener('click', () => {
-    if ($('btnNew').hidden) return;
+  /* ---------- Nuevo juego / Continuar ---------- */
+  function startNewGame() {
+    PDSave.clear();                                           // solo puede haber una partida: la nueva sustituye a la guardada
     openOverlay($('newgame'), $('introSettings'), $('btnNew'));
     if (window.PDIntro) window.PDIntro.start();
     document.dispatchEvent(new CustomEvent('pd:newgame'));   // gancho para cuando exista el juego
+  }
+  $('btnNew').addEventListener('click', () => {
+    if ($('btnNew').hidden) return;
+    if (PDSave.exists) openOverlay($('confirmNew'), $('confirmNewNo'), $('btnNew'));   // aviso: perderás la anterior
+    else startNewGame();
   });
+  $('confirmNewNo').addEventListener('click', closeOverlay);
+  $('confirmNewYes').addEventListener('click', () => { $('confirmNew').classList.remove('open'); current = null; startNewGame(); });
+  $('btnContinue').addEventListener('click', () => {
+    const s = PDSave.load();
+    if (!s) { refreshContinue(); return; }
+    openOverlay($('newgame'), $('introSettings'), $('btnContinue'));
+    if (window.PDIntro) window.PDIntro.resume(s);
+  });
+  // CONTINUAR solo se ve si hay partida guardada; al aparecer o desaparecer, el menú se recoloca
+  function refreshContinue() {
+    const b = $('btnContinue'), has = PDSave.exists;
+    if (b.hidden !== has) return;
+    b.hidden = !has; applyLayout();
+  }
+  refreshContinue();
   $('introMenu').addEventListener('click', () => { GameAudio.click(); closeOverlay(); });
   $('introSettings').addEventListener('click', () => { GameAudio.click(); openSettings($('introSettings')); });
   $('hudPhone').addEventListener('click', () => openPhoneUI());
@@ -2723,7 +2776,16 @@
       });
     }
     function enableHome() { homeMode = true; screen = 'home'; ensureAssets(() => {}); }
-    return { reset, render, open, bind, powerOff, enableHome, get flashlight() { return flash; } };
+    // partida guardada: qué se recuerda del móvil y cómo queda al continuar (chat con Daniel ya terminado)
+    function snapshot() { return { flash, waScreen, chatWith }; }
+    function restore(s) {
+      unlocked = true; chatSeq = 'done'; sentReply = true; sentOk = true; chatReveal = 1;
+      typeTarget = REPLY_OK; chatTyped = REPLY_OK.length;
+      waScreen = s && s.waScreen === 'list' ? 'list' : 'chat'; chatWith = s && s.chatWith === 'mama' ? 'mama' : 'daniel';
+      setFlash(!!(s && s.flash));
+      enableHome();
+    }
+    return { reset, render, open, bind, powerOff, enableHome, snapshot, restore, get flashlight() { return flash; } };
   })();
   window.PDPhone = PhoneApp;
 
@@ -3060,7 +3122,22 @@
 
     raf = requestAnimationFrame(frame);
   }
-  window.PDIntro = { start, stop, skipLine };
+  // CONTINUAR una partida guardada (punto: se va la luz en el salón): se salta la intro y entra directo a la sala
+  function resume(save) {
+    if (!bg) build();
+    PhoneApp.reset(); PhoneApp.bind(); PhoneApp.restore(save.phone);
+    running = true; ended = true; phoneTaken = true; phoneHover = false; phoneReady = false;
+    vibeT0 = null; vibeDone = true; vibeNotified = true;
+    roomAt = null; inRoom = true; voice = null; voiceOff = true; windLvl = 0.55;
+    t0 = performance.now() / 1000; lastT = 0;
+    clearSub(); setHud(true);
+    const ui = document.getElementById('phoneUI'); if (ui) ui.classList.remove('open');
+    cancelAnimationFrame(raf);                             // la escena lateral no se dibuja
+    if (window.PDRoom) window.PDRoom.start({ from: save.at, player: save.player });
+    const GA = A(); if (!GA) return;
+    GA.loadURL('wind', 'assets/wind.mp3').then(buf => { if (running && !wind) wind = GA.loop(buf, 3, windLvl); }).catch(() => {});
+  }
+  window.PDIntro = { start, stop, skipLine, resume };
 })();
 </script>
 <script>
@@ -3383,19 +3460,31 @@
   // ---------- bucle ----------
   // ---------- apagón: a los 5 s se va la luz de la casa (parpadea, se apaga con un chasquido) ----------
   const OUT_AT = 5, OUT_FLICK = [[0, 0.07, 0], [0.07, 0.2, 1], [0.2, 0.32, 0], [0.32, 0.5, 0.6], [0.5, 0.58, 0]];
-  const powerAt = t => { if (t < OUT_AT) return 1; const f = OUT_FLICK.find(([a, b]) => t - OUT_AT >= a && t - OUT_AT < b); return f ? f[2] : 0; };
+  let outAt = OUT_AT;                                                // al continuar una partida guardada, la luz ya se fue (outAt < 0)
+  const powerAt = t => { if (t < outAt) return 1; const f = OUT_FLICK.find(([a, b]) => t - outAt >= a && t - outAt < b); return f ? f[2] : 0; };
   let outFx = 0;                                                     // sonidos del apagón ya hechos (0, 1 o 2)
   function outageSounds(t) {
     const GA = window.GameAudio; if (!GA) return;
-    if (outFx < 1 && t >= OUT_AT) { outFx = 1; GA.blip(70, 0.18, 'square', 0.12, 40); }                         // chasquido del salto de luz
-    if (outFx < 2 && t >= OUT_AT + 0.5) { outFx = 2; GA.blip(1400, 0.45, 'sine', 0.05, 80); GA.blip(60, 0.3, 'square', 0.08, 30); }   // la tele se apaga
+    if (outFx < 1 && t >= outAt) { outFx = 1; GA.blip(70, 0.18, 'square', 0.12, 40); }                          // chasquido del salto de luz
+    if (outFx < 2 && t >= outAt + 0.5) { outFx = 2; GA.blip(1400, 0.45, 'sine', 0.05, 80); GA.blip(60, 0.3, 'square', 0.08, 30); }   // la tele se apaga
+  }
+  // ---------- guardado automático: al irse la luz, antes de los bocadillos ----------
+  let saved = false;
+  function autosave(t) {
+    if (saved || t < outAt) return;
+    saved = true;
+    if (window.PDSave) window.PDSave.save({
+      at: 'apagon',
+      player: { x: P.x, y: P.y, dir: P.dir, ang: P.ang },
+      phone: window.PDPhone ? window.PDPhone.snapshot() : null
+    });
   }
 
   // ---------- bocadillos de cómic del protagonista (uno detrás de otro) ----------
   // Al acabar el último, el móvil empieza a vibrar hasta que el jugador lo abre.
   const SAYS = [{ text: 'Vaya, qué momento para que se vaya la luz', hold: 3.2 }, { text: 'Voy a preguntarle a mi madre', hold: 2.6 }];
-  const SAY_AT = OUT_AT + 1.2, SAY_DT = 0.045, SAY_GAP = 0.8;
-  let sayI = 0, sayNext = SAY_AT, sayAt = null, sayLines = null;
+  const SAY_AFTER = 1.2, SAY_DT = 0.045, SAY_GAP = 0.8;              // el primero, 1,2 s después del apagón
+  let sayI = 0, sayNext = OUT_AT + SAY_AFTER, sayAt = null, sayLines = null;
   const phoneOpen = () => document.getElementById('phoneUI').classList.contains('open');
   function drawBubble(t) {
     const PD = window.PD; if (!PD || sayI >= SAYS.length || t < sayNext) return;
@@ -3500,7 +3589,7 @@
     update(dt);
     const lvl = 0.94 + 0.06 * Math.sin(t * 1.6) - (hash(Math.floor(t * 18)) > 0.97 ? 0.25 : 0);
     const power = powerAt(t);                                            // luz eléctrica (1 = encendida); la del día no depende de ella
-    outageSounds(t);
+    outageSounds(t); autosave(t);
     ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;   // a partir de aquí, en px lógicos
 
     ctx.drawImage(bg, 0, 0);
@@ -3590,12 +3679,18 @@
     raf = requestAnimationFrame(frame);
   }
 
-  function start() {
+  // opts.from === 'apagon': se continúa una partida guardada en el apagón (la luz ya se fue; vuelven los bocadillos)
+  function start(opts) {
     if (!bg) build();
+    const resumed = !!opts && opts.from === 'apagon', sp = resumed && opts.player;
     Object.assign(P, { x: 170, y: 74, dir: 'down', ang: Math.PI / 2, moving: false, phase: 0, tx: null, ty: null, stuck: 0 });   // junto al sofá, donde estaba el móvil
+    if (sp && isFinite(sp.x) && isFinite(sp.y) && !blocked(sp.x, sp.y)) {                     // donde estaba al guardarse (si sigue siendo un sitio válido)
+      Object.assign(P, { x: sp.x, y: sp.y, dir: ['up', 'down', 'left', 'right'].includes(sp.dir) ? sp.dir : 'down', ang: isFinite(sp.ang) ? sp.ang : Math.PI / 2 });
+    }
     flashOn = !!(window.PDPhone && window.PDPhone.flashlight);
-    keys.clear(); mark = null; moved = false; movedAt = null; dragging = false; outFx = 0;
-    sayI = 0; sayNext = SAY_AT; sayAt = null; stopBuzz();
+    keys.clear(); mark = null; moved = false; movedAt = null; dragging = false;
+    outAt = resumed ? -10 : OUT_AT; outFx = resumed ? 2 : 0; saved = resumed;
+    sayI = 0; sayNext = resumed ? FADE_IN + 1 : OUT_AT + SAY_AFTER; sayAt = null; stopBuzz();
     cv.hidden = false; running = true;
     t0 = performance.now() / 1000; last = performance.now();
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
