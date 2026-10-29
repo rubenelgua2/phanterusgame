@@ -173,6 +173,8 @@
   #settings { z-index: 60; }   /* ajustes por encima de la intro */
   #introCanvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
   [data-layout=portrait] #introCanvas { top: 50%; height: auto; transform: translateY(-50%); object-fit: contain; }   /* formato cine en vertical */
+  /* sala vista desde arriba: se ve entera siempre (sin recortes), con bandas negras si sobra pantalla */
+  #roomCanvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; z-index: 1; background: #000; touch-action: none; }
   .intro-top {
     position: absolute; z-index: 3; top: calc(var(--px) * 3 + env(safe-area-inset-top));
     right: calc(var(--px) * 3 + env(safe-area-inset-right));
@@ -201,6 +203,14 @@
     padding: calc(var(--px) * 1.5); line-height: 0;
   }
   .intro-hud-phone canvas { display: block; width: calc(12 * var(--px)); height: calc(18 * var(--px)); }
+  /* el móvil vibra: tiembla un momento y para, una y otra vez, hasta que se abre */
+  .intro-hud-phone.buzzing { animation: hudbuzz 1.8s infinite; }
+  @keyframes hudbuzz {
+    0%, 22%, 100% { transform: none; }
+    3% { transform: translateX(-2px) rotate(-8deg); } 6% { transform: translateX(2px) rotate(8deg); }
+    9% { transform: translateX(-2px) rotate(-8deg); } 12% { transform: translateX(2px) rotate(8deg); }
+    15% { transform: translateX(-1px) rotate(-5deg); } 18% { transform: translateX(1px) rotate(5deg); }
+  }
   /* ventana estática del smartphone (UI) */
   #phoneUI {
     position: absolute; inset: 0; z-index: 4;
@@ -231,7 +241,7 @@
   .phone-side-btn:focus-visible { outline: calc(var(--px) * 0.5) solid rgba(255, 90, 74, .7); outline-offset: calc(var(--px) * 0.5); }
   .phone-side-btn:active { filter: brightness(1.15); }
 
-  @media (prefers-reduced-motion: reduce) { .overlay.open { animation: none; } #phoneUI.open { animation: none; } #scene { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .overlay.open { animation: none; } #phoneUI.open { animation: none; } #scene { transition: none; } .intro-hud-phone.buzzing { animation: none; } }
 </style>
 </head>
 <body>
@@ -262,6 +272,16 @@
         <input type="range" id="volume" min="0" max="100" step="1" value="70" aria-label="Volumen general">
         <button class="btn" id="volUp" type="button" data-label="+" aria-label="Subir volumen"></button>
       </div>
+      <!-- música del menú: va aparte, pero también la baja el volumen general -->
+      <div class="vol-label" style="margin-top: calc(var(--px) * 6)">
+        <span data-px="MÚSICA" data-color="#c9b8b8"></span>
+        <span id="musicOut" data-px="100%" data-color="#ff5a4a"></span>
+      </div>
+      <div class="vol-row">
+        <button class="btn" id="musDown" type="button" data-label="-" aria-label="Bajar música"></button>
+        <input type="range" id="musicVol" min="0" max="100" step="1" value="100" aria-label="Volumen de la música">
+        <button class="btn" id="musUp" type="button" data-label="+" aria-label="Subir música"></button>
+      </div>
       <div class="row-actions" id="fsRow" style="margin-top: calc(var(--px) * 5)"><button class="btn" id="btnFull" type="button" data-label="PANTALLA COMPLETA" aria-label="Pantalla completa"></button></div>
       <div class="row-actions" style="margin-top: calc(var(--px) * 4)"><button class="btn" id="settingsClose" type="button" data-label="VOLVER" aria-label="Volver"></button></div>
     </div>
@@ -281,6 +301,8 @@
   <!-- Nueva partida: introducción (sala vacía, viento y fecha) -->
   <div class="overlay" id="newgame" role="dialog" aria-modal="true" aria-label="Nueva partida">
     <canvas id="introCanvas" role="img" aria-label="Una sala vieja y vacía; la luz se refleja en el espejo"></canvas>
+    <!-- 2ª escena: la sala vista desde arriba (jugable) -->
+    <canvas id="roomCanvas" role="img" aria-label="El salón visto desde arriba: sofá, cómoda, mesa junto a la ventana y la tele encendida" hidden></canvas>
     <button type="button" class="intro-sub" id="introSubBtn" aria-label="Saltar diálogo" hidden>
       <canvas id="introSub" role="img" aria-label="Subtítulo"></canvas>
     </button>
@@ -1189,13 +1211,15 @@
      Todo sonido futuro (música, efectos) debe conectarse a GameAudio.master
      ===================================================================== */
   const GameAudio = (() => {
-    let ctx = null, master = null, vol = 0.7;
-    try { const s = parseFloat(localStorage.getItem('pd_master_volume')); if (!isNaN(s)) vol = Math.min(1, Math.max(0, s)); } catch (e) {}
+    let ctx = null, master = null, music = null, vol = 0.7, mvol = 1;
+    const saved = (key, v) => { try { const s = parseFloat(localStorage.getItem(key)); if (!isNaN(s)) return Math.min(1, Math.max(0, s)); } catch (e) {} return v; };
+    vol = saved('pd_master_volume', vol); mvol = saved('pd_music_volume', mvol);
     function init() {
       if (!ctx) {
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return false;
         ctx = new AC(); master = ctx.createGain(); master.gain.value = vol; master.connect(ctx.destination);
+        music = ctx.createGain(); music.gain.value = mvol; music.connect(master);   // la música pasa también por el volumen general
       }
       if (ctx.state === 'suspended') ctx.resume();
       return true;
@@ -1204,6 +1228,11 @@
       vol = Math.min(1, Math.max(0, v));
       if (master) master.gain.setTargetAtTime(vol, ctx.currentTime, 0.015);
       try { localStorage.setItem('pd_master_volume', String(vol)); } catch (e) {}
+    }
+    function setMusicVolume(v) {
+      mvol = Math.min(1, Math.max(0, v));
+      if (music) music.gain.setTargetAtTime(mvol, ctx.currentTime, 0.015);
+      try { localStorage.setItem('pd_music_volume', String(mvol)); } catch (e) {}
     }
     function blip(freq, dur, type, level, slideTo) {
       if (!ctx || ctx.state !== 'running') return;
@@ -1264,8 +1293,9 @@
       return Math.min(h, ctx.currentTime);                 // con el audio en pausa el reloj se queda quieto
     }
     return {
-      init, setVolume, blip, loadB64, loadURL, loop, play, heard,
-      get volume() { return vol; }, get master() { return master; }, get context() { return ctx; },
+      init, setVolume, setMusicVolume, blip, loadB64, loadURL, loop, play, heard,
+      get volume() { return vol; }, get musicVolume() { return mvol; },
+      get master() { return master; }, get music() { return music; }, get context() { return ctx; },
       hover() { blip(180, 0.05, 'square', 0.06); },
       click() { blip(120, 0.14, 'sawtooth', 0.16, 45); },
       test()  { blip(440, 0.08, 'square', 0.12); },
@@ -1292,28 +1322,32 @@
      Fa mayor, 92 bpm, swing suave y ritmo de bossa; 32 compases (la 2ª vuelta deja descansar la melodía).
      Se toca en tiempo real como un secuenciador de consola: cada compás se programa en el reloj de audio un
      poco antes de que suene, así arranca al instante, gasta muy poco y el bucle no tiene costuras.
-     Canales: pulso 50% (melodía, con vibrato y eco), pulso 25% (acordes), triángulo (bajo), ruido (shaker).
+     Canales: pulso 50% (melodía, con vibrato), pulso 25% (acordes), triángulo (bajo), ruido (shaker).
+     Para que suene limpio: melodía y bajo tocan una nota cada vez (la anterior se apaga antes de la siguiente),
+     cada canal tiene su altura (bajo < acordes, por debajo de Mi4 < melodía) y no hay eco que se monte encima.
      ===================================================================== */
   const MenuMusic = (() => {
     const BPM = 92, BEAT = 60 / BPM, BAR = 4 * BEAT, SWING = 0.58, BARS = 32, AHEAD = 0.6;
-    const LEVEL = 0.23;                                         // medido: RMS 0.05 y picos 0.27 (más bajo que el viento y las voces)
+    const LEVEL = 0.24;                                         // medido: RMS 0.05 y picos 0.21 (más bajo que el viento y las voces)
     const midi = n => { const m = /^([A-G])([#b]?)(\d)$/.exec(n); return 12 * (+m[3] + 1) + 'C D EF G A B'.indexOf(m[1]) + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0); };
     const hz = n => 440 * Math.pow(2, (midi(n) - 69) / 12);
     const sw = beat => (Math.floor(beat) + (beat % 1 === 0.5 ? SWING : beat % 1)) * BEAT;   // tiempo dentro del compás, corcheas con swing
+    const span = (s, d) => sw(s + d) - sw(s);                  // duración real de una nota, con el swing aplicado a su final
+    const gate = (s, d, rel) => Math.min(span(s, d) * 0.9, span(s, d) - rel - 0.01);   // nota + su cola terminan antes de la siguiente
 
-    // acordes: bajo (fundamental) y voicing sin fundamental en la zona media (colores de jazz: 7ª y 9ª)
+    // acordes: bajo (fundamental) y 3 notas sin fundamental entre Mi3 y Mi4 (3ª, 7ª, 9ª: color de jazz sin tapar la melodía)
     const CH = {
-      Fmaj7: ['F2', 'A3 C4 E4 G4'], Dm7: ['D2', 'A3 C4 E4 F4'], Gm7: ['G2', 'Bb3 D4 F4 A4'], C7: ['C3', 'Bb3 D4 E4 G4'],
-      D7: ['D2', 'C4 E4 F#4 A4'], Bbmaj7: ['Bb2', 'A3 C4 D4 F4'], Bbm6: ['Bb2', 'Bb3 Db4 F4 G4'], Am7: ['A2', 'G3 C4 E4 A4']
+      Fmaj7: ['F2', 'A3 C4 E4'], Dm7: ['D2', 'F3 A3 C4'], Gm7: ['G2', 'F3 Bb3 D4'], C7: ['C3', 'E3 Bb3 D4'],
+      D7: ['D2', 'F#3 C4 E4'], Bbmaj7: ['Bb2', 'F3 A3 D4'], Bbm6: ['Bb2', 'F3 G3 Db4'], Am7: ['A2', 'G3 C4 E4']
     };
     const PROG = ['Fmaj7', 'Dm7', 'Gm7', 'C7', 'Fmaj7', 'D7', 'Gm7', 'C7',            // A: la casa de apuestas abre
                   'Bbmaj7', 'Bbm6', 'Am7', 'D7', 'Gm7', 'C7', 'Fmaj7 Dm7', 'Gm7 C7'];  // B: el iv menor le da el toque triste
     // melodía, un compás por línea: "tiempo-duración-nota"
     const MEL = [
       '1-1-A4 2-.5-C5 2.5-1.5-E5', '0-1.5-D5 1.5-.5-C5 2-2-A4', '.5-.5-Bb4 1-.5-D5 1.5-1.5-F5 3-1-E5', '0-1-D5 1-.5-C5 1.5-.5-Bb4 2-2-G4',
-      '1-1-A4 2-.5-C5 2.5-1.5-F5', '0-1.5-F#5 1.5-.5-E5 2-1-D5 3-1-C5', '0-1.5-Bb4 1.5-.5-A4 2-2-G4', '.5-.5-E4 1-.5-G4 1.5-.5-Bb4 2-.5-D5 2.5-1.5-C5',
+      '1-1-A4 2-.5-C5 2.5-1.5-F5', '0-1.5-F#5 1.5-.5-E5 2-1-D5 3-1-C5', '0-1.5-Bb4 1.5-.5-A4 2-2-G4', '.5-.5-G4 1-.5-Bb4 1.5-.5-D5 2-.5-E5 2.5-1.5-C5',
       '0-1.5-F5 1.5-.5-D5 2-2-A4', '0-1.5-F5 1.5-.5-Db5 2-2-Bb4', '.5-.5-C5 1-.5-E5 1.5-1.5-G5 3-1-E5', '0-1.5-F#5 1.5-.5-E5 2-2-D5',
-      '0-1-Bb4 1-.5-D5 1.5-1-F5 2.5-1.5-A5', '0-1-G5 1-1-E5 2-1-C5 3-1-Bb4', '0-1.5-A4 1.5-.5-G4 2-2-F4', '2-.5-E4 2.5-.5-G4 3-1-Bb4'
+      '0-1-Bb4 1-.5-D5 1.5-1-F5 2.5-1.5-A5', '0-1-G5 1-1-E5 2-1-C5 3-1-Bb4', '0-1.5-A4 1.5-.5-G4 2-2-F4', '2-.5-G4 2.5-.5-Bb4 3-1-C5'
     ].map(l => l.split(' ').map(s => { const [b, d, n] = s.split('-'); return [+b, +d, n]; }));
 
     // instrumentos y efectos fijos; devuelve la función que programa un compás (n) a partir del instante t0
@@ -1326,9 +1360,6 @@
       const P50 = pulse(0.5), P25 = pulse(0.25);
       const bus = oc.createBiquadFilter(); bus.type = 'lowpass'; bus.frequency.value = 5000; bus.connect(dest);
       const lead = oc.createBiquadFilter(); lead.type = 'lowpass'; lead.frequency.value = 3200; lead.connect(bus);
-      const echo = oc.createDelay(1), fb = oc.createGain(), wet = oc.createGain(), damp = oc.createBiquadFilter();
-      echo.delayTime.value = BEAT * 0.75; fb.gain.value = 0.3; wet.gain.value = 0.28; damp.type = 'lowpass'; damp.frequency.value = 1800;
-      lead.connect(echo); echo.connect(damp); damp.connect(fb); fb.connect(echo); damp.connect(wet); wet.connect(bus);
       const comp = oc.createBiquadFilter(); comp.type = 'lowpass'; comp.frequency.value = 2200; comp.connect(bus);
       const vib = oc.createOscillator(), vibAmt = oc.createGain(); vib.frequency.value = 5.2; vibAmt.gain.value = 9; vib.connect(vibAmt); vib.start();
       const noise = oc.createBuffer(1, Math.round(oc.sampleRate / 5), oc.sampleRate), nd = noise.getChannelData(0);
@@ -1360,13 +1391,13 @@
           // bajo de bossa: fundamental (negra con puntillo) + quinta, dos veces por compás
           [[0, 1.5, hz(root)], [1.5, 0.5, fifth], [2, 1.5, hz(root)], [3.5, 0.5, fifth]]
             .filter(([s]) => !half || (s >= b0 && s < b0 + 2))
-            .forEach(([s, d, f]) => tone('triangle', f, at(s), d * BEAT * 0.92, 0.42, bus, 0.7, 0.08));
-          // acordes punteados, rasgueo suave (cada voz entra 12 ms después)
-          (half ? [b0, b0 + 1.5] : [0, 1.5, 3]).forEach((s, k) => voicing.split(' ').forEach((nt, v) =>
-            tone(P25, hz(nt), at(s) + v * 0.012, (k === 0 ? 1.1 : 0.7) * BEAT, k === 0 ? 0.05 : 0.038, comp, 0.35, 0.12)));
+            .forEach(([s, d, f]) => tone('triangle', f, at(s), gate(s, d, 0.04), 0.42, bus, 0.7, 0.04));
+          // acordes punteados, rasgueo suave (cada voz entra 12 ms después); cada golpe se apaga antes del siguiente
+          (half ? [[b0, 1.1], [b0 + 1.5, 0.35]] : [[0, 1.1], [1.5, 0.8], [3, 0.7]]).forEach(([s, len], k) => voicing.split(' ').forEach((nt, v) =>
+            tone(P25, hz(nt), at(s) + v * 0.012, span(s, len), k === 0 ? 0.06 : 0.045, comp, 0.35, 0.06)));
         });
         // melodía: la 2ª vuelta descansa en la parte A (solo ritmo), para que no canse
-        if (pass === 0 || b >= 8) MEL[b].forEach(([s, d, nt]) => vibAmt.connect(tone(P50, hz(nt), at(s), d * BEAT * 0.9, 0.17, lead, 0.75, 0.12).detune));
+        if (pass === 0 || b >= 8) MEL[b].forEach(([s, d, nt]) => vibAmt.connect(tone(P50, hz(nt), at(s), gate(s, d, 0.04), 0.17, lead, 0.75, 0.04).detune));
         // shaker en corcheas (acento a contratiempo), bombo muy suave en 1 y 3, clave de bossa con "rim"
         for (let e = 0; e < 8; e++) hiss(at(e / 2), e % 2 ? 0.06 : 0.035, e % 2 ? 0.05 : 0.028, 6000);
         [0, 2].forEach(s => tone('sine', 110, at(s), 0.13, 0.22, bus, 0.2, 0.05, 42));
@@ -1379,7 +1410,7 @@
       const c = GameAudio.context;
       if (player || !c) return;                                // sin gesto del usuario todavía no hay audio
       const out = c.createGain(), t = c.currentTime;
-      out.gain.setValueAtTime(0, t); out.gain.linearRampToValueAtTime(LEVEL, t + 2.5); out.connect(GameAudio.master);
+      out.gain.setValueAtTime(0, t); out.gain.linearRampToValueAtTime(LEVEL, t + 2.5); out.connect(GameAudio.music);
       const bar = synth(c, out);
       let n = 0, next = t + 0.1;
       const tick = () => {                                      // programa los compases que van a sonar en los próximos AHEAD s
@@ -1394,14 +1425,20 @@
       if (!player) return;
       const { out, timer } = player, c = GameAudio.context, t = c.currentTime, f = fade || 1.5;
       out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.linearRampToValueAtTime(0, t + f);
-      setTimeout(() => { clearInterval(timer); out.disconnect(); }, (f + AHEAD + 0.2) * 1000);
+      clearInterval(timer);                                     // no se programan más compases
+      setTimeout(() => out.disconnect(), (f + AHEAD + 0.2) * 1000);   // lo ya programado suena con volumen 0 y se suelta
       player = null;
     }
     return { start, stop, synth, BARS, BAR, get playing() { return !!player; } };
   })();
   window.MenuMusic = MenuMusic;
 
-  ['pointerdown', 'touchend', 'click', 'keydown'].forEach(ev => addEventListener(ev, () => { GameAudio.init(); updateMusic(); }, { passive: true }));   // iOS/Android exigen un gesto
+  // iOS/Android exigen un gesto para el audio. La música se decide al acabar el gesto (no al pulsar):
+  // si ese primer clic era NUEVO JUEGO, ya no estamos en el menú y no llega a sonar ni una nota
+  ['pointerdown', 'touchend', 'click', 'keydown'].forEach(ev => addEventListener(ev, () => {
+    GameAudio.init();
+    if (ev !== 'pointerdown') setTimeout(updateMusic, 50);
+  }, { passive: true }));
   document.addEventListener('visibilitychange', () => { const c = GameAudio.context; if (!c) return; if (document.hidden) c.suspend(); else c.resume(); });   // silencio al salir de la app
 
   /* ---------- ventanas ---------- */
@@ -1413,9 +1450,9 @@
     (focusEl || el.querySelector('button')).focus();
     updateMusic();
   }
-  // música del menú: suena mientras se ve el menú (también con Ajustes o ¿Salir? encima); en la partida y en la despedida, no
+  // música SOLO en el menú (también con Ajustes o ¿Salir? encima); al entrar en la partida o en la despedida se corta en el acto
   function updateMusic() {
-    if (!current || current.id === 'settings' || current.id === 'confirm') MenuMusic.start(); else MenuMusic.stop(1.5);
+    if (!current || current.id === 'settings' || current.id === 'confirm') MenuMusic.start(); else MenuMusic.stop(0.15);
   }
   function closePhoneUI() { $('phoneUI').classList.remove('open'); }
   function powerOffPhone() {
@@ -1516,20 +1553,25 @@
   $('phoneUIClose').addEventListener('click', () => { GameAudio.click(); powerOffPhone(); });
   $('phoneUI').addEventListener('pointerdown', e => { if (e.target === $('phoneUI')) powerOffPhone(); });
 
-  /* ---------- Ajustes (volumen) ---------- */
-  const slider = $('volume'), out = $('volumeOut');
-  let lastTest = 0;
-  function showVolume(pct) { slider.value = pct; slider.style.setProperty('--pct', pct + '%'); renderPx(out, pct + '%'); }
-  function applyVolume(pct, audible) {
-    pct = Math.min(100, Math.max(0, Math.round(pct)));
-    showVolume(pct); GameAudio.init(); GameAudio.setVolume(pct / 100);
-    const n = performance.now();
-    if (audible && n - lastTest > 110) { lastTest = n; GameAudio.test(); }
+  /* ---------- Ajustes (volumen general y música) ---------- */
+  // un deslizador con sus botones - / +; "beep" = pitido de prueba al moverlo (la música ya se oye sola en el menú)
+  function volumeControl(ids, initial, set, beep) {
+    const [slider, out, down, up] = ids.split(' ').map($);
+    let lastTest = 0;
+    const show = pct => { slider.value = pct; slider.style.setProperty('--pct', pct + '%'); renderPx(out, pct + '%'); };
+    const apply = pct => {
+      pct = Math.min(100, Math.max(0, Math.round(pct)));
+      show(pct); GameAudio.init(); set(pct / 100);
+      const n = performance.now();
+      if (beep && n - lastTest > 110) { lastTest = n; GameAudio.test(); }
+    };
+    show(Math.round(initial * 100));
+    slider.addEventListener('input', () => apply(+slider.value));
+    down.addEventListener('click', () => apply(+slider.value - 10));
+    up.addEventListener('click', () => apply(+slider.value + 10));
   }
-  showVolume(Math.round(GameAudio.volume * 100));
-  slider.addEventListener('input', () => applyVolume(+slider.value, true));
-  $('volDown').addEventListener('click', () => applyVolume(+slider.value - 10, true));
-  $('volUp').addEventListener('click', () => applyVolume(+slider.value + 10, true));
+  volumeControl('volume volumeOut volDown volUp', GameAudio.volume, v => GameAudio.setVolume(v), true);
+  volumeControl('musicVol musicOut musDown musUp', GameAudio.musicVolume, v => GameAudio.setMusicVolume(v), false);
   $('btnSettings').addEventListener('click', () => openSettings($('btnSettings')));
   $('settingsClose').addEventListener('click', closeSettings);
   const fsOK = document.fullscreenEnabled || document.webkitFullscreenEnabled;      // iPhone no lo permite: se oculta
@@ -1638,22 +1680,6 @@
       }
     }
     R(0, FLOOR, W, 3, '#000', 0.45); R(0, FLOOR + 3, W, 2, '#000', 0.2);
-
-    // ---------- alfombra ----------
-    for (let y = 141; y <= 177; y++) {
-      const t = (y - 141) / 36, xl = Math.round(30 - 34 * t), xr = Math.round(236 + 34 * t), bw = Math.round(4 + 3 * t);
-      for (let x = Math.max(0, xl); x <= Math.min(W - 1, xr); x++) {
-        const e = Math.min(x - xl, xr - x), ey = Math.min(y - 141, 177 - y);
-        let c;
-        if (e < 2 || ey < 1) c = '#1f0a0b';
-        else if (e < bw) c = (e === 2 || e === bw - 1) ? '#7a5a24' : '#4a1416';
-        else if (ey < bw * 0.5) c = '#4a1416';
-        else { c = (((x >> 3) + (y >> 2)) & 1) ? '#5e1b1e' : '#531518'; if (hash(x * 1.3 + y * 2.9) > 0.97) c = '#74312a'; }
-        Pt(x, y, c);
-      }
-    }
-    for (let k = 0; k < 2; k++) for (let a = 0; a < 360; a += 3) { const rr = a * Math.PI / 180; Pt(133 + Math.cos(rr) * (34 - k * 14), 159 + Math.sin(rr) * (9 - k * 4), '#7a5a24', 0.55); }
-    for (let x = 6; x < 266; x += 2) R(x, 178, 1, 2, '#a89868', 0.5);
 
     // ---------- cuadros: sombras, cuerdas y marcos ----------
     R(MX0 + 4, MY0 + 5, MW, MH, '#000', 0.3);
@@ -1902,8 +1928,16 @@
     ];
     const KEY_R = 26;
     let screen = 'lock', pin = '', hits = [], shakeT = 0, flashKey = null, flashUntil = 0;
-    let imgs = { lock: null, pin: null, chat: null }, ready = false;
+    let imgs = { lock: null, pin: null, chat: null, home: null }, ready = false;
     let anim = null, rafId = 0, chatRaf = 0, dragY0 = null, chatReveal = 1, poweringOff = false;
+    // 2ª escena: el móvil arranca en la pantalla de inicio (WhatsApp + Linterna)
+    let homeMode = false, flash = false;
+    // WhatsApp: con quién es el chat abierto, qué pantalla de la app se vio la última vez y si se tocó el campo del chat de mamá
+    let chatWith = 'daniel', waScreen = 'chat', momFocus = false;
+    const HOME_TIME = '16:05', HOME_DATE = 'Jueves 24 sep';          // como el reloj de la pared; el 24/09/2026 es jueves
+    const SCREEN = { x: 20, y: 22, w: 200, h: 432 };                  // pantalla exacta dentro del marco del sprite (medida en el png)
+    const APPS = { chat: { x: 70, y: 304, label: 'WhatsApp' }, flash: { x: 130, y: 304, label: 'Linterna' } };
+    const ICON = 40, TORCH = { x: 120, y: 150 }, SWITCH = { x: 82, y: 330, w: 76, h: 34 };   // app Linterna: dibujo y interruptor
     // unlocked: ya entró al chat; chatSeq persiste al apagar
     // idle → typing → sent → waiting → awaitOk → typing → done
     let unlocked = false, chatSeq = 'idle', chatTyped = 0, chatT0 = 0, firstBubble = null;
@@ -2046,6 +2080,7 @@
       flashKey = null; chatReveal = 1; poweringOff = false;
       unlocked = false; chatSeq = 'idle'; chatTyped = 0; chatT0 = 0; firstBubble = null;
       typeTarget = REPLY; sentReply = false; sentOk = false;
+      homeMode = false; setFlash(false); chatWith = 'daniel'; waScreen = 'chat'; momFocus = false;
       if (rafId) cancelAnimationFrame(rafId); rafId = 0;
       if (chatRaf) cancelAnimationFrame(chatRaf); chatRaf = 0;
     }
@@ -2090,12 +2125,178 @@
       Promise.all([
         loadImg('assets/phone-lock.png'),
         loadImg('assets/phone-pin.png'),
-        loadImg('assets/phone-chat.png')
-      ]).then(([a, b, d]) => {
-        imgs.lock = a; imgs.pin = b; imgs.chat = d; ready = true; cb();
+        loadImg('assets/phone-chat.png'),
+        loadImg('assets/phone-home.png')                               // el mismo fondo del desbloqueo, sin la hora ni el aviso
+      ]).then(([a, b, d, h]) => {
+        imgs.lock = a; imgs.pin = b; imgs.chat = d; imgs.home = h; ready = true; cb();
       });
     }
-    function sprite(name) { return imgs[name]; }
+    function sprite(name) { return imgs[name === 'flash' || name === 'list' ? 'home' : name]; }   // linterna y lista de chats se pintan sobre el marco del inicio
+
+    // ---------- pantalla de inicio y app Linterna (2ª escena) ----------
+    function setFlash(on) {
+      if (flash === on) return;
+      flash = on;
+      document.dispatchEvent(new CustomEvent('pd:flashlight', { detail: { on } }));
+    }
+    function bigText(g, t, cx, y, s, col) {                          // texto 5×7 ampliado (la hora grande)
+      t = mNorm(t); g.fillStyle = col; let x = cx - Math.round(mMeasure(t) * s / 2);
+      for (const ch of t) {
+        (MF[ch] || MF['?']).split('|').forEach((row, ry) => { for (let i = 0; i < row.length; i++) if (row[i] === 'X') g.fillRect(x + i * s, y + ry * s, s, s); });
+        x += (mW(ch) + 1) * s;
+      }
+    }
+    function centered(g, t, cx, y, col, shadow) {
+      const x = cx - Math.round(mMeasure(t) / 2);
+      if (shadow) mText(g, t, x + 1, y + 1, shadow);
+      mText(g, t, x, y, col);
+    }
+    function statusBar(g, col) {                                     // hora, cobertura y batería
+      mText(g, HOME_TIME, SCREEN.x + 8, SCREEN.y + 6, col);
+      g.fillStyle = col;
+      for (let i = 0; i < 4; i++) g.fillRect(SCREEN.x + SCREEN.w - 44 + i * 4, SCREEN.y + 13 - i * 2 - 1, 3, i * 2 + 2);
+      g.fillRect(SCREEN.x + SCREEN.w - 24, SCREEN.y + 6, 14, 7); g.fillRect(SCREEN.x + SCREEN.w - 10, SCREEN.y + 8, 2, 3);
+      g.clearRect(SCREEN.x + SCREEN.w - 23, SCREEN.y + 7, 12, 5);
+      g.fillRect(SCREEN.x + SCREEN.w - 22, SCREEN.y + 8, 7, 3);       // batería al 60%
+    }
+    function appIcon(g, key, x, y) {
+      g.fillStyle = 'rgba(0,0,0,0.25)'; roundRect(g, x + 1, y + 2, ICON, ICON, 10); g.fill();
+      if (key === 'chat') {                                          // bocadillo blanco con auricular sobre verde
+        g.fillStyle = '#25d366'; roundRect(g, x, y, ICON, ICON, 10); g.fill();
+        g.fillStyle = '#1fb956'; g.fillRect(x + 4, y + ICON - 6, ICON - 8, 3);
+        g.fillStyle = '#fff'; g.beginPath(); g.arc(x + 20, y + 19, 12, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.moveTo(x + 10, y + 26); g.lineTo(x + 8, y + 33); g.lineTo(x + 16, y + 30); g.closePath(); g.fill();
+        g.fillStyle = '#25d366'; g.beginPath(); g.arc(x + 20, y + 19, 9, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = '#fff'; g.lineWidth = 3; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(x + 16, y + 14); g.quadraticCurveTo(x + 15, y + 24, x + 25, y + 24); g.stroke();
+      } else {                                                       // linterna blanca (con rayos si está encendida)
+        g.fillStyle = flash ? '#f2c94c' : '#2f343c'; roundRect(g, x, y, ICON, ICON, 10); g.fill();
+        const ink = flash ? '#2a2210' : '#f2f2f2';
+        g.fillStyle = ink;
+        g.beginPath(); g.moveTo(x + 13, y + 13); g.lineTo(x + 27, y + 13); g.lineTo(x + 24, y + 20); g.lineTo(x + 16, y + 20); g.closePath(); g.fill();
+        g.fillRect(x + 16, y + 20, 8, 12); g.fillStyle = flash ? '#f2c94c' : '#2f343c'; g.fillRect(x + 19, y + 23, 2, 3);
+        g.fillStyle = flash ? '#fff7d0' : '#ffd84a'; g.fillRect(x + 14, y + 12, 12, 2);
+        if (flash) { g.fillStyle = '#2a2210'; [[x + 12, y + 6], [x + 19, y + 4], [x + 26, y + 6]].forEach(([a, b]) => g.fillRect(a, b, 2, 4)); }
+      }
+      centered(g, APPS[key].label, x + ICON / 2, y + ICON + 6, '#ffffff', 'rgba(0,0,0,0.75)');
+    }
+    function paintHome(g) {
+      statusBar(g, '#14202c');
+      bigText(g, HOME_TIME, 120, 62, 5, '#101820');
+      centered(g, HOME_DATE, 120, 106, '#1c2a38');
+      appIcon(g, 'chat', APPS.chat.x, APPS.chat.y);
+      appIcon(g, 'flash', APPS.flash.x, APPS.flash.y);
+    }
+    function paintFlash(g) {
+      const S = SCREEN, T = TORCH;
+      const bgG = g.createLinearGradient(0, S.y, 0, S.y + S.h);       // fondo a pantalla completa (tapa todo el fondo de pantalla)
+      bgG.addColorStop(0, '#0d0e12'); bgG.addColorStop(1, '#16181d');
+      g.fillStyle = bgG; g.fillRect(S.x, S.y, S.w, S.h);
+      statusBar(g, '#c8ccd2');
+      centered(g, 'Linterna', 120, 56, '#e6e8ec');
+      if (flash) {                                                   // haz saliendo por arriba de la linterna
+        g.save(); g.beginPath(); g.moveTo(T.x - 18, T.y); g.lineTo(T.x + 18, T.y); g.lineTo(T.x + 70, S.y + 30); g.lineTo(T.x - 70, S.y + 30); g.closePath(); g.clip();
+        const beam = g.createLinearGradient(0, T.y, 0, S.y + 30);
+        beam.addColorStop(0, 'rgba(255,248,215,0.55)'); beam.addColorStop(1, 'rgba(255,248,215,0)');
+        g.fillStyle = beam; g.fillRect(S.x, S.y, S.w, T.y - S.y); g.restore();
+        const halo = g.createRadialGradient(T.x, T.y, 4, T.x, T.y, 46);
+        halo.addColorStop(0, 'rgba(255,240,190,0.6)'); halo.addColorStop(1, 'rgba(255,240,190,0)');
+        g.fillStyle = halo; g.fillRect(T.x - 46, T.y - 46, 92, 92);
+      }
+      // linterna metálica: cabezal ancho, cuerpo con moleteado, pulsador de goma y tapa trasera
+      const metal = (x, w) => { const m = g.createLinearGradient(x, 0, x + w, 0); m.addColorStop(0, '#1b1d22'); m.addColorStop(0.3, '#6c727c'); m.addColorStop(0.45, '#9aa1ab'); m.addColorStop(0.7, '#3a3e46'); m.addColorStop(1, '#15171b'); return m; };
+      g.fillStyle = metal(T.x - 20, 40); g.beginPath(); g.moveTo(T.x - 20, T.y); g.lineTo(T.x + 20, T.y); g.lineTo(T.x + 13, T.y + 34); g.lineTo(T.x - 13, T.y + 34); g.closePath(); g.fill();
+      for (let y = T.y + 6; y < T.y + 30; y += 4) { g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(T.x - 17 + (y - T.y) / 5, y, 34 - (y - T.y) / 2.5, 1); }   // aletas del cabezal
+      g.fillStyle = metal(T.x - 13, 26); g.fillRect(T.x - 13, T.y + 34, 26, 96);
+      for (let y = T.y + 52; y < T.y + 98; y += 3) for (let x = T.x - 12; x < T.x + 12; x += 3) { g.fillStyle = (x + y) % 2 ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.08)'; g.fillRect(x, y, 2, 2); }   // moleteado
+      g.fillStyle = flash ? '#3d8b4a' : '#5a1e1e'; roundRect(g, T.x - 5, T.y + 104, 10, 14, 4); g.fill();          // pulsador
+      g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(T.x - 3, T.y + 106, 2, 9);
+      g.fillStyle = metal(T.x - 14, 28); g.fillRect(T.x - 14, T.y + 130, 28, 10); g.fillStyle = '#0c0d10'; g.fillRect(T.x - 14, T.y + 129, 28, 1);
+      g.fillStyle = flash ? '#fffbe6' : '#20252c'; g.beginPath(); g.ellipse(T.x, T.y, 20, 5, 0, 0, Math.PI * 2); g.fill();   // cristal
+      g.strokeStyle = '#b8bec6'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(T.x, T.y, 20, 5, 0, 0, Math.PI * 2); g.stroke();
+      if (!flash) { g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(T.x - 12, T.y - 2, 8, 1); }               // reflejo del cristal apagado
+      // interruptor grande (como en los móviles de verdad)
+      const W2 = SWITCH;
+      g.fillStyle = flash ? '#f2c94c' : '#30343c'; roundRect(g, W2.x, W2.y, W2.w, W2.h, W2.h / 2); g.fill();
+      const kx = flash ? W2.x + W2.w - W2.h / 2 : W2.x + W2.h / 2;
+      g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.arc(kx, W2.y + W2.h / 2 + 2, W2.h / 2 - 3, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#f4f5f7'; g.beginPath(); g.arc(kx, W2.y + W2.h / 2, W2.h / 2 - 3, 0, Math.PI * 2); g.fill();
+      centered(g, flash ? 'Encendida' : 'Apagada', 120, W2.y + W2.h + 12, flash ? '#f2c94c' : '#8a9099');
+      g.fillStyle = '#9aa0a8'; roundRect(g, 98, 439, 44, 4, 2); g.fill();                    // barra de inicio
+    }
+    // ---------- WhatsApp: lista de chats (Mamá anclado, Daniel y otros contactos ilegibles) ----------
+    const WA_TOP = SCREEN.y + 50, WA_ROW = 44, WA_Y0 = WA_TOP + 6;
+    const WA_ROWS = [
+      { who: 'mama', name: 'Mamá', time: 'ayer', pin: true, av: '#c9a27e' },
+      { who: 'daniel', name: FROM, time: '16:03', prev: 'Tú: ok', av: '#7e8a96' },
+      { av: '#9fb39a', n: 52, p: 104, tm: 18 }, { av: '#b39aa4', n: 38, p: 86, tm: 22 }, { av: '#a3a9c4', n: 60, p: 112, tm: 16 },
+      { av: '#c4b49a', n: 44, p: 72, tm: 22 }, { av: '#9ab4b8', n: 56, p: 96, tm: 18 }, { av: '#b8a39a', n: 34, p: 108, tm: 20 }
+    ];
+    function avatar(g, cx, cy, col) {
+      g.fillStyle = col; g.beginPath(); g.arc(cx, cy, 14, 0, Math.PI * 2); g.fill();
+      g.save(); g.beginPath(); g.arc(cx, cy, 14, 0, Math.PI * 2); g.clip();
+      g.fillStyle = 'rgba(255,255,255,0.75)'; g.beginPath(); g.arc(cx, cy - 4, 5, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.ellipse(cx, cy + 12, 10, 8, 0, 0, Math.PI * 2); g.fill(); g.restore();
+    }
+    function scribble(g, x, y, w, col, seed) {                       // texto ilegible: trazos de distinta longitud
+      g.fillStyle = col; let cx = x, i = 0;
+      while (cx < x + w) { const len = 6 + Math.floor(hash(seed * 3.1 + i * 7.7) * 16); g.fillRect(cx, y, Math.min(len, x + w - cx), 3); cx += len + 3; i++; }
+    }
+    function paintList(g) {
+      const S = SCREEN;
+      g.fillStyle = '#ffffff'; g.fillRect(S.x, S.y, S.w, S.h);
+      g.fillStyle = '#0e7064'; g.fillRect(S.x, S.y, S.w, WA_TOP - S.y);
+      statusBar(g, '#dff1ec');
+      mText(g, 'WhatsApp', S.x + 10, S.y + 31, '#ffffff');
+      g.strokeStyle = '#ffffff'; g.lineWidth = 2;                    // lupa y menú
+      g.beginPath(); g.arc(S.x + S.w - 40, S.y + 33, 4.5, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.moveTo(S.x + S.w - 36.5, S.y + 36.5); g.lineTo(S.x + S.w - 33, S.y + 40); g.stroke();
+      g.fillStyle = '#ffffff'; for (let k = 0; k < 3; k++) g.fillRect(S.x + S.w - 16, S.y + 28 + k * 5, 2, 2);
+      WA_ROWS.forEach((r, i) => {
+        const y = WA_Y0 + i * WA_ROW;
+        if (y + WA_ROW > S.y + S.h - 20) return;
+        avatar(g, S.x + 22, y + 18, r.av);
+        if (r.who) {
+          mTextLo(g, r.name, S.x + 44, y + 8, '#121418');
+          mTextLo(g, r.time, S.x + S.w - 8 - mMeasureLo(r.time), y + 8, '#8a9099');
+          if (r.prev) mTextLo(g, r.prev, S.x + 44, y + 22, '#667079'); else scribble(g, S.x + 44, y + 24, 90, '#d5d9de', i + 1);
+          if (r.pin) {                                               // chincheta de "anclado"
+            const px = S.x + S.w - 15, py = y + 22;
+            g.fillStyle = '#8a9099'; g.fillRect(px, py, 6, 3); g.fillRect(px + 1, py + 3, 4, 2); g.fillRect(px + 2, py + 5, 2, 3);
+          }
+        } else {
+          scribble(g, S.x + 44, y + 9, r.n, '#8f969e', i * 11);      // nombre ilegible
+          scribble(g, S.x + 44, y + 24, r.p, '#d5d9de', i * 13);     // último mensaje ilegible
+          g.fillStyle = '#c4c9cf'; g.fillRect(S.x + S.w - 8 - r.tm, y + 10, r.tm, 3);
+        }
+        g.fillStyle = '#eef0f2'; g.fillRect(S.x + 44, y + WA_ROW - 4, S.w - 44, 1);
+      });
+      g.fillStyle = 'rgba(0,0,0,0.2)'; roundRect(g, S.x + S.w - 39, S.y + S.h - 61, 30, 30, 9); g.fill();   // botón de chat nuevo
+      g.fillStyle = '#1fa855'; roundRect(g, S.x + S.w - 40, S.y + S.h - 63, 30, 30, 9); g.fill();
+      g.fillStyle = '#ffffff'; roundRect(g, S.x + S.w - 32, S.y + S.h - 55, 14, 11, 3); g.fill(); g.fillRect(S.x + S.w - 30, S.y + S.h - 45, 3, 3);
+      g.fillStyle = '#9aa0a8'; roundRect(g, 98, 439, 44, 4, 2); g.fill();                    // barra de inicio
+    }
+    function paintMomChat(g) {                                       // chat con mamá: vacío por ahora
+      mTextLo(g, 'Mamá', 66, 42, '#ffffff'); backChevron(g);
+      if (momFocus) { g.fillStyle = '#2a2e34'; g.fillRect(COMPOSE.tx, 426, 1, 9); }
+      else mTextLo(g, 'Mensaje', COMPOSE.tx, COMPOSE.ty, '#a0a6ad');
+    }
+    function openChat(who) { chatWith = who; waScreen = 'chat'; momFocus = false; startSwap('list', 'chat'); }
+    function toList() { waScreen = 'list'; momFocus = false; startSwap('chat', 'list'); }
+
+    function backChevron(g) {                                        // "<" en la cabecera del chat para volver
+      g.fillStyle = '#ffffff';
+      for (let i = 0; i < 5; i++) { g.fillRect(25 + i, 48 - i, 2, 1); g.fillRect(25 + i, 48 + i, 2, 1); }
+    }
+    function startSwap(from, to) {                                   // abrir/cerrar app: fundido con un poco de zoom
+      if (anim) return;
+      if (reduce()) { screen = to; frame(); return; }
+      anim = { type: 'swap', from, to, t0: performance.now(), dur: 300 };
+      tick();
+    }
+    // WhatsApp vuelve a la última pantalla que se vio (el chat o la lista); la linterna empieza apagada: se enciende con su interruptor
+    function openApp(name) { startSwap('home', name === 'chat' ? waScreen : name); }
+    function goHome() { if (screen !== 'home') startSwap(screen, 'home'); }
 
     function paintLockExtras(g) {
       // solo nombre + preview (sin etiquetas de app ni chevrons)
@@ -2182,7 +2383,9 @@
       }
     }
     function paintChatText(g) {
+      if (chatWith === 'mama') { paintMomChat(g); return; }
       mTextLo(g, FROM, 66, 42, '#ffffff');
+      if (homeMode) backChevron(g);
       const now = performance.now();
       let y = 82 + Math.floor((1 - chatReveal) * 10);
       g.globalAlpha = chatReveal;
@@ -2361,6 +2564,7 @@
         frame(e);
         if (u >= 1) {
           if (anim.type === 'toPin') { screen = 'pin'; anim = null; frame(); }
+          else if (anim.type === 'swap') { screen = anim.to; anim = null; frame(); }
           else { anim = null; enterChat(true); }
         } else tick();
       });
@@ -2383,6 +2587,7 @@
       paintScreen(og, name, extras);
       return o;
     }
+    const EXTRAS = { lock: () => paintLockExtras, pin: () => paintPinFills, chat: () => paintChatText, home: () => paintHome, flash: () => paintFlash, list: () => paintList };
 
     function frame(progress) {
       const cv = c(); if (!cv) return;
@@ -2392,11 +2597,9 @@
       const p = progress == null ? 1 : progress;
 
       if (anim) {
-        const from = anim.type === 'toPin' ? 'lock' : 'pin';
-        const to = anim.type === 'toPin' ? 'pin' : 'chat';
-        const fromEx = from === 'lock' ? paintLockExtras : (from === 'pin' ? paintPinFills : null);
-        const toEx = to === 'pin' ? paintPinFills : (to === 'chat' ? paintChatText : null);
-        const a = makeLayer(from, fromEx), b = makeLayer(to, toEx);
+        const from = anim.from || (anim.type === 'toPin' ? 'lock' : 'pin');
+        const to = anim.to || (anim.type === 'toPin' ? 'pin' : 'chat');
+        const a = makeLayer(from, EXTRAS[from]()), b = makeLayer(to, EXTRAS[to]());
         g.clearRect(0, 0, PW, PHU);
         if (anim.type === 'toPin') {
           // slide vertical + ligera sombra
@@ -2426,21 +2629,46 @@
         if ((shakeT && performance.now() < shakeT) || (flashKey && performance.now() < flashUntil)) {
           requestAnimationFrame(() => frame());
         }
+      } else if (screen === 'home') {
+        paintScreen(g, 'home', paintHome);
+        Object.keys(APPS).forEach(k => hit(APPS[k].x - 6, APPS[k].y - 4, ICON + 12, ICON + 20, () => openApp(k)));
+        cv.style.cursor = 'default';
+      } else if (screen === 'flash') {
+        paintScreen(g, 'flash', paintFlash);
+        const toggle = () => { setFlash(!flash); frame(); };        // el estado se guarda: al volver a abrir sigue como estaba
+        hit(SWITCH.x - 6, SWITCH.y - 6, SWITCH.w + 12, SWITCH.h + 28, toggle);
+        hit(TORCH.x - 22, TORCH.y - 8, 44, 150, toggle);
+        hit(90, 430, 60, 22, goHome);
+        cv.style.cursor = 'default';
+      } else if (screen === 'list') {
+        paintScreen(g, 'list', paintList);
+        hit(SCREEN.x, WA_Y0, SCREEN.w, WA_ROW, () => openChat('mama'));
+        hit(SCREEN.x, WA_Y0 + WA_ROW, SCREEN.w, WA_ROW, () => openChat('daniel'));
+        hit(90, 430, 60, 22, goHome);
+        cv.style.cursor = 'default';
       } else {
         paintScreen(g, 'chat', paintChatText);
-        if ((chatSeq === 'idle' || chatSeq === 'awaitOk') && chatReveal > 0.9) {
+        if (chatWith === 'daniel' && (chatSeq === 'idle' || chatSeq === 'awaitOk') && chatReveal > 0.9) {
           hit(COMPOSE.x, COMPOSE.y, COMPOSE.w, COMPOSE.h, startReply);
+          cv.style.cursor = 'pointer';
+        } else if (chatWith === 'mama') {                            // por ahora solo deja el cursor en el campo (escribir: siguiente paso)
+          hit(COMPOSE.x, COMPOSE.y, COMPOSE.w, COMPOSE.h, () => { momFocus = true; frame(); });
           cv.style.cursor = 'pointer';
         } else {
           cv.style.cursor = 'default';
         }
+        if (homeMode) { hit(22, 30, 14, 36, toList); hit(90, 446, 60, 8, goHome); }      // "<" a la lista de chats; barra de inicio
       }
 
       cv.setAttribute('aria-label',
         screen === 'lock' ? 'Desliza hacia arriba o toca la notificacion'
           : screen === 'pin' ? 'Introduce el codigo 6767'
-            : (chatSeq === 'idle' || chatSeq === 'awaitOk') ? 'Toca el campo de texto para responder'
-              : 'Chat con ' + FROM);
+            : screen === 'home' ? 'Pantalla de inicio: ' + HOME_TIME + '. Apps: WhatsApp y Linterna'
+              : screen === 'flash' ? 'Linterna ' + (flash ? 'encendida' : 'apagada') + '. Toca el boton para cambiar'
+                : screen === 'list' ? 'WhatsApp: chats. Mama (anclado), ' + FROM + ' y otros'
+                  : chatWith === 'mama' ? 'Chat con Mama'
+                    : (chatSeq === 'idle' || chatSeq === 'awaitOk') ? 'Toca el campo de texto para responder'
+                      : 'Chat con ' + FROM);
     }
 
     function canvasPos(e) {
@@ -2484,8 +2712,9 @@
     function render() { ensureAssets(() => frame()); }
     function open() {
       poweringOff = false;
-      // Si ya desbloqueó, vuelve al chat con el historial intacto
-      if (unlocked) screen = 'chat';
+      // 2ª escena: siempre a la pantalla de inicio. Antes: si ya desbloqueó, vuelve al chat con el historial intacto
+      if (homeMode) screen = 'home';
+      else if (unlocked) screen = 'chat';
       else if (screen !== 'pin') screen = 'lock';
       pin = '';
       ensureAssets(() => {
@@ -2493,7 +2722,8 @@
         if (screen === 'chat') resumeChatAnim();
       });
     }
-    return { reset, render, open, bind, powerOff };
+    function enableHome() { homeMode = true; screen = 'home'; ensureAssets(() => {}); }
+    return { reset, render, open, bind, powerOff, enableHome, get flashlight() { return flash; } };
   })();
   window.PDPhone = PhoneApp;
 
@@ -2529,7 +2759,8 @@
   ];
   const subCv = document.getElementById('introSub'), sctx = subCv.getContext('2d');
   const subBtn = document.getElementById('introSubBtn');
-  let SUB = '', CUES = null, SUB_OUT = 0, lastT = 0;
+  let SUB = '', CUES = null, SUB_OUT = 0, lastT = 0, POS = [];
+  const SUB_PADX = 5, SUB_PADY = 3, SUB_LINE = 10;
   function setSubLine(L) {
     const PD = window.PD; if (!PD) return;
     SUB = PD.norm(L.text);
@@ -2540,12 +2771,33 @@
     }
     const last = CUES.reduce((m, v) => v == null ? m : Math.max(m, v), 0);
     SUB_OUT = (L.cueEnd != null ? L.cueEnd : last) + 0.45 + (L.hold || 0);
-    const padX = 5, padY = 3;
-    subCv.width = PD.measure(SUB) + padX * 2; subCv.height = 7 + padY * 2;
-    subCv.style.width = `calc(${subCv.width} * var(--px))`;
+    layoutSub();
     subCv.setAttribute('aria-label', L.text);
     if (subBtn) { subBtn.hidden = false; subBtn.setAttribute('aria-label', 'Saltar: ' + L.text); }
   }
+  // Reparte el subtítulo en líneas que quepan en la pantalla (en móvil una frase larga no cabe en una sola)
+  // y guarda dónde va cada letra: así cada una sigue apareciendo con su sílaba aunque cambie de línea.
+  function layoutSub() {
+    const PD = window.PD; if (!PD || !SUB) return;
+    const px = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--px')) || 2;
+    const maxW = Math.max(60, Math.floor(innerWidth * 0.92 / px) - SUB_PADX * 2);
+    const lines = []; let cur = '';
+    for (const w of SUB.split(' ')) {
+      const test = cur ? cur + ' ' + w : w;
+      if (cur && PD.measure(test) > maxW) { lines.push(cur); cur = w; } else cur = test;
+    }
+    if (cur) lines.push(cur);
+    const widest = Math.max(...lines.map(l => PD.measure(l)));
+    POS = []; let i = 0;
+    lines.forEach((ln, li) => {
+      let x = SUB_PADX + Math.floor((widest - PD.measure(ln)) / 2);   // cada línea centrada
+      for (const ch of ln) { POS[i++] = [x, SUB_PADY + li * SUB_LINE]; x += PD.measure(ch) + 1; }
+      if (li < lines.length - 1) POS[i++] = null;                      // el espacio que se convierte en salto de línea
+    });
+    subCv.width = widest + SUB_PADX * 2; subCv.height = SUB_LINE * lines.length - 3 + SUB_PADY * 2;
+    subCv.style.width = `calc(${subCv.width} * var(--px))`;
+  }
+  window.addEventListener('pd:layout', () => { if (SUB) layoutSub(); });   // al girar el móvil o cambiar el tamaño
   function clearSub() {
     SUB = ''; CUES = null;
     if (subBtn) subBtn.hidden = true;
@@ -2563,17 +2815,15 @@
     sctx.globalAlpha = 0.35 * out;
     sctx.fillStyle = '#1a1010';
     sctx.fillRect(1, 1, subCv.width - 2, subCv.height - 2);
-    const padX = 5, padY = 3;
-    let x = padX, any = false;
+    let any = false;
     for (let i = 0; i < SUB.length; i++) {
-      const ch = SUB[i], a = CUES[i] == null ? 0 : clamp((lt - CUES[i] + LEAD) / LFADE, 0, 1) * out;
+      const p = POS[i], ch = SUB[i], a = !p || CUES[i] == null ? 0 : clamp((lt - CUES[i] + LEAD) / LFADE, 0, 1) * out;
       if (a > 0) {
         any = true;
         sctx.globalAlpha = a;
-        PD.drawText(sctx, ch, x + 1, padY + 1, 'rgba(0,0,0,0.9)');
-        PD.drawText(sctx, ch, x, padY, '#e8e0d0');
+        PD.drawText(sctx, ch, p[0] + 1, p[1] + 1, 'rgba(0,0,0,0.9)');
+        PD.drawText(sctx, ch, p[0], p[1], '#e8e0d0');
       }
-      x += PD.measure(ch) + 1;
     }
     sctx.globalAlpha = 1;
     if (subBtn) subBtn.style.cursor = any ? 'pointer' : 'default';
@@ -2593,12 +2843,23 @@
     if (on) { paintHudIcon(); b.hidden = false; }
     else { b.hidden = true; }
   }
-  // Tras enviar "ok": cierra el móvil y quita el icono (temp.) hasta la siguiente escena
+  // Tras enviar "ok": se apaga el móvil, quita el icono y la escena funde a negro → sala vista desde arriba
+  const ROOM_FADE = 1.4;
+  let roomAt = null, inRoom = false;
+  function enterRoom() {
+    inRoom = true; cancelAnimationFrame(raf);
+    clearSub(); if (voice) { voice.stop(); voice = null; }
+    windTo(0.55, 2.5);                                     // dentro de casa el viento suena más lejos
+    PhoneApp.enableHome(); setHud(true);                   // el móvil vuelve a estar activo: abre en la pantalla de inicio
+    if (window.PDRoom) window.PDRoom.start();
+  }
   document.addEventListener('pd:phone-chat-done', () => {
+    if (inRoom) return;                                    // ya en la sala, el móvil sigue activo
     setHud(false);
     const done = () => {
       const ui = document.getElementById('phoneUI');
       if (ui) ui.classList.remove('open');
+      if (running && !inRoom && roomAt == null) roomAt = lastT + 0.3;
     };
     if (window.PDPhone && window.PDPhone.powerOff) window.PDPhone.powerOff(done);
     else done();
@@ -2632,6 +2893,7 @@
     PhoneApp.reset(); PhoneApp.bind(); PhoneApp.render();
     running = true; ended = false; phoneTaken = false; phoneHover = false; phoneReady = false;
     vibeT0 = null; vibeDone = false; vibeNotified = false;
+    roomAt = null; inRoom = false; if (window.PDRoom) window.PDRoom.stop();
     t0 = performance.now() / 1000; lastT = 0;
     lineI = 0; lineStart = FIRST_AT; voice = null; voiceOff = false; lag = 0; windLvl = WIND; waiting = false;
     clearSub();
@@ -2645,6 +2907,7 @@
   function stop() {
     running = false; cancelAnimationFrame(raf); phoneTaken = false; phoneHover = false; phoneReady = false;
     vibeT0 = null; vibeDone = false; vibeNotified = false;
+    roomAt = null; inRoom = false; if (window.PDRoom) window.PDRoom.stop();
     cv.style.cursor = '';
     clearSub();
     setHud(false);
@@ -2788,9 +3051,557 @@
     const black = 1 - ease(clamp(t / FADE, 0, 1));
     if (black > 0) { ctx.fillStyle = `rgba(0,0,0,${black})`; ctx.fillRect(0, 0, W, H); }
 
+    // salida a negro hacia la sala vista desde arriba
+    if (roomAt != null && t >= roomAt) {
+      const k = clamp((t - roomAt) / ROOM_FADE, 0, 1);
+      ctx.fillStyle = `rgba(0,0,0,${ease(k)})`; ctx.fillRect(0, 0, W, H);
+      if (k >= 1) { enterRoom(); return; }
+    }
+
     raf = requestAnimationFrame(frame);
   }
   window.PDIntro = { start, stop, skipLine };
+})();
+</script>
+<script>
+(() => {
+  'use strict';
+  /* =====================================================================
+     SALA VISTA DESDE ARRIBA (2ª escena, jugable). Del boceto del usuario:
+     sofá contra la pared de arriba con la cómoda a su derecha, mesa a la izquierda junto a la ventana,
+     mueble con la tele encendida abajo, lámpara de techo en el centro y dos puertas
+     (arriba a la izquierda y en la pared derecha). Paredes amarillas y suelo blanco grisáceo;
+     muebles y detalles con los colores de la primera escena. La pared del fondo se ve de frente (vista 3/4).
+     El protagonista es PROVISIONAL hasta tener su boceto.
+     ===================================================================== */
+  const W = 320, H = 180;
+  const cv = document.getElementById('roomCanvas'), ctx = cv.getContext('2d');
+  const RES = 3;                                                     // la sala se pinta a 320×180 escalada ×3: así el bocadillo puede llevar letra más fina
+  cv.width = W * RES; cv.height = H * RES;
+  const hash = n => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+  const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+  const ease = u => u * u * (3 - 2 * u);
+
+  // ---------- geometría (px lógicos) ----------
+  const WALL = { x0: 20, x1: 300, y0: 2, y1: 178, t: 6 };            // tapas de las paredes vistas desde arriba
+  const FLOOR = { x0: 26, x1: 294, y0: 30, y1: 172 };                // la franja 8..30 es la pared del fondo vista de frente
+  const SOFA = { x: 120, y: 31, w: 100, h: 31 }, DRESSER = { x: 224, y: 31, w: 40, h: 29 };
+  const LAMP = { x: 108, y: 56 }, TABLE = { x: 32, y: 82, w: 52, h: 70 }, CHAIRS = [{ x: 87, y: 94 }, { x: 87, y: 128 }];
+  const TV = { x: 116, y: 152, w: 100, h: 20 };
+  const DOOR_N = { x: 32, w: 22 }, DOOR_E = { y: 100, h: 56 }, WIN = { y: 34, h: 112 };   // balcón (cristal), puerta grande con ventana, ventanal
+  const CEIL_LIGHT = { x: 170, y: 100 };
+  // Zonas que no se pueden pisar (según el dibujo del usuario): bloques enteros, sin huecos por detrás de muebles y cajas.
+  // Si algún día hay que esconder algo detrás de un mueble, se abre aquí el hueco.
+  const SOLID = [
+    { x: 57, y: 30, w: 210, h: 32 },     // franja de arriba: cajas abiertas, lámpara de pie, sofá y cómoda
+    { x: 266, y: 30, w: 28, h: 73 },     // columna de cajas contra la pared derecha
+    { x: 26, y: 80, w: 61, h: 72 },      // mesa (hasta el ventanal)
+    { x: 87, y: 85, w: 14, h: 20 }, { x: 87, y: 126, w: 16, h: 15 },   // las dos sillas (entre ellas sí se puede pasar)
+    { x: 26, y: 150, w: 192, h: 22 }     // franja de abajo: cartones, el hueco junto a la tele y el mueble de la tele
+  ];
+
+  // ---------- fondo estático ----------
+  let bg = null, vig = null;
+  function build() {
+    bg = document.createElement('canvas'); bg.width = W; bg.height = H;
+    const b = bg.getContext('2d');
+    const R = (x, y, w, h, c, a) => { b.globalAlpha = a == null ? 1 : a; b.fillStyle = c; b.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); b.globalAlpha = 1; };
+    const Pt = (x, y, c, a) => R(x, y, 1, 1, c, a);
+    const disc = (cx, cy, r, c, a) => { for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (x * x + y * y <= r * r + r * 0.6) Pt(cx + x, cy + y, c, a); };
+    const dith = (x, y, w, h, c, ph, a) => { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (((i + j + (ph || 0)) & 1) === 0) Pt(x + i, y + j, c, a); };
+    const blotch = (cx, cy, rx, ry, c, a, seed) => { for (let y = -ry; y <= ry; y++) for (let x = -rx; x <= rx; x++) { const d = (x * x) / (rx * rx) + (y * y) / (ry * ry) + (hash(x * 3.1 + y * 5.7 + seed) - 0.5) * 0.5; if (d < 1) Pt(cx + x, cy + y, c, a * (1 - d * 0.6)); } };
+    const F = FLOOR, WL = WALL, FY0 = WL.y0 + WL.t;                   // la pared del fondo va de FY0 a F.y0
+
+    R(0, 0, W, H, '#070304');
+    // SUELO: baldosas blanco grisáceo, gastadas
+    const TS = 12;
+    for (let y = F.y0; y < F.y1; y += TS) for (let x = F.x0; x < F.x1; x += TS) {
+      const w = Math.min(TS, F.x1 - x), h = Math.min(TS, F.y1 - y), k = ((x - F.x0) / TS + (y - F.y0) / TS) & 1;
+      R(x, y, w, h, k ? '#d4d0c8' : '#cbc7bf');
+      R(x, y, w, 1, '#b4afa5'); R(x, y, 1, h, '#b4afa5');
+    }
+    for (let i = 0; i < 260; i++) Pt(F.x0 + hash(i * 1.7) * (F.x1 - F.x0), F.y0 + hash(i * 2.9) * (F.y1 - F.y0), hash(i) > 0.5 ? '#b8b3a9' : '#e0dcd4', 0.6);
+    blotch(250, 120, 14, 8, '#a8a294', 0.3, 1); blotch(100, 150, 10, 6, '#a8a294', 0.25, 2); blotch(60, 60, 9, 5, '#a8a294', 0.2, 3);
+    // MARCA de un mueble que ya no está (la casa está de mudanza): el hueco más limpio y la mugre alrededor
+    const M = { x: 222, y: 155, w: 46, h: 16 };
+    R(M.x, M.y, M.w, M.h, '#e6e3dc', 0.45);
+    for (let i = 0; i < 180; i++) {
+      const side = i % 4, k = hash(i * 3.7);
+      const px = side < 2 ? M.x + k * M.w : (side === 2 ? M.x - 1 - hash(i) * 3 : M.x + M.w + hash(i) * 3);
+      const py = side < 2 ? (side === 0 ? M.y - 1 - hash(i * 1.3) * 3 : M.y + M.h - 1) : M.y + k * M.h;
+      Pt(px, py, hash(i * 5.1) > 0.5 ? '#9a9387' : '#aaa397', 0.75);
+    }
+    R(M.x, M.y, M.w, 1, '#8f897d', 0.6); R(M.x, M.y, 1, M.h, '#8f897d', 0.6); R(M.x + M.w - 1, M.y, 1, M.h, '#8f897d', 0.6);
+    [[2, 2], [M.w - 4, 2], [2, M.h - 4], [M.w - 4, M.h - 4]].forEach(([dx, dy]) => R(M.x + dx, M.y + dy, 2, 2, '#77716a', 0.7));   // marcas de las patas
+    blotch(M.x + 3, M.y + M.h - 3, 3, 2, '#8f897d', 0.5, 9); blotch(M.x + M.w - 6, M.y + 2, 2, 2, '#8f897d', 0.45, 11);         // pelusas
+
+    for (let k = 0; k < 6; k++) R(F.x0, F.y0 + k, F.x1 - F.x0, 1, '#000', 0.3 - k * 0.05);      // sombra de la pared del fondo
+    for (let k = 0; k < 3; k++) { R(F.x0 + k, F.y0, 1, F.y1 - F.y0, '#000', 0.18 - k * 0.06); R(F.x1 - 1 - k, F.y0, 1, F.y1 - F.y0, '#000', 0.18 - k * 0.06); R(F.x0, F.y1 - 1 - k, F.x1 - F.x0, 1, '#000', 0.14 - k * 0.045); }
+
+    // PARED DEL FONDO vista de frente: papel pintado amarillo con damasco, rodapié y humedades
+    for (let x = F.x0; x < F.x1; x++) R(x, FY0, 1, F.y0 - FY0, Math.floor((x - F.x0) / 6) % 2 ? '#b8974a' : '#b09045');
+    const MOT = ['..X..', '.XXX.', '..X..'];
+    for (let row = 0; row < 2; row++) for (let x = F.x0 + 4 + row * 6; x < F.x1 - 4; x += 12)
+      MOT.forEach((r, j) => { for (let i = 0; i < 5; i++) if (r[i] === 'X') Pt(x - 2 + i, FY0 + 5 + row * 7 + j, '#93783a'); });
+    R(F.x0, FY0, F.x1 - F.x0, 2, '#000', 0.35); R(F.x0, FY0 + 2, F.x1 - F.x0, 1, '#000', 0.15);
+    [44, 118, 210, 262].forEach((sx, i) => { const len = 6 + Math.floor(hash(i * 7) * 9); for (let y = 0; y < len; y++) R(sx - 1, FY0 + y, 3, 1, '#6b5418', 0.22 * (1 - y / len)); });
+    for (let i = 0; i < 70; i++) { Pt(F.x0 + Math.pow(hash(i * 2.1), 2.2) * 30, FY0 + hash(i * 3.7) * 18, '#4a4a26', 0.45); Pt(F.x1 - 1 - Math.pow(hash(i * 5.3), 2.2) * 26, FY0 + hash(i * 1.9) * 18, '#4a4a26', 0.4); }
+    R(F.x0, F.y0 - 4, F.x1 - F.x0, 1, '#6e5233'); R(F.x0, F.y0 - 3, F.x1 - F.x0, 2, '#4a3520'); R(F.x0, F.y0 - 1, F.x1 - F.x0, 1, '#21170d');
+
+    // en la pared: retrato sin cara, espejo sobre el sofá (su reflejo se anima) y reloj a las 4 y 5
+    R(104, 11, 11, 13, '#2a0709'); R(105, 12, 9, 11, '#7a161c'); R(106, 13, 7, 9, '#c9b78a'); R(107, 14, 5, 7, '#4a3d2a');
+    disc(109, 16, 1, '#a89868'); R(107, 19, 5, 2, '#2a2218'); Pt(108, 15, '#2a1a10'); Pt(110, 17, '#2a1a10');
+    R(144, 10, 52, 16, '#2a0709'); R(145, 11, 50, 14, '#6d1219'); R(145, 11, 50, 1, '#9b2430'); R(145, 11, 1, 14, '#9b2430');
+    R(147, 13, 46, 10, '#8b6b2c');
+    for (let y = 0; y < 8; y++) R(148, 14 + y, 44, 1, `rgb(${28 - y},${38 - y * 2},${48 - y * 2})`);
+    disc(244, 18, 6, '#3a2410'); disc(244, 18, 5, '#d9d2bf');
+    [[0, -4], [4, 0], [0, 4], [-4, 0]].forEach(([dx, dy]) => Pt(244 + dx, 18 + dy, '#3a2410'));
+    const hand = (ang, len, c) => { for (let k = 1; k <= len; k++) Pt(244 + Math.round(Math.cos(ang) * k), 18 + Math.round(Math.sin(ang) * k), c); };
+    hand(((4 + 5 / 60) / 12) * 2 * Math.PI - Math.PI / 2, 2, '#1a120a'); hand((5 / 60) * 2 * Math.PI - Math.PI / 2, 4, '#1a120a');
+
+    // PUERTA DEL BALCÓN (arriba a la izquierda): toda de cristal. Como miramos desde arriba, a través del cristal
+    // se ve el suelo de baldosas de barro del balcón, la barandilla al fondo y una franja de cielo; todo al sol
+    const DN = DOOR_N, dy0 = FY0 + 1, dy1 = F.y0, gh = dy1 - dy0 - 1, gy = dy0 + 1;
+    R(DN.x - 2, dy0 - 1, DN.w + 4, gh + 2, '#7c6244'); R(DN.x - 2, dy0 - 1, DN.w + 4, 1, '#98794f');
+    for (let y = 0; y < 4; y++) R(DN.x, gy + y, DN.w, 1, `rgb(${214 - y * 4},${226 - y * 3},${234 - y * 2})`);   // cielo
+    R(DN.x, gy + 4, DN.w, 1, '#3a3a3e'); R(DN.x, gy + 8, DN.w, 1, '#3a3a3e');                                  // barandilla
+    for (let x = DN.x + 1; x < DN.x + DN.w; x += 3) R(x, gy + 5, 1, 3, '#4a4a50');
+    for (let y = gy + 9; y < dy1; y++) R(DN.x, y, DN.w, 1, (y - gy) % 4 === 0 ? '#a35f43' : '#c97f5c');        // suelo del balcón
+    for (let x = DN.x + 3; x < DN.x + DN.w; x += 6) R(x, gy + 9, 1, dy1 - gy - 9, '#a35f43');
+    R(DN.x + DN.w - 6, gy + 10, 5, 4, '#7a3f26'); R(DN.x + DN.w - 7, gy + 7, 7, 4, '#3d7a45'); Pt(DN.x + DN.w - 5, gy + 7, '#5fa060');   // maceta
+    R(DN.x, gy, DN.w, gh, '#fff3d6', 0.22);                                                                        // a pleno sol
+    R(DN.x + DN.w / 2 - 1, dy0 + 1, 2, gh, '#7c6244');                                                // dos hojas de cristal
+    R(DN.x + DN.w / 2 - 3, dy0 + 10, 1, 3, '#b8943a'); R(DN.x + DN.w / 2 + 2, dy0 + 10, 1, 3, '#b8943a');
+    for (let k = 0; k < 4; k++) { Pt(DN.x + 3 + k, dy0 + 9 - k, '#ffffff', 0.55); Pt(DN.x + DN.w / 2 + 4 + k, dy0 + 11 - k, '#ffffff', 0.4); }   // brillos
+    R(DN.x - 1, F.y0, DN.w + 2, 2, '#8a8478');
+
+    // TAPAS de las paredes vistas desde arriba (amarillas)
+    const cap = (x, y, w, h) => { R(x, y, w, h, '#c4a24c'); for (let i = 0; i < w * h / 9; i++) Pt(x + hash(i * 1.3 + x) * w, y + hash(i * 2.7 + y) * h, '#b3923f', 0.7); };
+    cap(WL.x0, WL.y0, WL.x1 - WL.x0, WL.t); cap(WL.x0, WL.y0, WL.t, WL.y1 - WL.y0);
+    cap(WL.x1 - WL.t, WL.y0, WL.t, WL.y1 - WL.y0); cap(WL.x0, WL.y1 - WL.t, WL.x1 - WL.x0, WL.t);
+    R(WL.x0, WL.y0, WL.x1 - WL.x0, 1, '#dcbf68'); R(WL.x0, WL.y0, 1, WL.y1 - WL.y0, '#dcbf68');         // luz en los bordes de fuera
+    R(WL.x0 - 1, WL.y0 - 1, WL.x1 - WL.x0 + 2, 1, '#1c1408'); R(WL.x0 - 1, WL.y1, WL.x1 - WL.x0 + 2, 1, '#1c1408');
+    R(WL.x0 - 1, WL.y0 - 1, 1, WL.y1 - WL.y0 + 2, '#1c1408'); R(WL.x1, WL.y0 - 1, 1, WL.y1 - WL.y0 + 2, '#1c1408');
+    R(F.x0, FY0 - 1, F.x1 - F.x0, 1, '#957a33'); R(F.x0 - 1, F.y0, 1, F.y1 - F.y0, '#5c4a20');           // bordes de dentro
+    R(F.x1, F.y0, 1, F.y1 - F.y0, '#5c4a20'); R(F.x0, F.y1, F.x1 - F.x0, 1, '#5c4a20');
+
+    // PUERTA GRANDE CON VENTANA (pared derecha, se ve de canto desde arriba): madera arriba y abajo, cristal en medio
+    const DE = DOOR_E, ex = WL.x1 - WL.t, gy0 = DE.y + 9, gy1 = DE.y + DE.h - 9;
+    R(ex - 1, DE.y - 2, WL.t + 2, 2, '#7c6244'); R(ex - 1, DE.y + DE.h, WL.t + 2, 2, '#7c6244');      // marco
+    R(ex, DE.y, WL.t, DE.h, '#5a3a1e'); R(ex + 1, DE.y + 1, WL.t - 2, DE.h - 2, '#6e4a26');
+    R(ex + 1, gy0, WL.t - 2, gy1 - gy0, '#a9c2cc'); R(ex + 1, gy0, WL.t - 2, 1, '#5a3a1e'); R(ex + 1, gy1 - 1, WL.t - 2, 1, '#5a3a1e');
+    R(ex + 1, (gy0 + gy1) / 2, WL.t - 2, 1, '#6e4a26');
+    for (let i = 0; i < 5; i++) Pt(ex + 1 + Math.floor(hash(i * 2.3) * (WL.t - 2)), gy0 + 2 + Math.floor(hash(i * 6.1) * (gy1 - gy0 - 4)), '#e2eef2');
+    R(ex - 1, DE.y + DE.h - 12, 1, 3, '#b8943a'); R(F.x1 - 3, DE.y, 3, DE.h, '#8a8478', 0.55);
+
+    // VENTANAL en la pared izquierda, a lo largo de la mesa (entra la luz de la tarde por cada hoja)
+    const wx = WL.x0, PANE = WIN.h / 4;
+    R(wx - 4, WIN.y + 2, 4, WIN.h - 4, '#e8dcc0', 0.18);
+    R(wx, WIN.y, WL.t, WIN.h, '#7c6244'); R(wx + 1, WIN.y + 2, WL.t - 2, WIN.h - 4, '#a9c2cc');
+    for (let i = 0; i < 14; i++) Pt(wx + 1 + Math.floor(hash(i * 3.1) * (WL.t - 2)), WIN.y + 3 + Math.floor(hash(i * 5.7) * (WIN.h - 6)), '#e2eef2');
+    for (let k = 1; k < 4; k++) R(wx, WIN.y + k * PANE - 1, WL.t, 2, '#7c6244');
+    R(F.x0, WIN.y - 1, 3, WIN.h + 2, '#8a7350'); R(F.x0, WIN.y - 1, 3, 1, '#a88c62');
+
+    // MESA de madera con dos sillas (papeles, una taza, las llaves y un cenicero encima)
+    const T = TABLE;
+    R(T.x + 2, T.y + T.h, T.w, 3, '#000', 0.25);
+    R(T.x, T.y, T.w, T.h, '#24140a'); R(T.x + 1, T.y + 1, T.w - 2, T.h - 4, '#6b4426');
+    R(T.x + 1, T.y + T.h - 3, T.w - 2, 2, '#4a2c16'); R(T.x + 1, T.y + 1, T.w - 2, 1, '#8a5c34'); R(T.x + 1, T.y + 1, 1, T.h - 4, '#8a5c34');
+    for (let i = 0; i < 26; i++) R(T.x + 3 + Math.floor(hash(i * 1.9) * (T.w - 6)), T.y + 3 + Math.floor(hash(i * 3.3) * (T.h - 12)), 1, 3 + Math.floor(hash(i * 5.1) * 8), '#5c381d', 0.7);
+    R(T.x + 7, T.y + 8, 13, 9, '#d9d2bf'); R(T.x + 9, T.y + 11, 13, 9, '#e6dfcc');
+    for (let k = 0; k < 3; k++) R(T.x + 11, T.y + 13 + k * 2, 8, 1, '#a89e84');
+    disc(T.x + 38, T.y + 18, 3, '#c9c2b0'); disc(T.x + 38, T.y + 18, 2, '#3a2410'); Pt(T.x + 42, T.y + 18, '#c9c2b0');
+    disc(T.x + 12, T.y + 54, 3, '#4a4a4e'); disc(T.x + 12, T.y + 54, 1, '#2a2a2e'); R(T.x + 13, T.y + 52, 4, 1, '#d8d0c0'); Pt(T.x + 16, T.y + 52, '#c04a20');
+    disc(T.x + 30, T.y + 50, 2, '#9a9a90'); R(T.x + 32, T.y + 50, 6, 1, '#b8b8b0'); R(T.x + 36, T.y + 51, 2, 1, '#b8b8b0'); Pt(T.x + 33, T.y + 50, '#f0ece0');
+    CHAIRS.forEach(c => {
+      R(c.x + 1, c.y + 10, 10, 2, '#000', 0.25);
+      R(c.x, c.y, 10, 10, '#24140a'); R(c.x + 1, c.y + 1, 8, 8, '#5a3a1e'); R(c.x + 1, c.y + 1, 8, 1, '#7a5430');
+      R(c.x + 8, c.y - 3, 3, 13, '#24140a'); R(c.x + 9, c.y - 2, 1, 11, '#3d2614');            // respaldo
+    });
+
+    // SOFÁ chesterfield azul (el de la primera escena) con su cojín rojo
+    const C1 = '#4a8fc7', C2 = '#2b6aa3', C3 = '#1f4f80', C4 = '#143659', C5 = '#0d2540', S = SOFA;
+    R(S.x - 1, S.y + S.h - 2, S.w + 2, 4, '#000', 0.28);
+    R(S.x, S.y, S.w, S.h, C5);
+    R(S.x + 1, S.y + 1, S.w - 2, 8, C2); R(S.x + 1, S.y + 1, S.w - 2, 1, C1); dith(S.x + 1, S.y + 2, S.w - 2, 2, C1, 0, 0.6);
+    for (let x = S.x + 14; x < S.x + S.w - 10; x += 11) { R(x, S.y + 4, 2, 2, C5); Pt(x - 1, S.y + 3, C1); }
+    [[S.x + 1, 9], [S.x + S.w - 10, 9]].forEach(([x, w]) => {                                   // brazos enrollados
+      R(x, S.y + 2, w, S.h - 4, C2); R(x, S.y + 2, w, 1, C1); R(x + 1, S.y + S.h - 8, w - 2, 5, C1, 0.55);
+      R(x, S.y + 2, 1, S.h - 4, C1, 0.6); R(x + w - 1, S.y + 2, 1, S.h - 4, C4, 0.8);
+    });
+    for (let i = 0; i < 3; i++) {                                                               // cojines del asiento
+      const x = S.x + 10 + i * 27;
+      R(x, S.y + 9, 27, 18, C2); R(x, S.y + 9, 27, 2, C1); dith(x + 1, S.y + 12, 25, 8, C1, i, 0.35);
+      R(x, S.y + 9, 1, 18, C4); R(x + 13, S.y + 17, 2, 2, C5);
+    }
+    R(S.x + 10, S.y + 27, S.w - 20, 2, C3); R(S.x + 1, S.y + S.h - 2, S.w - 2, 1, C4);
+    for (let i = 0; i < 50; i++) Pt(S.x + 2 + hash(i * 1.3) * (S.w - 4), S.y + 2 + hash(i * 2.9) * (S.h - 4), hash(i) > 0.5 ? C1 : C4, 0.3);
+    R(S.x + 12, S.y + 11, 10, 9, '#4a1618'); R(S.x + 13, S.y + 11, 9, 8, '#7a2a2c'); R(S.x + 13, S.y + 11, 9, 1, '#a04448'); dith(S.x + 14, S.y + 13, 7, 5, '#8a3436', 0, 0.5);
+
+    // CÓMODA con la lámpara de mesa y el retrato pequeño
+    const D = DRESSER;
+    R(D.x + 1, D.y + D.h, D.w, 3, '#000', 0.25);
+    R(D.x, D.y, D.w, D.h, '#3a2410'); R(D.x + 1, D.y + 1, D.w - 2, D.h - 10, '#7a5430'); R(D.x + 1, D.y + 1, D.w - 2, 1, '#98703f');
+    for (let i = 0; i < 18; i++) R(D.x + 2 + Math.floor(hash(i * 2.2) * (D.w - 4)), D.y + 2 + Math.floor(hash(i * 4.4) * (D.h - 13)), 3 + Math.floor(hash(i * 1.1) * 6), 1, '#6a4524', 0.7);
+    R(D.x + 1, D.y + D.h - 9, D.w - 2, 8, '#63401f'); R(D.x + 1, D.y + D.h - 5, D.w - 2, 1, '#46301a');
+    [D.x + 10, D.x + D.w - 11].forEach(x => { R(x, D.y + D.h - 8, 2, 2, '#b8943a'); R(x, D.y + D.h - 4, 2, 2, '#b8943a'); });
+    disc(D.x + 10, D.y + 9, 5, '#6f6040'); disc(D.x + 10, D.y + 9, 4, '#9b8a5c'); disc(D.x + 9, D.y + 8, 2, '#bba980');
+    R(D.x + 24, D.y + 4, 9, 11, '#2a1a0f'); R(D.x + 25, D.y + 5, 7, 9, '#6a4a28'); R(D.x + 26, D.y + 6, 5, 7, '#4a3d2a'); disc(D.x + 28, D.y + 8, 1, '#a89868');
+
+    // MUDANZA: cajas de cartón. Cada caja: huella en el suelo (x, fy, ancho, fondo), alto y lo que tiene debajo (lift)
+    const crate = (x, fy, w, d, h, lift, open) => {
+      const top = fy - lift - h;
+      if (!lift) R(x + 1, fy + d, w, 2, '#000', 0.25);
+      R(x, top, w, d + h, '#5e4220');
+      R(x + 1, top + 1, w - 2, d - 1, open ? '#2e2214' : '#c39555');
+      R(x + 1, top + d, w - 2, h - 1, '#a57a42'); R(x + 1, top + d, w - 2, 1, '#d2a666'); R(x + 1, top + d + h - 2, w - 2, 1, '#86602f');
+      if (!open) { R(x + Math.floor(w / 2) - 1, top + 1, 3, d - 1, '#e0d2a8'); R(x + Math.floor(w / 2) - 1, top + d, 3, Math.min(4, h - 1), '#e0d2a8', 0.8); }
+      return top;
+    };
+    const flaps = (x, top, w, d) => {                                 // solapas abiertas hacia fuera
+      [[x - 4, top + 2, 4, d - 3], [x + w, top + 2, 4, d - 3], [x + 2, top - 4, w - 4, 4]].forEach(([fx, fy, fw, fh]) => { R(fx, fy, fw, fh, '#5e4220'); R(fx + 1, fy + 1, fw - 2, fh - 2, '#cfa265'); });
+    };
+    // (2) cajas pequeñas cerradas, amontonadas contra la pared derecha
+    crate(267, 36, 24, 14, 12, 0); crate(270, 38, 18, 11, 9, 12);
+    crate(268, 64, 22, 13, 12, 0); crate(271, 66, 16, 10, 8, 12); crate(273, 68, 11, 7, 6, 20);
+    crate(274, 85, 16, 11, 8, 0);
+    [[270, 52], [271, 80], [276, 98]].forEach(([x, y]) => { R(x, y, 6, 1, '#3a2a18'); R(x + 7, y, 3, 1, '#3a2a18'); });   // rotulador
+    // (4) cajas abiertas llenas de cosas, junto a la puerta del balcón
+    let top = crate(60, 40, 21, 15, 12, 0, true); flaps(60, top, 21, 15);
+    ['#7a2a2c', '#2b4a6a', '#b8a070', '#5a6a2a', '#d9d2bf', '#4a2f17'].forEach((c, i) => { R(62 + i * 3, top + 2, 2, 10 - (i % 3), c); R(62 + i * 3, top + 2, 2, 1, '#e8e0d0', 0.35); });   // libros
+    top = crate(79, 45, 15, 12, 10, 0, true); flaps(79, top, 15, 12);
+    R(81, top + 2, 7, 5, '#6d1f22'); R(85, top + 5, 7, 5, '#2b4a6a'); R(82, top + 8, 6, 3, '#d9d2bf');                            // ropa y papeles
+    disc(90, top + 3, 2, '#c9c2b0'); disc(90, top + 3, 1, '#3a2410');                                                            // una taza
+
+    // LÁMPARA DE PIE apagada, junto al sofá
+    const Lp = LAMP;
+    disc(Lp.x, Lp.y, 3, '#1a120a'); R(Lp.x, Lp.y - 18, 1, 18, '#2a2016'); R(Lp.x + 1, Lp.y - 18, 1, 18, '#5a4a30', 0.6);
+    for (let y = 0; y < 9; y++) { const w = 6 + Math.round(y * 0.9); R(Lp.x - w, Lp.y - 27 + y, w * 2 + 1, 1, y < 2 ? '#b19f70' : '#8a7a50'); }
+    R(Lp.x - 13, Lp.y - 18, 27, 1, '#40351f');
+
+    // (3) cartones de cajas desmontadas, apilados en el suelo bajo la mesa
+    R(32, 170, 70, 2, '#000', 0.25);
+    [[33, 159, 62, 0], [36, 158, 63, 1], [31, 160, 60, 2], [35, 158, 61, 3], [34, 159, 64, 4]].forEach(([x, y, w, k]) => {
+      const yy = y - k * 1;                                          // cada cartón 1 px más arriba que el de debajo
+      R(x, yy, w, 11, '#5e4220'); R(x + 1, yy + 1, w - 2, 9, k % 2 ? '#c39555' : '#b98b4c');
+      R(x + Math.floor(w / 2), yy + 1, 1, 9, '#9a7038');               // doblez del cartón
+      for (let i = x + 1; i < x + w - 1; i += 2) Pt(i, yy + 10, '#e0c08a');   // canto ondulado
+    });
+    R(54, 155, 3, 9, '#e0d2a8', 0.85); R(70, 157, 9, 1, '#3a2a18'); R(81, 157, 4, 1, '#3a2a18');            // cinta y rotulador
+
+    // MUEBLE DE LA TELE (abajo, contra la pared) con la tele encendida mirando al sofá
+    const V = TV;
+    R(V.x, V.y, V.w, V.h, '#24140a'); R(V.x + 1, V.y + 1, V.w - 2, V.h - 2, '#63401f'); R(V.x + 1, V.y + 1, V.w - 2, 1, '#98703f');
+    for (let i = 0; i < 14; i++) R(V.x + 3 + Math.floor(hash(i * 3.9) * (V.w - 10)), V.y + 3 + Math.floor(hash(i * 1.7) * (V.h - 6)), 6, 1, '#533514', 0.7);
+    R(V.x + 16, V.y + 7, 68, 8, '#0b0c10'); R(V.x + 16, V.y + 7, 68, 1, '#6f8fb0'); R(V.x + 40, V.y + 15, 20, 3, '#14151a');
+    R(V.x + 4, V.y + 5, 9, 10, '#1d1f25'); R(V.x + 5, V.y + 6, 7, 1, '#3a3d46');
+    R(V.x + 88, V.y + 8, 7, 2, '#2a2a30'); Pt(V.x + 89, V.y + 8, '#c04040');
+
+    // tinte sepia suave (une con la primera escena sin ensuciar el suelo blanco grisáceo)
+    b.globalCompositeOperation = 'multiply'; b.fillStyle = 'rgb(240,228,208)'; b.fillRect(0, 0, W, H); b.globalCompositeOperation = 'source-over';
+
+    vig = document.createElement('canvas'); vig.width = W; vig.height = H;
+    const v = vig.getContext('2d'), g = v.createRadialGradient(W / 2, H / 2 + 6, 70, W / 2, H / 2 + 6, 200);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.6, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0.85)');
+    v.fillStyle = g; v.fillRect(0, 0, W, H);
+  }
+
+  // ---------- protagonista PROVISIONAL (se cambiará por el definitivo) ----------
+  const P = { x: 170, y: 74, dir: 'down', ang: Math.PI / 2, moving: false, phase: 0, tx: null, ty: null, stuck: 0 };
+  let flashOn = false;                                               // linterna del móvil (se enciende desde la app Linterna)
+  document.addEventListener('pd:flashlight', e => { flashOn = !!e.detail.on; });
+  const SPEED = 50, FOOT_W = 8, FOOT_H = 4;
+  function blocked(x, y) {                                           // la "huella" de los pies choca con paredes o muebles
+    const l = x - FOOT_W / 2, r = x + FOOT_W / 2, t = y - FOOT_H, b = y;
+    if (l < FLOOR.x0 + 1 || r > FLOOR.x1 - 1 || t < FLOOR.y0 + 1 || b > FLOOR.y1 - 1) return true;
+    return SOLID.some(s => l < s.x + s.w && r > s.x && t < s.y + s.h && b > s.y);
+  }
+  const keys = new Set();
+  function update(dt) {
+    let dx = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), dy = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0);
+    if (dx || dy) P.tx = null;                                      // el teclado manda sobre el toque
+    else if (P.tx != null) {
+      const vx = P.tx - P.x, vy = P.ty - P.y, d = Math.hypot(vx, vy);
+      if (d < 1.2) P.tx = null; else { dx = vx / d; dy = vy / d; }
+    }
+    const len = Math.hypot(dx, dy);
+    P.moving = len > 0;
+    if (!P.moving) { P.phase = 0; return; }
+    dx /= len; dy /= len;
+    const ox = P.x, oy = P.y, sx = dx * SPEED * dt, sy = dy * SPEED * dt;
+    if (!blocked(P.x + sx, P.y)) P.x += sx;                         // por ejes: si choca, se desliza por el borde
+    if (!blocked(P.x, P.y + sy)) P.y += sy;
+    if (P.tx != null && Math.hypot(P.x - ox, P.y - oy) < 0.01) { P.stuck += dt; if (P.stuck > 0.25) P.tx = null; } else P.stuck = 0;
+    P.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    const da = Math.atan2(dy, dx) - P.ang;                          // la linterna gira suave hacia donde camina
+    P.ang += Math.atan2(Math.sin(da), Math.cos(da)) * Math.min(1, dt * 10);
+    P.phase += dt * 7;
+  }
+  function drawPlayer() {
+    const x = Math.round(P.x), y = Math.round(P.y), r = (px, py, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(px, py, w, h); };
+    const step = P.moving ? Math.round(Math.sin(P.phase * Math.PI)) : 0;
+    const HOOD = '#6d1f22', HOOD_HI = '#8e2a2c', HOOD_LO = '#4a1416', JEANS = '#2b3242', SKIN = '#d9a982', HAIR = '#2a1c14';
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x - 4, y - 1, 8, 2); ctx.fillRect(x - 3, y - 2, 6, 1);
+    r(x - 3, y - 4 - (step > 0 ? 1 : 0), 2, 3, JEANS); r(x + 1, y - 4 - (step < 0 ? 1 : 0), 2, 3, JEANS);
+    r(x - 4, y - 10, 8, 6, HOOD); r(x - 4, y - 10, 8, 1, HOOD_HI);
+    r(x - 5, y - 9 + step, 1, 4, HOOD_LO); r(x + 4, y - 9 - step, 1, 4, HOOD_LO);
+    r(x - 3, y - 16, 6, 6, P.dir === 'up' ? HAIR : SKIN); r(x - 3, y - 16, 6, 2, HAIR);
+    if (P.dir === 'down') { r(x - 2, y - 13, 1, 1, '#1a120a'); r(x + 1, y - 13, 1, 1, '#1a120a'); }
+    else if (P.dir === 'left') { r(x + 1, y - 15, 2, 4, HAIR); r(x - 2, y - 13, 1, 1, '#1a120a'); }
+    else if (P.dir === 'right') { r(x - 3, y - 15, 2, 4, HAIR); r(x + 1, y - 13, 1, 1, '#1a120a'); }
+    else r(x - 3, y - 14, 6, 3, HAIR);
+  }
+
+  // ---------- controles: flechas/WASD; con ratón o dedo, tocar (o arrastrar) adonde ir ----------
+  const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
+  const busy = () => !running || document.getElementById('settings').classList.contains('open') || document.getElementById('phoneUI').classList.contains('open');
+  addEventListener('keydown', e => {
+    const k = KEYMAP[e.code]; if (!k || busy()) return;
+    keys.add(k); moved = true; e.preventDefault();
+  });
+  addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (k) keys.delete(k); });
+  addEventListener('blur', () => keys.clear());
+  function toRoom(e) {                                               // pantalla -> px lógicos (el lienzo va "contain")
+    const r = cv.getBoundingClientRect(), s = Math.min(r.width / W, r.height / H);
+    return { x: (e.clientX - r.left - (r.width - W * s) / 2) / s, y: (e.clientY - r.top - (r.height - H * s) / 2) / s };
+  }
+  let dragging = false, mark = null;
+  function aim(e) {
+    const p = toRoom(e);
+    P.tx = clamp(p.x, FLOOR.x0 + 5, FLOOR.x1 - 5); P.ty = clamp(p.y, FLOOR.y0 + 5, FLOOR.y1 - 2);
+    mark = { x: P.tx, y: P.ty, t: performance.now() }; moved = true;
+  }
+  cv.addEventListener('pointerdown', e => {
+    if (busy()) return;
+    dragging = true; aim(e);
+    try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+    e.preventDefault();
+  });
+  cv.addEventListener('pointermove', e => { if (dragging) aim(e); });
+  ['pointerup', 'pointercancel'].forEach(ev => cv.addEventListener(ev, () => { dragging = false; }));
+
+  // ---------- bucle ----------
+  // ---------- apagón: a los 5 s se va la luz de la casa (parpadea, se apaga con un chasquido) ----------
+  const OUT_AT = 5, OUT_FLICK = [[0, 0.07, 0], [0.07, 0.2, 1], [0.2, 0.32, 0], [0.32, 0.5, 0.6], [0.5, 0.58, 0]];
+  const powerAt = t => { if (t < OUT_AT) return 1; const f = OUT_FLICK.find(([a, b]) => t - OUT_AT >= a && t - OUT_AT < b); return f ? f[2] : 0; };
+  let outFx = 0;                                                     // sonidos del apagón ya hechos (0, 1 o 2)
+  function outageSounds(t) {
+    const GA = window.GameAudio; if (!GA) return;
+    if (outFx < 1 && t >= OUT_AT) { outFx = 1; GA.blip(70, 0.18, 'square', 0.12, 40); }                         // chasquido del salto de luz
+    if (outFx < 2 && t >= OUT_AT + 0.5) { outFx = 2; GA.blip(1400, 0.45, 'sine', 0.05, 80); GA.blip(60, 0.3, 'square', 0.08, 30); }   // la tele se apaga
+  }
+
+  // ---------- bocadillos de cómic del protagonista (uno detrás de otro) ----------
+  // Al acabar el último, el móvil empieza a vibrar hasta que el jugador lo abre.
+  const SAYS = [{ text: 'Vaya, qué momento para que se vaya la luz', hold: 3.2 }, { text: 'Voy a preguntarle a mi madre', hold: 2.6 }];
+  const SAY_AT = OUT_AT + 1.2, SAY_DT = 0.045, SAY_GAP = 0.8;
+  let sayI = 0, sayNext = SAY_AT, sayAt = null, sayLines = null;
+  const phoneOpen = () => document.getElementById('phoneUI').classList.contains('open');
+  function drawBubble(t) {
+    const PD = window.PD; if (!PD || sayI >= SAYS.length || t < sayNext) return;
+    const S = SAYS[sayI];
+    if (sayAt == null) {                                             // si tiene el móvil abierto, espera a que lo cierre para hablar
+      if (phoneOpen()) return;
+      sayAt = t; sayLines = []; let cur = '';                        // en líneas de ~132 px para que quepa en la sala
+      for (const w of PD.norm(S.text).split(' ')) { const test = cur ? cur + ' ' + w : w; if (cur && PD.measure(test) > 132) { sayLines.push(cur); cur = w; } else cur = test; }
+      sayLines.push(cur);
+    }
+    const end = sayAt + S.text.length * SAY_DT + S.hold, a = 1 - clamp((t - end) / 0.5, 0, 1);
+    if (a <= 0) {
+      sayI++; sayAt = null; sayNext = t + SAY_GAP;
+      if (sayI === SAYS.length) startBuzz(t);
+      return;
+    }
+    // Se dibuja en px reales del lienzo (×RES). k = tamaño de cada píxel de la letra: lo más fino que se siga leyendo bien
+    const r = cv.getBoundingClientRect(), screenPx = Math.min(r.width / W, r.height / H) / RES;   // px de pantalla por px del lienzo
+    const k = clamp(Math.ceil(1.4 / Math.max(0.01, screenPx)), 1, RES);
+    const pad = 3 * k, lh = 9 * k, w = Math.max(...sayLines.map(l => PD.measure(l))) * k + pad * 2, h = sayLines.length * lh - 2 * k + pad * 2;
+    const CW = W * RES, px = P.x * RES, head = (P.y - 18) * RES;
+    const bx = clamp(Math.round(px - w / 2), 3, CW - w - 3), by = Math.max(3, Math.round(head - h - 4 * k));
+    const tx = clamp(Math.round(px), bx + 3 * k, bx + w - 4 * k), ty = by + h;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = a;
+    const o = Math.max(1, Math.round(k / 2));                         // grosor del contorno
+    const th = 3 * k;                                                 // alto del pico que señala la cabeza
+    ctx.fillStyle = '#120c0a'; ctx.fillRect(bx - o, by, w + o * 2, h); ctx.fillRect(bx, by - o, w, h + o * 2);   // contorno con esquinas romas
+    for (let i = 0; i < th + o; i++) { const hw = th + o - 1 - i; ctx.fillRect(tx - hw, ty + i, hw * 2 + 1, 1); }
+    ctx.fillStyle = '#f4f0e6'; ctx.fillRect(bx, by, w, h);
+    for (let i = 0; i < th; i++) { const hw = th - 1 - i; ctx.fillRect(tx - hw, ty + i, hw * 2 + 1, 1); }
+    let left = Math.floor((t - sayAt) / SAY_DT) + 1;                  // aparece letra a letra
+    sayLines.forEach((ln, i) => { if (left > 0) PD.drawText(ctx, ln.slice(0, left), bx + pad, by + pad + i * lh, '#1a1210', k); left -= ln.length + 1; });
+    ctx.restore();
+  }
+
+  // ---------- el móvil vibra (icono que tiembla + zumbido) hasta que se abre ----------
+  const BUZZ_EVERY = 1.8;
+  let buzzNext = null;
+  const hud = () => document.getElementById('hudPhone');
+  function startBuzz(t) { buzzNext = t; hud().classList.add('buzzing'); }
+  function stopBuzz() { buzzNext = null; hud().classList.remove('buzzing'); }
+  function buzzTick(t) {
+    if (buzzNext == null) return;
+    if (phoneOpen()) { stopBuzz(); return; }
+    if (t < buzzNext) return;
+    buzzNext = t + BUZZ_EVERY;
+    const GA = window.GameAudio;
+    if (GA) { GA.blip(65, 0.09, 'square', 0.06); setTimeout(() => GA.blip(65, 0.09, 'square', 0.06), 150); }
+    if (TOUCH && navigator.vibrate) try { navigator.vibrate([90, 60, 90]); } catch (_) {}
+  }
+
+  // ---------- haz de la linterna, con los bordes difuminados ----------
+  // Se pinta a resolución completa en una capa aparte: la luz baja con la distancia (degradado radial) y, además,
+  // una máscara por ángulo la deja opaca en el centro y la va disolviendo hacia los lados, sin bordes marcados.
+  const beamCv = document.createElement('canvas'); beamCv.width = W * RES; beamCv.height = H * RES;
+  const bctx = beamCv.getContext('2d');
+  const BEAM_LEN = 115, BEAM_HALF = 0.6;                             // alcance (px lógicos) y medio ángulo del haz (rad)
+  const BEAM_PROFILE = [[0, 0], [0.12, 0.08], [0.28, 0.35], [0.42, 0.8], [0.5, 1], [0.58, 0.8], [0.72, 0.35], [0.88, 0.08], [1, 0]];
+  function beamLayer(ox, oy, ang, fl) {
+    const X = ox * RES, Y = oy * RES, L = BEAM_LEN * RES, box = [X - L, Y - L, L * 2, L * 2], conic = !!bctx.createConicGradient;
+    bctx.clearRect(0, 0, beamCv.width, beamCv.height); bctx.save();
+    // la luz no atraviesa las paredes: solo alumbra el suelo de la sala y la cara de la pared del fondo (que se ve de frente)
+    const FY = WALL.y0 + WALL.t;
+    bctx.beginPath(); bctx.rect(FLOOR.x0 * RES, FY * RES, (FLOOR.x1 - FLOOR.x0) * RES, (FLOOR.y1 - FY) * RES); bctx.clip();
+    if (!conic) { bctx.beginPath(); bctx.moveTo(X, Y); bctx.arc(X, Y, L, ang - BEAM_HALF * 0.7, ang + BEAM_HALF * 0.7); bctx.closePath(); bctx.clip(); }   // navegadores antiguos: cono sencillo
+    const rad = bctx.createRadialGradient(X, Y, 2 * RES, X, Y, L);
+    rad.addColorStop(0, `rgba(255,250,232,${0.8 * fl})`); rad.addColorStop(0.3, `rgba(255,248,226,${0.45 * fl})`);
+    rad.addColorStop(0.7, `rgba(255,246,220,${0.14 * fl})`); rad.addColorStop(1, 'rgba(255,246,220,0)');
+    bctx.fillStyle = rad; bctx.fillRect(...box);
+    const hx = X + Math.cos(ang) * 50 * RES, hy = Y + (Math.sin(ang) * 50 + 5) * RES;          // círculo de luz donde el haz toca el suelo
+    const pool = bctx.createRadialGradient(hx, hy, 2 * RES, hx, hy, 26 * RES);
+    pool.addColorStop(0, `rgba(255,252,236,${0.3 * fl})`); pool.addColorStop(1, 'rgba(255,252,236,0)');
+    bctx.fillStyle = pool; bctx.fillRect(hx - 26 * RES, hy - 26 * RES, 52 * RES, 52 * RES);
+    const c = Math.cos(ang), s = Math.sin(ang);                                                // dónde choca el rayo central con la pared
+    const d = Math.min(c > 0 ? (FLOOR.x1 - ox) / c : c < 0 ? (FLOOR.x0 - ox) / c : Infinity, s > 0 ? (FLOOR.y1 - oy) / s : s < 0 ? (FLOOR.y0 - oy) / s : Infinity);
+    if (d < BEAM_LEN) {                                                                        // ahí la luz se queda y se concentra
+      const wx = (ox + c * d) * RES, wy = (oy + s * d) * RES, k = 1 - d / BEAM_LEN, R18 = 18 * RES;
+      const sp = bctx.createRadialGradient(wx, wy, 0, wx, wy, R18);
+      sp.addColorStop(0, `rgba(255,250,232,${0.45 * k * fl})`); sp.addColorStop(1, 'rgba(255,250,232,0)');
+      bctx.fillStyle = sp; bctx.fillRect(wx - R18, wy - R18, R18 * 2, R18 * 2);
+    }
+    if (conic) {                                                                               // máscara por ángulo: centro opaco, lados que se disuelven
+      const cg = bctx.createConicGradient(ang - BEAM_HALF, X, Y), span = (BEAM_HALF * 2) / (Math.PI * 2);
+      BEAM_PROFILE.forEach(([u, a]) => cg.addColorStop(u * span, `rgba(0,0,0,${a})`));
+      cg.addColorStop(Math.min(1, span + 0.001), 'rgba(0,0,0,0)'); cg.addColorStop(1, 'rgba(0,0,0,0)');
+      bctx.globalCompositeOperation = 'destination-in'; bctx.fillStyle = cg; bctx.fillRect(...box);
+    }
+    bctx.globalCompositeOperation = 'source-over';                                            // destello del móvil en la mano (sin máscara, pero
+    const R6 = 6 * RES, spot = bctx.createRadialGradient(X, Y, 0, X, Y, R6);                  // tampoco atraviesa la pared si está pegado a ella)
+    spot.addColorStop(0, 'rgba(255,255,244,0.95)'); spot.addColorStop(1, 'rgba(255,255,244,0)');
+    bctx.fillStyle = spot; bctx.fillRect(X - R6, Y - R6, R6 * 2, R6 * 2);
+    bctx.restore();
+    return beamCv;
+  }
+
+  const FADE_IN = 1.6, TOUCH = matchMedia('(pointer: coarse)').matches;
+  let running = false, raf = 0, t0 = 0, last = 0, moved = false, movedAt = null;
+  const poly = pts => { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.fill(); };
+  function frame(now) {
+    if (!running) return;
+    const t = now / 1000 - t0, dt = Math.min(0.05, (now - last) / 1000); last = now;
+    update(dt);
+    const lvl = 0.94 + 0.06 * Math.sin(t * 1.6) - (hash(Math.floor(t * 18)) > 0.97 ? 0.25 : 0);
+    const power = powerAt(t);                                            // luz eléctrica (1 = encendida); la del día no depende de ella
+    outageSounds(t);
+    ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;   // a partir de aquí, en px lógicos
+
+    ctx.drawImage(bg, 0, 0);
+    // reflejo del espejo: la luz no deja ver nada dentro
+    ctx.save(); ctx.beginPath(); ctx.rect(148, 14, 44, 8); ctx.clip(); ctx.globalCompositeOperation = 'screen';
+    const sh = Math.sin(t * 0.35) * 4;
+    ctx.fillStyle = 'rgba(235,242,248,0.25)'; ctx.fillRect(148, 14, 44, 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; poly([[160 + sh, 14], [168 + sh, 14], [164 + sh, 22], [156 + sh, 22]]);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'; poly([[172 + sh, 14], [175 + sh, 14], [171 + sh, 22], [168 + sh, 22]]);
+    ctx.restore();
+
+    if (mark) {                                                      // marca de destino al tocar
+      const a = 1 - (now - mark.t) / 600;
+      if (a > 0) { ctx.fillStyle = `rgba(232,224,208,${a * 0.8})`; const mx = Math.round(mark.x), my = Math.round(mark.y); ctx.fillRect(mx - 3, my, 2, 1); ctx.fillRect(mx + 2, my, 2, 1); ctx.fillRect(mx, my - 2, 1, 1); ctx.fillRect(mx, my + 2, 1, 1); }
+      else mark = null;
+    }
+    drawPlayer();
+
+    // penumbra y luces: tarde por la ventana, lámpara de techo cálida y la tele, fría y parpadeante
+    ctx.fillStyle = `rgba(10,5,4,${0.22 + 0.26 * (1 - power)})`; ctx.fillRect(0, 0, W, H);   // sin luz eléctrica: penumbra, pero son las 4 de la tarde
+    ctx.save(); ctx.globalCompositeOperation = 'screen';
+    // luz del día de fuera: claridad desde el ventanal que se apaga hacia el centro de la sala
+    const fill = ctx.createLinearGradient(26, 0, 190, 0);
+    fill.addColorStop(0, `rgba(255,236,200,${0.16 * lvl})`); fill.addColorStop(1, 'rgba(255,236,200,0)');
+    ctx.fillStyle = fill; ctx.fillRect(26, 30, 170, 142);
+    const sway = Math.sin(t * 0.5) * 2, PANE = WIN.h / 4;
+    for (let k = 0; k < 4; k++) {                                                              // un haz por cada hoja del ventanal
+      const y0 = WIN.y + k * PANE + 2, y1 = WIN.y + (k + 1) * PANE - 2;
+      ctx.fillStyle = `rgba(255,232,180,${0.12 * lvl})`; poly([[26, y0], [26, y1], [92 + sway, y1 + 22], [92 + sway, y0 + 22]]);
+    }
+    const DN = DOOR_N, DE = DOOR_E, F = FLOOR, half = DN.w / 2;                                // balcón: un haz por cada hoja de cristal
+    [[DN.x, DN.x + half - 1], [DN.x + half + 1, DN.x + DN.w]].forEach(([a, b]) => {
+      ctx.fillStyle = `rgba(255,236,196,${0.14 * lvl})`; poly([[a, F.y0], [b, F.y0], [b + 18 + sway, F.y0 + 48], [a + 8 + sway, F.y0 + 48]]);
+    });
+    ctx.fillStyle = `rgba(235,240,255,${0.08 * lvl})`; poly([[F.x1, DE.y + 9], [F.x1, DE.y + DE.h - 9], [F.x1 - 22, DE.y + DE.h - 3], [F.x1 - 22, DE.y + 15]]);
+    ctx.fillStyle = 'rgba(225,238,245,0.5)';                                                   // los cristales brillan: fuera es de día
+    for (let k = 0; k < 4; k++) ctx.fillRect(WALL.x0 + 1, WIN.y + k * PANE + 1, WALL.t - 2, PANE - 2);
+    ctx.fillStyle = 'rgba(255,244,220,0.3)'; ctx.fillRect(DN.x, WALL.y0 + WALL.t + 2, DN.w, F.y0 - WALL.y0 - WALL.t - 3);
+    ctx.fillStyle = 'rgba(225,238,245,0.4)'; ctx.fillRect(WALL.x1 - WALL.t + 1, DE.y + 9, WALL.t - 2, DE.h - 18);
+    if (power > 0) {                                                                           // lámpara de techo
+      const lamp = ctx.createRadialGradient(CEIL_LIGHT.x, CEIL_LIGHT.y, 4, CEIL_LIGHT.x, CEIL_LIGHT.y, 70);
+      lamp.addColorStop(0, `rgba(255,214,140,${0.3 * lvl * power})`); lamp.addColorStop(0.5, `rgba(255,200,120,${0.12 * lvl * power})`); lamp.addColorStop(1, 'rgba(255,200,120,0)');
+      ctx.fillStyle = lamp; ctx.fillRect(0, 0, W, H);
+    }
+    // la tele: la luz sale de TODO el ancho de la pantalla y se abre hacia el sofá (bordes difuminados por capas)
+    const tvk = hash(Math.floor(t * 7)), cut = hash(Math.floor(t * 7) * 3.3) > 0.85;          // cambios de plano de la tele
+    const tvA = (0.15 + 0.1 * tvk) * (cut ? 1.4 : 1) * power, tvC = cut ? '200,215,255' : '110,160,255';
+    const sx0 = TV.x + 16, sx1 = TV.x + 84, sy = TV.y + 7, ty = SOFA.y + SOFA.h - 2;
+    if (tvA > 0) {
+      const grad = ctx.createLinearGradient(0, sy, 0, ty);
+      grad.addColorStop(0, `rgba(${tvC},${tvA})`); grad.addColorStop(0.6, `rgba(${tvC},${tvA * 0.45})`); grad.addColorStop(1, `rgba(${tvC},${tvA * 0.12})`);
+      ctx.fillStyle = grad;
+      [[0, 1], [10, 0.6], [22, 0.35]].forEach(([s, k]) => { ctx.globalAlpha = k; poly([[sx0 - s * 0.3, sy], [sx1 + s * 0.3, sy], [sx1 + 52 + s, ty], [sx0 - 40 - s, ty]]); });
+      ctx.globalAlpha = 1;
+      const near = ctx.createLinearGradient(0, sy - 10, 0, sy); near.addColorStop(0, `rgba(${tvC},0)`); near.addColorStop(1, `rgba(${tvC},${tvA * 1.5})`);
+      ctx.fillStyle = near; ctx.fillRect(sx0 - 2, sy - 10, sx1 - sx0 + 4, 10);
+      ctx.fillStyle = `rgba(${tvC},${(0.5 + 0.4 * tvk) * power})`; ctx.fillRect(sx0 + 1, sy, sx1 - sx0 - 2, 1);
+    }
+    if (flashOn) {                                                                             // linterna del móvil: cono hacia donde mira
+      const ox = P.x + Math.cos(P.ang) * 5, oy = P.y - 8 + Math.sin(P.ang) * 3;
+      const fl = 0.96 + 0.04 * Math.sin(t * 23);
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(beamLayer(ox, oy, P.ang, fl), 0, 0); ctx.restore();
+    }
+    for (let i = 0; i < 30; i++) {                                                             // polvo en el aire
+      const x = (hash(i) * W + t * (2 + hash(i * 2) * 4) + Math.sin(t * 0.6 + i) * 3) % W, y = (hash(i * 3) * H + t * (1 + hash(i * 5) * 2)) % H;
+      ctx.fillStyle = `rgba(255,236,200,${(0.15 + 0.2 * Math.abs(Math.sin(t * 1.4 + i))) * lvl})`; ctx.fillRect(Math.floor(x), Math.floor(y), 1, 1);
+    }
+    ctx.restore();
+
+    ctx.drawImage(vig, 0, 0);
+    for (let i = 0; i < 120; i++) { ctx.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)'; ctx.fillRect((Math.random() * W) | 0, (Math.random() * H) | 0, 1, 1); }
+    drawBubble(t); buzzTick(t);
+
+    // ayuda de controles: se va al empezar a moverse
+    if (moved && movedAt == null) movedAt = t;
+    const helpA = clamp((t - FADE_IN) / 0.6, 0, 1) * (movedAt == null ? 1 : 1 - clamp((t - movedAt - 1.2) / 0.8, 0, 1));
+    const PD = window.PD;
+    if (helpA > 0 && PD) {
+      const msg = PD.norm(TOUCH ? 'Toca donde quieras ir' : 'Flechas o WASD para moverte'), w = PD.measure(msg);
+      const hx = Math.round(194 - w / 2), hy = TV.y - 14;                                        // en el suelo libre, entre las sillas y la pared derecha
+      ctx.globalAlpha = helpA * 0.75; ctx.fillStyle = '#000'; ctx.fillRect(hx - 4, hy - 2, w + 8, 11);
+      ctx.globalAlpha = helpA; PD.drawText(ctx, msg, hx + 1, hy + 1, 'rgba(0,0,0,0.9)'); PD.drawText(ctx, msg, hx, hy, '#e8e0d0'); ctx.globalAlpha = 1;
+    }
+
+    const black = 1 - ease(clamp(t / FADE_IN, 0, 1));                // entrada desde negro
+    if (black > 0) { ctx.fillStyle = `rgba(0,0,0,${black})`; ctx.fillRect(0, 0, W, H); }
+    raf = requestAnimationFrame(frame);
+  }
+
+  function start() {
+    if (!bg) build();
+    Object.assign(P, { x: 170, y: 74, dir: 'down', ang: Math.PI / 2, moving: false, phase: 0, tx: null, ty: null, stuck: 0 });   // junto al sofá, donde estaba el móvil
+    flashOn = !!(window.PDPhone && window.PDPhone.flashlight);
+    keys.clear(); mark = null; moved = false; movedAt = null; dragging = false; outFx = 0;
+    sayI = 0; sayNext = SAY_AT; sayAt = null; stopBuzz();
+    cv.hidden = false; running = true;
+    t0 = performance.now() / 1000; last = performance.now();
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
+  }
+  function stop() { running = false; cancelAnimationFrame(raf); cv.hidden = true; keys.clear(); dragging = false; stopBuzz(); }
+  window.PDRoom = { start, stop, get running() { return running; }, get player() { return { x: P.x, y: P.y, dir: P.dir }; } };
 })();
 </script>
 </body>
