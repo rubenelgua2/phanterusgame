@@ -1286,7 +1286,122 @@
     };
   })();
   window.GameAudio = GameAudio;
-  ['pointerdown', 'touchend', 'click', 'keydown'].forEach(ev => addEventListener(ev, () => GameAudio.init(), { passive: true }));   // iOS/Android exigen un gesto
+
+  /* =====================================================================
+     MÚSICA DEL MENÚ: lounge tranquilo de casa de apuestas, en 8 bits.
+     Fa mayor, 92 bpm, swing suave y ritmo de bossa; 32 compases (la 2ª vuelta deja descansar la melodía).
+     Se toca en tiempo real como un secuenciador de consola: cada compás se programa en el reloj de audio un
+     poco antes de que suene, así arranca al instante, gasta muy poco y el bucle no tiene costuras.
+     Canales: pulso 50% (melodía, con vibrato y eco), pulso 25% (acordes), triángulo (bajo), ruido (shaker).
+     ===================================================================== */
+  const MenuMusic = (() => {
+    const BPM = 92, BEAT = 60 / BPM, BAR = 4 * BEAT, SWING = 0.58, BARS = 32, AHEAD = 0.6;
+    const LEVEL = 0.23;                                         // medido: RMS 0.05 y picos 0.27 (más bajo que el viento y las voces)
+    const midi = n => { const m = /^([A-G])([#b]?)(\d)$/.exec(n); return 12 * (+m[3] + 1) + 'C D EF G A B'.indexOf(m[1]) + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0); };
+    const hz = n => 440 * Math.pow(2, (midi(n) - 69) / 12);
+    const sw = beat => (Math.floor(beat) + (beat % 1 === 0.5 ? SWING : beat % 1)) * BEAT;   // tiempo dentro del compás, corcheas con swing
+
+    // acordes: bajo (fundamental) y voicing sin fundamental en la zona media (colores de jazz: 7ª y 9ª)
+    const CH = {
+      Fmaj7: ['F2', 'A3 C4 E4 G4'], Dm7: ['D2', 'A3 C4 E4 F4'], Gm7: ['G2', 'Bb3 D4 F4 A4'], C7: ['C3', 'Bb3 D4 E4 G4'],
+      D7: ['D2', 'C4 E4 F#4 A4'], Bbmaj7: ['Bb2', 'A3 C4 D4 F4'], Bbm6: ['Bb2', 'Bb3 Db4 F4 G4'], Am7: ['A2', 'G3 C4 E4 A4']
+    };
+    const PROG = ['Fmaj7', 'Dm7', 'Gm7', 'C7', 'Fmaj7', 'D7', 'Gm7', 'C7',            // A: la casa de apuestas abre
+                  'Bbmaj7', 'Bbm6', 'Am7', 'D7', 'Gm7', 'C7', 'Fmaj7 Dm7', 'Gm7 C7'];  // B: el iv menor le da el toque triste
+    // melodía, un compás por línea: "tiempo-duración-nota"
+    const MEL = [
+      '1-1-A4 2-.5-C5 2.5-1.5-E5', '0-1.5-D5 1.5-.5-C5 2-2-A4', '.5-.5-Bb4 1-.5-D5 1.5-1.5-F5 3-1-E5', '0-1-D5 1-.5-C5 1.5-.5-Bb4 2-2-G4',
+      '1-1-A4 2-.5-C5 2.5-1.5-F5', '0-1.5-F#5 1.5-.5-E5 2-1-D5 3-1-C5', '0-1.5-Bb4 1.5-.5-A4 2-2-G4', '.5-.5-E4 1-.5-G4 1.5-.5-Bb4 2-.5-D5 2.5-1.5-C5',
+      '0-1.5-F5 1.5-.5-D5 2-2-A4', '0-1.5-F5 1.5-.5-Db5 2-2-Bb4', '.5-.5-C5 1-.5-E5 1.5-1.5-G5 3-1-E5', '0-1.5-F#5 1.5-.5-E5 2-2-D5',
+      '0-1-Bb4 1-.5-D5 1.5-1-F5 2.5-1.5-A5', '0-1-G5 1-1-E5 2-1-C5 3-1-Bb4', '0-1.5-A4 1.5-.5-G4 2-2-F4', '2-.5-E4 2.5-.5-G4 3-1-Bb4'
+    ].map(l => l.split(' ').map(s => { const [b, d, n] = s.split('-'); return [+b, +d, n]; }));
+
+    // instrumentos y efectos fijos; devuelve la función que programa un compás (n) a partir del instante t0
+    function synth(oc, dest) {
+      const pulse = duty => {                                   // onda de pulso de consola (serie de Fourier)
+        const n = 24, re = new Float32Array(n + 1), im = new Float32Array(n + 1);
+        for (let k = 1; k <= n; k++) { re[k] = Math.sin(2 * Math.PI * k * duty) / (k * Math.PI); im[k] = (1 - Math.cos(2 * Math.PI * k * duty)) / (k * Math.PI); }
+        return oc.createPeriodicWave(re, im);
+      };
+      const P50 = pulse(0.5), P25 = pulse(0.25);
+      const bus = oc.createBiquadFilter(); bus.type = 'lowpass'; bus.frequency.value = 5000; bus.connect(dest);
+      const lead = oc.createBiquadFilter(); lead.type = 'lowpass'; lead.frequency.value = 3200; lead.connect(bus);
+      const echo = oc.createDelay(1), fb = oc.createGain(), wet = oc.createGain(), damp = oc.createBiquadFilter();
+      echo.delayTime.value = BEAT * 0.75; fb.gain.value = 0.3; wet.gain.value = 0.28; damp.type = 'lowpass'; damp.frequency.value = 1800;
+      lead.connect(echo); echo.connect(damp); damp.connect(fb); fb.connect(echo); damp.connect(wet); wet.connect(bus);
+      const comp = oc.createBiquadFilter(); comp.type = 'lowpass'; comp.frequency.value = 2200; comp.connect(bus);
+      const vib = oc.createOscillator(), vibAmt = oc.createGain(); vib.frequency.value = 5.2; vibAmt.gain.value = 9; vib.connect(vibAmt); vib.start();
+      const noise = oc.createBuffer(1, Math.round(oc.sampleRate / 5), oc.sampleRate), nd = noise.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+
+      function tone(wave, f, t, dur, peak, dest, sus, rel, glide) {
+        const o = oc.createOscillator(), g = oc.createGain();
+        if (typeof wave === 'string') o.type = wave; else o.setPeriodicWave(wave);
+        o.frequency.setValueAtTime(f, t);
+        if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + dur);
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + 0.008);
+        g.gain.setTargetAtTime(peak * sus, t + 0.008, dur / 3);
+        g.gain.setTargetAtTime(0, t + dur, rel / 3);
+        o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + rel * 2);
+        return o;
+      }
+      function hiss(t, dur, peak, freq) {                       // percusión de ruido
+        const s = oc.createBufferSource(), f = oc.createBiquadFilter(), g = oc.createGain();
+        s.buffer = noise; f.type = 'highpass'; f.frequency.value = freq;
+        g.gain.setValueAtTime(peak, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        s.connect(f); f.connect(g); g.connect(bus); s.start(t, Math.random() * 0.05); s.stop(t + dur + 0.01);
+      }
+
+      return (n, t0) => {
+        const pass = Math.floor(n / 16), b = n % 16, chords = PROG[b].split(' '), at = s => t0 + sw(s);
+        chords.forEach((name, h) => {                           // h = mitad del compás (2 acordes) o compás entero
+          const [root, voicing] = CH[name], half = chords.length === 2, r = midi(root);
+          const fifth = 440 * Math.pow(2, (r + (r >= 45 ? -5 : 7) - 69) / 12), b0 = half ? h * 2 : 0;
+          // bajo de bossa: fundamental (negra con puntillo) + quinta, dos veces por compás
+          [[0, 1.5, hz(root)], [1.5, 0.5, fifth], [2, 1.5, hz(root)], [3.5, 0.5, fifth]]
+            .filter(([s]) => !half || (s >= b0 && s < b0 + 2))
+            .forEach(([s, d, f]) => tone('triangle', f, at(s), d * BEAT * 0.92, 0.42, bus, 0.7, 0.08));
+          // acordes punteados, rasgueo suave (cada voz entra 12 ms después)
+          (half ? [b0, b0 + 1.5] : [0, 1.5, 3]).forEach((s, k) => voicing.split(' ').forEach((nt, v) =>
+            tone(P25, hz(nt), at(s) + v * 0.012, (k === 0 ? 1.1 : 0.7) * BEAT, k === 0 ? 0.05 : 0.038, comp, 0.35, 0.12)));
+        });
+        // melodía: la 2ª vuelta descansa en la parte A (solo ritmo), para que no canse
+        if (pass === 0 || b >= 8) MEL[b].forEach(([s, d, nt]) => vibAmt.connect(tone(P50, hz(nt), at(s), d * BEAT * 0.9, 0.17, lead, 0.75, 0.12).detune));
+        // shaker en corcheas (acento a contratiempo), bombo muy suave en 1 y 3, clave de bossa con "rim"
+        for (let e = 0; e < 8; e++) hiss(at(e / 2), e % 2 ? 0.06 : 0.035, e % 2 ? 0.05 : 0.028, 6000);
+        [0, 2].forEach(s => tone('sine', 110, at(s), 0.13, 0.22, bus, 0.2, 0.05, 42));
+        (n % 2 ? [1, 2.5] : [0, 1.5, 3]).forEach(s => tone(P25, 1650, at(s), 0.018, 0.035, bus, 0.3, 0.01));
+      };
+    }
+
+    let player = null;
+    function start() {
+      const c = GameAudio.context;
+      if (player || !c) return;                                // sin gesto del usuario todavía no hay audio
+      const out = c.createGain(), t = c.currentTime;
+      out.gain.setValueAtTime(0, t); out.gain.linearRampToValueAtTime(LEVEL, t + 2.5); out.connect(GameAudio.master);
+      const bar = synth(c, out);
+      let n = 0, next = t + 0.1;
+      const tick = () => {                                      // programa los compases que van a sonar en los próximos AHEAD s
+        if (c.state !== 'running') return;
+        if (next < c.currentTime) next = c.currentTime + 0.05; // tras una pausa (app en segundo plano) no se amontonan notas
+        while (next < c.currentTime + AHEAD) { bar(n % BARS, next); n++; next += BAR; }
+      };
+      tick();
+      player = { out, timer: setInterval(tick, 100) };
+    }
+    function stop(fade) {
+      if (!player) return;
+      const { out, timer } = player, c = GameAudio.context, t = c.currentTime, f = fade || 1.5;
+      out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.linearRampToValueAtTime(0, t + f);
+      setTimeout(() => { clearInterval(timer); out.disconnect(); }, (f + AHEAD + 0.2) * 1000);
+      player = null;
+    }
+    return { start, stop, synth, BARS, BAR, get playing() { return !!player; } };
+  })();
+  window.MenuMusic = MenuMusic;
+
+  ['pointerdown', 'touchend', 'click', 'keydown'].forEach(ev => addEventListener(ev, () => { GameAudio.init(); updateMusic(); }, { passive: true }));   // iOS/Android exigen un gesto
   document.addEventListener('visibilitychange', () => { const c = GameAudio.context; if (!c) return; if (document.hidden) c.suspend(); else c.resume(); });   // silencio al salir de la app
 
   /* ---------- ventanas ---------- */
@@ -1296,6 +1411,11 @@
     current = el; opener = from || document.activeElement;
     el.classList.add('open'); menu.inert = true;
     (focusEl || el.querySelector('button')).focus();
+    updateMusic();
+  }
+  // música del menú: suena mientras se ve el menú (también con Ajustes o ¿Salir? encima); en la partida y en la despedida, no
+  function updateMusic() {
+    if (!current || current.id === 'settings' || current.id === 'confirm') MenuMusic.start(); else MenuMusic.stop(1.5);
   }
   function closePhoneUI() { $('phoneUI').classList.remove('open'); }
   function powerOffPhone() {
@@ -1318,6 +1438,7 @@
     }
     current = null; menu.inert = false;
     if (opener && opener.focus) opener.focus();
+    updateMusic();
   }
   function openSettings(from) {
     const focusEl = $('volume');
@@ -1339,6 +1460,7 @@
     if (current.id === 'settings') { closeSettings(); return; }
     current.classList.remove('open'); current = null; menu.inert = false;
     if (opener && opener.focus) opener.focus();
+    updateMusic();
   }
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && $('phoneUI').classList.contains('open')) { powerOffPhone(); return; }

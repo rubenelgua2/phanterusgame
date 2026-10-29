@@ -47,6 +47,10 @@ Audio en ./audios/1parte2audio.mp3, convertir a un formato mas ligero para la we
 - El historial de chat debe sobrevivir apagados hasta nueva partida.
 - Assets viejos (`tlf*`, `phone-frame`, `phone-ref`, `phone-lock-screen`) eliminados <!-- HECHO -->
 
+## Música
+
+- Canción 8 bits tranquila para el menú, estilo casa de apuestas (lounge, bossa con swing suave, Fa mayor, 92 bpm, bucle de 32 compases). Suena en el menú (también con Ajustes/¿Salir? encima), se apaga con fundido en la partida y en la despedida, y vuelve al regresar al menú. Va por el volumen general. <!-- HECHO -->
+
 ## Fixes
 
 Cosas a solucionar pedidas por chat. Marcar `HECHO` o `PENDIENTE`.
