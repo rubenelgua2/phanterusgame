@@ -3369,7 +3369,7 @@
   const SOFA = { x: 120, y: 31, w: 100, h: 31 }, DRESSER = { x: 224, y: 31, w: 40, h: 29 };
   const LAMP = { x: 108, y: 56 }, TABLE = { x: 32, y: 82, w: 52, h: 70 }, CHAIRS = [{ x: 87, y: 94 }, { x: 87, y: 128 }];
   const TV = { x: 116, y: 152, w: 100, h: 20 };
-  const DOOR_N = { x: 32, w: 22 }, DOOR_E = { y: 100, h: 56 }, WIN = { y: 34, h: 112 };   // balcón (cristal), puerta grande con ventana, ventanal
+  const DOOR_N = { x: 33, w: 19 }, DOOR_E = { y: 104, h: 48 }, WIN = { y: 34, h: 112 };   // balcón (cristal), puerta grande con ventana, ventanal
   const CEIL_LIGHT = { x: 170, y: 100 };
   // Zonas que no se pueden pisar (según el dibujo del usuario): bloques enteros, sin huecos por detrás de muebles y cajas.
   // Si algún día hay que esconder algo detrás de un mueble, se abre aquí el hueco.
@@ -3380,6 +3380,68 @@
     { x: 87, y: 85, w: 14, h: 20 }, { x: 87, y: 126, w: 16, h: 15 },   // las dos sillas (entre ellas sí se puede pasar)
     { x: 26, y: 150, w: 192, h: 22 }     // franja de abajo: cartones, el hueco junto a la tele y el mueble de la tele
   ];
+
+  // ---------- ENTRADA (plano del usuario): en L, se llega por la puerta doble de la izquierda, que da a la sala ----------
+  // Todavía vacía: el usuario marcará dónde va cada cosa. La puerta de la calle es la de abajo (EXIT); las demás, cerradas.
+  // floor = suelo; faces = paredes del fondo vistas de frente; walk = dónde pueden ir los pies (con 1 px de margen)
+  const HALL_DEF = {
+    floor: [{ x: 208, y: 26, w: 58, h: 116 }, { x: 54, y: 84, w: 44, h: 58 }, { x: 98, y: 114, w: 110, h: 28 }, { x: 93, y: 142, w: 96, h: 28 }],
+    faces: [{ x: 208, y: 12, w: 58, h: 14 }, { x: 54, y: 70, w: 44, h: 14 }, { x: 98, y: 100, w: 110, h: 14 }],
+    walk: [{ x: 209, y: 27, w: 56, h: 114 }, { x: 55, y: 85, w: 42, h: 56 }, { x: 97, y: 115, w: 112, h: 26 }, { x: 94, y: 140, w: 94, h: 29 }],
+    caps: [
+      { x: 202, y: 6, w: 70, h: 6 }, { x: 266, y: 6, w: 6, h: 142 }, { x: 202, y: 6, w: 6, h: 94 },        // parte alta de la derecha
+      { x: 98, y: 94, w: 110, h: 6 }, { x: 98, y: 64, w: 6, h: 36 },                                       // pared del medio
+      { x: 48, y: 64, w: 56, h: 6 }, { x: 48, y: 64, w: 6, h: 84 }, { x: 48, y: 142, w: 45, h: 6 },        // parte de la izquierda
+      { x: 87, y: 142, w: 6, h: 34 }, { x: 87, y: 170, w: 108, h: 6 }, { x: 189, y: 142, w: 6, h: 34 },    // entrante de la puerta de la calle
+      { x: 189, y: 142, w: 83, h: 6 }
+    ],
+    DOOR_W: { y: 103, h: 35 },                                     // puerta doble a la sala (pared izquierda)
+    EXIT: { x: 126, w: 26 },                                       // puerta de la calle (pared de abajo del entrante)
+    LAMP: { x: 160, y: 118 },
+    FUSE: { x: 91, y: 146, w: 6, h: 13 },                          // cuadro de luz en la pared izquierda del entrante, junto a la puerta de la calle
+    // caja 1 (delante del cuadro de luz): x, fy (dónde empieza su huella en el suelo), ancho, fondo, alto. Se mueve encima de las cajas 2
+    BOX1: { x: 95, fy: 147, w: 18, d: 11, h: 10 }, BOX1_TO: { x: 163, fy: 160, lift: 8 },
+    PILE: { x: 160, y: 145, w: 29, h: 25 }                         // montón de cajas 2 (bloque entero, como se ve), junto a la puerta de la calle
+  };
+  // salas: con qué se pinta, por dónde se anda y qué alumbra la linterna (lit = suelo + paredes del fondo)
+  const SALA = {
+    name: 'sala', solid: SOLID,
+    walk: [{ x: FLOOR.x0 + 1, y: FLOOR.y0 + 1, w: FLOOR.x1 - FLOOR.x0 - 2, h: FLOOR.y1 - FLOOR.y0 - 2 }],
+    floor: [{ x: FLOOR.x0, y: FLOOR.y0, w: FLOOR.x1 - FLOOR.x0, h: FLOOR.y1 - FLOOR.y0 }],
+    lit: [{ x: FLOOR.x0, y: WALL.y0 + WALL.t, w: FLOOR.x1 - FLOOR.x0, h: FLOOR.y1 - WALL.y0 - WALL.t }]
+  };
+  // caja 1 como bloque entero (tapa y frente, como se ve; igual que los muebles de la sala): no se puede pasar por detrás. Se quita al moverla
+  const HALL_BOX1 = { x: HALL_DEF.BOX1.x, y: HALL_DEF.BOX1.fy - HALL_DEF.BOX1.h, w: HALL_DEF.BOX1.w, h: HALL_DEF.BOX1.h + HALL_DEF.BOX1.d };
+  const HALL = {
+    name: 'entrada', walk: HALL_DEF.walk, floor: HALL_DEF.floor, lit: HALL_DEF.floor.concat(HALL_DEF.faces),
+    solid: [{ x: 93, y: 145, w: 5, h: 15 }, HALL_DEF.PILE, HALL_BOX1]   // cuadro de luz, montón de cajas 2 y caja 1
+  };
+
+  // caja de cartón vista desde arriba (tapa y frente). fy = dónde empieza su huella en el suelo; lift = lo que tiene debajo
+  function drawCrate(g, x, fy, w, d, h, lift, open) {
+    const R = (a, b, c, e, col, al) => { g.globalAlpha = al == null ? 1 : al; g.fillStyle = col; g.fillRect(Math.round(a), Math.round(b), Math.round(c), Math.round(e)); g.globalAlpha = 1; };
+    const top = fy - lift - h;
+    if (!lift) R(x + 1, fy + d, w, 2, '#000', 0.25);
+    R(x, top, w, d + h, '#5e4220');
+    R(x + 1, top + 1, w - 2, d - 1, open ? '#2e2214' : '#c39555');
+    R(x + 1, top + d, w - 2, h - 1, '#a57a42'); R(x + 1, top + d, w - 2, 1, '#d2a666'); R(x + 1, top + d + h - 2, w - 2, 1, '#86602f');
+    if (!open) { R(x + Math.floor(w / 2) - 1, top + 1, 3, d - 1, '#e0d2a8'); R(x + Math.floor(w / 2) - 1, top + d, 3, Math.min(4, h - 1), '#e0d2a8', 0.8); }
+    return top;
+  }
+  let room = SALA;
+  const inRects = (rs, x, y) => rs.some(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+  const boxOf = rs => ({ x0: Math.min(...rs.map(r => r.x)), y0: Math.min(...rs.map(r => r.y)), x1: Math.max(...rs.map(r => r.x + r.w)), y1: Math.max(...rs.map(r => r.y + r.h)) });
+
+  // pared pintada (sin papel): amarillo anaranjado liso, algo gastado, con sombra arriba. Sala y entrada
+  function paintWall(b, x, y, w, h) {
+    b.fillStyle = '#b5944a'; b.fillRect(x, y, w, h);
+    for (let i = 0; i < w * h / 7; i++) {
+      const k = hash(i * 1.37 + x * 0.11 + y);
+      b.fillStyle = k > 0.5 ? '#ad8c44' : '#bd9c52'; b.globalAlpha = 0.6;
+      b.fillRect(Math.floor(x + hash(i * 2.91 + x) * w), Math.floor(y + hash(i * 4.13 + y) * h), 1, 1);
+    }
+    b.globalAlpha = 0.35; b.fillStyle = '#000'; b.fillRect(x, y, w, 2); b.globalAlpha = 0.15; b.fillRect(x, y + 2, w, 1); b.globalAlpha = 1;
+  }
 
   // ---------- fondo estático ----------
   let bg = null, vig = null;
@@ -3419,12 +3481,8 @@
     for (let k = 0; k < 6; k++) R(F.x0, F.y0 + k, F.x1 - F.x0, 1, '#000', 0.3 - k * 0.05);      // sombra de la pared del fondo
     for (let k = 0; k < 3; k++) { R(F.x0 + k, F.y0, 1, F.y1 - F.y0, '#000', 0.18 - k * 0.06); R(F.x1 - 1 - k, F.y0, 1, F.y1 - F.y0, '#000', 0.18 - k * 0.06); R(F.x0, F.y1 - 1 - k, F.x1 - F.x0, 1, '#000', 0.14 - k * 0.045); }
 
-    // PARED DEL FONDO vista de frente: papel pintado amarillo con damasco, rodapié y humedades
-    for (let x = F.x0; x < F.x1; x++) R(x, FY0, 1, F.y0 - FY0, Math.floor((x - F.x0) / 6) % 2 ? '#b8974a' : '#b09045');
-    const MOT = ['..X..', '.XXX.', '..X..'];
-    for (let row = 0; row < 2; row++) for (let x = F.x0 + 4 + row * 6; x < F.x1 - 4; x += 12)
-      MOT.forEach((r, j) => { for (let i = 0; i < 5; i++) if (r[i] === 'X') Pt(x - 2 + i, FY0 + 5 + row * 7 + j, '#93783a'); });
-    R(F.x0, FY0, F.x1 - F.x0, 2, '#000', 0.35); R(F.x0, FY0 + 2, F.x1 - F.x0, 1, '#000', 0.15);
+    // PARED DEL FONDO vista de frente: pintura amarillo anaranjado (sin papel), rodapié y humedades
+    paintWall(b, F.x0, FY0, F.x1 - F.x0, F.y0 - FY0);
     [44, 118, 210, 262].forEach((sx, i) => { const len = 6 + Math.floor(hash(i * 7) * 9); for (let y = 0; y < len; y++) R(sx - 1, FY0 + y, 3, 1, '#6b5418', 0.22 * (1 - y / len)); });
     for (let i = 0; i < 70; i++) { Pt(F.x0 + Math.pow(hash(i * 2.1), 2.2) * 30, FY0 + hash(i * 3.7) * 18, '#4a4a26', 0.45); Pt(F.x1 - 1 - Math.pow(hash(i * 5.3), 2.2) * 26, FY0 + hash(i * 1.9) * 18, '#4a4a26', 0.4); }
     R(F.x0, F.y0 - 4, F.x1 - F.x0, 1, '#6e5233'); R(F.x0, F.y0 - 3, F.x1 - F.x0, 2, '#4a3520'); R(F.x0, F.y0 - 1, F.x1 - F.x0, 1, '#21170d');
@@ -3585,6 +3643,91 @@
     const v = vig.getContext('2d'), g = v.createRadialGradient(W / 2, H / 2 + 6, 70, W / 2, H / 2 + 6, 200);
     g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.6, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0.85)');
     v.fillStyle = g; v.fillRect(0, 0, W, H);
+    buildHall();
+  }
+
+  // ---------- fondo de la ENTRADA: paredes, suelo y puertas (sin muebles todavía) ----------
+  let hallBg = null;
+  function buildHall() {
+    hallBg = document.createElement('canvas'); hallBg.width = W; hallBg.height = H;
+    const b = hallBg.getContext('2d'), D = HALL_DEF;
+    const R = (x, y, w, h, c, a) => { b.globalAlpha = a == null ? 1 : a; b.fillStyle = c; b.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); b.globalAlpha = 1; };
+    const Pt = (x, y, c, a) => R(x, y, 1, 1, c, a);
+    R(0, 0, W, H, '#070304');
+    // tapas amarillas de las paredes (vistas desde arriba) con su contorno oscuro
+    D.caps.forEach(c => R(c.x - 1, c.y - 1, c.w + 2, c.h + 2, '#1c1408'));
+    D.caps.forEach(c => { R(c.x, c.y, c.w, c.h, '#c4a24c'); for (let i = 0; i < c.w * c.h / 9; i++) Pt(c.x + hash(i * 1.3 + c.x) * c.w, c.y + hash(i * 2.7 + c.y) * c.h, '#b3923f', 0.7); });
+    // SUELO: las mismas baldosas blanco grisáceo que la sala
+    b.save(); b.beginPath(); D.floor.forEach(f => b.rect(f.x, f.y, f.w, f.h)); b.clip();
+    const TS = 12, X0 = 54, Y0 = 26;
+    for (let y = Y0 - TS * 2; y < 172; y += TS) for (let x = X0; x < 266; x += TS) {
+      R(x, y, TS, TS, (((x - X0) / TS + (y - Y0) / TS) & 1) ? '#d4d0c8' : '#cbc7bf');
+      R(x, y, TS, 1, '#b4afa5'); R(x, y, 1, TS, '#b4afa5');
+    }
+    for (let i = 0; i < 200; i++) Pt(54 + hash(i * 1.7) * 212, 12 + hash(i * 2.9) * 160, hash(i) > 0.5 ? '#b8b3a9' : '#e0dcd4', 0.6);
+    // sombras del suelo junto a las paredes
+    D.faces.forEach(f => { for (let k = 0; k < 6; k++) R(f.x, f.y + f.h + k, f.w, 1, '#000', 0.3 - k * 0.05); });
+    [[54, 84, 58, 1], [266, 26, 116, -1], [208, 26, 74, 1], [93, 142, 28, 1], [189, 142, 28, -1]].forEach(([x, y, h, d]) => {
+      for (let k = 0; k < 3; k++) R(d > 0 ? x + k : x - 1 - k, y, 1, h, '#000', 0.18 - k * 0.06);
+    });
+    [[54, 142, 39], [189, 142, 77], [93, 170, 96]].forEach(([x, y, w]) => { for (let k = 0; k < 3; k++) R(x, y - 1 - k, w, 1, '#000', 0.14 - k * 0.045); });
+    // POLVO donde había un mueble (bajo la pared del medio): el hueco más limpio, la mugre alrededor y las marcas de las patas
+    const M = { x: 160, y: 115, w: 38, h: 9 };
+    R(M.x, M.y, M.w, M.h, '#e6e3dc', 0.4);
+    for (let i = 0; i < 150; i++) {
+      const side = i % 4, k = hash(i * 4.3 + 7);
+      const px = side < 2 ? M.x + k * M.w : (side === 2 ? M.x - 1 - hash(i * 1.1) * 3 : M.x + M.w + hash(i * 1.1) * 3);
+      const py = side < 2 ? (side === 0 ? M.y : M.y + M.h - 1 + hash(i * 1.7) * 2) : M.y + k * M.h;
+      Pt(px, py, hash(i * 5.9) > 0.5 ? '#9a9387' : '#aaa397', 0.7);
+    }
+    R(M.x, M.y + M.h - 1, M.w, 1, '#8f897d', 0.5); R(M.x, M.y, 1, M.h, '#8f897d', 0.5); R(M.x + M.w - 1, M.y, 1, M.h, '#8f897d', 0.5);
+    [[2, 1], [M.w - 4, 1], [2, M.h - 3], [M.w - 4, M.h - 3]].forEach(([dx, dy]) => R(M.x + dx, M.y + dy, 2, 2, '#77716a', 0.65));
+    // SUCIEDAD alrededor de las cajas (la de delante del cuadro de luz y el montón junto a la puerta de la calle)
+    for (let i = 0; i < 90; i++) {
+      const near1 = i % 2 === 0, cx = near1 ? 104 : 174, cy = near1 ? 153 : 165, rx = near1 ? 14 : 18, ry = near1 ? 10 : 6;
+      Pt(cx + (hash(i * 3.3) - 0.5) * rx * 2, cy + (hash(i * 7.1) - 0.5) * ry * 2, hash(i * 2.2) > 0.5 ? '#8f897d' : '#a39c8f', 0.55);
+    }
+    R(118, 160, 3, 1, '#8a6a3a', 0.6); R(150, 166, 4, 1, '#8a6a3a', 0.6); R(192, 150, 2, 2, '#8a6a3a', 0.5);   // trocitos de cartón y cinta
+    b.restore();
+    // PAREDES DEL FONDO vistas de frente: la misma pintura que la sala, con rodapié
+    D.faces.forEach(f => {
+      paintWall(b, f.x, f.y, f.w, f.h);
+      R(f.x, f.y + f.h - 3, f.w, 1, '#6e5233'); R(f.x, f.y + f.h - 2, f.w, 1, '#4a3520'); R(f.x, f.y + f.h - 1, f.w, 1, '#21170d');
+    });
+    // puertas cerradas en las paredes del fondo (se ven de frente)
+    const frontDoor = (x, w, f) => {
+      R(x - 1, f.y + 1, w + 2, f.h - 1, '#3a2410'); R(x, f.y + 2, w, f.h - 2, '#6e4a26'); R(x, f.y + 2, w, 1, '#8a5c34');
+      R(x + 2, f.y + 4, Math.floor(w / 2) - 3, f.h - 7, '#5f3f20'); R(x + Math.ceil(w / 2) + 1, f.y + 4, Math.floor(w / 2) - 3, f.h - 7, '#5f3f20');
+      R(x + w - 4, f.y + Math.floor(f.h / 2) + 1, 2, 1, '#b8943a');
+    };
+    frontDoor(224, 22, D.faces[0]); frontDoor(64, 24, D.faces[1]); frontDoor(123, 24, D.faces[2]);
+    // CUADRO QUITADO en la pared del medio: la pintura que tapaba está menos gastada, con polvo en el borde y el clavo
+    R(168, 102, 17, 8, '#c4a258'); R(168, 102, 17, 1, '#9c7d3c', 0.8); R(168, 109, 17, 1, '#9c7d3c', 0.6);
+    R(168, 102, 1, 8, '#9c7d3c', 0.7); R(184, 102, 1, 8, '#9c7d3c', 0.7); Pt(176, 101, '#2a2016'); Pt(176, 100, '#6b5a40', 0.6);
+    // puerta de la pared derecha (de canto, como la grande de la sala pero sin cristal)
+    R(265, 59, 8, 2, '#7c6244'); R(265, 81, 8, 2, '#7c6244'); R(266, 61, 6, 20, '#5a3a1e'); R(267, 62, 4, 18, '#6e4a26'); R(265, 75, 1, 3, '#b8943a');
+    // puerta doble a la SALA (pared izquierda): madera con cristal, como la de la sala vista desde el otro lado
+    const DW = D.DOOR_W, wx = 48, gy0 = DW.y + 7, gy1 = DW.y + DW.h - 7;
+    R(wx - 1, DW.y - 2, 8, 2, '#7c6244'); R(wx - 1, DW.y + DW.h, 8, 2, '#7c6244');
+    R(wx, DW.y, 6, DW.h, '#5a3a1e'); R(wx + 1, DW.y + 1, 4, DW.h - 2, '#6e4a26');
+    R(wx + 1, gy0, 4, gy1 - gy0, '#a9c2cc'); R(wx + 1, DW.y + Math.floor(DW.h / 2), 4, 1, '#5a3a1e');      // dos hojas con cristal
+    for (let i = 0; i < 4; i++) Pt(wx + 1 + Math.floor(hash(i * 2.3) * 4), gy0 + 2 + Math.floor(hash(i * 6.1) * (gy1 - gy0 - 4)), '#e2eef2');
+    R(wx + 6, DW.y + Math.floor(DW.h / 2) - 4, 1, 3, '#b8943a'); R(wx + 6, DW.y + Math.floor(DW.h / 2) + 2, 1, 3, '#b8943a');
+    // puertas en las paredes de abajo (vistas desde arriba): la de la derecha y la de la CALLE (sin decorar)
+    const capDoor = (x, w, y) => {
+      R(x - 2, y - 1, 2, 8, '#7c6244'); R(x + w, y - 1, 2, 8, '#7c6244');
+      R(x, y, w, 6, '#4a2f17'); R(x, y + 1, w, 4, '#6e4a26'); R(x, y + 1, w, 1, '#8a5c34');
+    };
+    capDoor(221, 24, 142); capDoor(D.EXIT.x, D.EXIT.w, 170);
+    // CUADRO DE LUZ en la pared izquierda del entrante (gris, metálico, con su tapa); la caja 1 lo tapa
+    const FU = D.FUSE;
+    R(FU.x - 1, FU.y - 1, FU.w + 2, FU.h + 2, '#141416'); R(FU.x, FU.y, FU.w, FU.h, '#8c9198'); R(FU.x, FU.y, FU.w, 1, '#b8bdc4');
+    R(FU.x + FU.w - 2, FU.y + 1, 2, FU.h - 1, '#5f646b'); R(FU.x + 1, FU.y + 3, FU.w - 3, FU.h - 6, '#a3a8af'); R(FU.x + 2, FU.y + 5, 2, 2, '#e0c040');
+    R(FU.x + 1, FU.y + FU.h, FU.w + 1, 2, '#000', 0.25);
+    // CAJAS 2: montón de cajas cerradas y una abierta, junto a la puerta de la calle
+    drawCrate(b, 160, 160, 15, 10, 8, 0); drawCrate(b, 175, 161, 13, 9, 7, 0);
+    const ot = drawCrate(b, 164, 161, 11, 7, 6, 8, true); R(166, ot + 2, 3, 3, '#d9d2bf'); R(170, ot + 2, 3, 4, '#6d1f22');
+    b.globalCompositeOperation = 'multiply'; b.fillStyle = 'rgb(240,228,208)'; b.fillRect(0, 0, W, H); b.globalCompositeOperation = 'source-over';
   }
 
   // ---------- protagonista PROVISIONAL (se cambiará por el definitivo) ----------
@@ -3592,14 +3735,16 @@
   let flashOn = false;                                               // linterna del móvil (se enciende desde la app Linterna)
   document.addEventListener('pd:flashlight', e => { flashOn = !!e.detail.on; });
   const SPEED = 50, FOOT_W = 8, FOOT_H = 4;
-  function blocked(x, y) {                                           // la "huella" de los pies choca con paredes o muebles
+  function blocked(x, y, rm) {                                       // la "huella" de los pies choca con paredes o muebles
+    rm = rm || room;
     const l = x - FOOT_W / 2, r = x + FOOT_W / 2, t = y - FOOT_H, b = y;
-    if (l < FLOOR.x0 + 1 || r > FLOOR.x1 - 1 || t < FLOOR.y0 + 1 || b > FLOOR.y1 - 1) return true;
-    return SOLID.some(s => l < s.x + s.w && r > s.x && t < s.y + s.h && b > s.y);
+    if (![[l, t], [r, t], [l, b], [r, b]].every(([px, py]) => inRects(rm.walk, px, py))) return true;   // las 4 esquinas, dentro del suelo
+    return rm.solid.some(s => l < s.x + s.w && r > s.x && t < s.y + s.h && b > s.y);
   }
   const keys = new Set();
   function update(dt) {
-    let dx = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), dy = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0), k = 1;
+    if (swap || cut) { P.moving = false; P.phase = 0; return; }      // cruzando una puerta (fundido) o en una mini escena: quieto
+    let dx =(keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), dy = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0), k = 1;
     const jm = Math.hypot(joy.x, joy.y);
     if (dx || dy) P.tx = null;                                      // el teclado manda sobre el joystick y el ratón
     else if (jm > JOY_DEAD && !busy()) { dx = joy.x; dy = joy.y; k = Math.min(1, (jm - JOY_DEAD) / (1 - JOY_DEAD) * 1.25); P.tx = null; }   // poco empuje = andar despacio
@@ -3620,25 +3765,69 @@
     P.ang += Math.atan2(Math.sin(da), Math.cos(da)) * Math.min(1, dt * 10);
     P.phase += dt * 7;
   }
-  function drawPlayer() {
-    const x = Math.round(P.x), y = Math.round(P.y), r = (px, py, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(px, py, w, h); };
-    const step = P.moving ? Math.round(Math.sin(P.phase * Math.PI)) : 0;
-    const HOOD = '#6d1f22', HOOD_HI = '#8e2a2c', HOOD_LO = '#4a1416', JEANS = '#2b3242', SKIN = '#d9a982', HAIR = '#2a1c14';
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x - 4, y - 1, 8, 2); ctx.fillRect(x - 3, y - 2, 6, 1);
-    r(x - 3, y - 4 - (step > 0 ? 1 : 0), 2, 3, JEANS); r(x + 1, y - 4 - (step < 0 ? 1 : 0), 2, 3, JEANS);
-    r(x - 4, y - 10, 8, 6, HOOD); r(x - 4, y - 10, 8, 1, HOOD_HI);
-    r(x - 5, y - 9 + step, 1, 4, HOOD_LO); r(x + 4, y - 9 - step, 1, 4, HOOD_LO);
-    r(x - 3, y - 16, 6, 6, P.dir === 'up' ? HAIR : SKIN); r(x - 3, y - 16, 6, 2, HAIR);
-    if (P.dir === 'down') { r(x - 2, y - 13, 1, 1, '#1a120a'); r(x + 1, y - 13, 1, 1, '#1a120a'); }
-    else if (P.dir === 'left') { r(x + 1, y - 15, 2, 4, HAIR); r(x - 2, y - 13, 1, 1, '#1a120a'); }
-    else if (P.dir === 'right') { r(x - 3, y - 15, 2, 4, HAIR); r(x + 1, y - 13, 1, 1, '#1a120a'); }
-    else r(x - 3, y - 14, 6, 3, HAIR);
+  // ---------- JUAN JOSÉ (Phanterus), a partir de su foto: pelo corto castaño oscuro algo peinado hacia un lado, gafas
+  // rectangulares, sonrisa grande, cara redonda con mofletes, corpulento, camiseta ROJA de "DELAWARE" (letras gris
+  // azulado en arco y el escudo redondo rosado debajo), pantalón oscuro y el tatuaje del antebrazo.
+  // 12×20 px por fotograma (+1 px de contorno oscuro para verlo a oscuras).
+  const JJ_PAL = {
+    H: '#3b2719', h: '#5c3d26', S: '#e9b997', s: '#c98f6e', c: '#e39c88', G: '#1d1d24', g: '#cfe3ee', W: '#f6f1e6', M: '#5a1e22',
+    T: '#cf2f2f', t: '#9c2222', D: '#9fb0c4', R: '#b0789c', B: '#8a5a86', X: '#4c5d70', P: '#25304d', K: '#1a1515'
+  };
+  const JJ_TOP = {                                                   // cabeza (filas 0..9: las gafas en 4 y 5) y torso (10..15)
+    down: ['....HHHH....', '...HhhhHH...', '..HHHHHHHH..', '..HSSSSSSH..', '..SGGSSGGS..', '..GgWGGWgG..', '..cSSSSSSc..', '..SsWWWWsS..',
+      '...SMMMMS...', '....SSSS....', '..TTTTTTTT..', '.TTDTTTTDTT.', 'STTTDDDDTTTS', 'XTTTTRRTTTTS', 'STTTTBBTTTTS', 'SttttttttttS'],
+    up: ['....HHHH....', '...HHHHHH...', '..HHHhHHHH..', '..HHHHHHHH..', '..HHHHHHHH..', '..GHHHHHHG..', '..sHHHHHHs..', '...HHHHHH...',
+      '...SSSSSS...', '....SSSS....', '..TTTTTTTT..', '.TTTTTTTTTT.', 'STTTTTTTTTTS', 'STTTTTTTTTTX', 'STTTTTTTTTTS', 'SttttttttttS'],
+    left: ['....HHHH....', '...HHhhHH...', '..HHHHHHHH..', '..SSSHHHHH..', '.SGGSSHHHH..', '.GgWGGGsHH..', '..cSSSSSH...', '.SWWWSSSS...',
+      '..SMMSSS....', '...SSSS.....', '...TTTTTT...', '..TTTTTTTT..', '.TTTTTSSTT..', '.TTTTTSSTT..', '.TTTTTTSTT..', '..tttttttt..']
+  };
+  const JJ_LEGS = {                                                  // piernas (filas 16..19): quieto y pasos
+    front: [['..PPPPPPPP..', '..PPP..PPP..', '..PPP..PPP..', '..KKK..KKK..'],
+      ['..PPPPPPPP..', '..PPP..PPP..', '..KKK..PPP..', '.......KKK..'],
+      ['..PPPPPPPP..', '..PPP..PPP..', '..PPP..KKK..', '..KKK.......']],
+    side: [['...PPPPPP...', '....PPPP....', '....PPPP....', '...KKKK.....'],
+      ['...PPPPPP...', '...PP..PP...', '..PP....PP..', '.KKK....KKK.'],
+      ['...PPPPPP...', '....PPPP....', '....PPPP....', '...KKKK.....']]
+  };
+  const JJ = {};                                                     // fotogramas ya pintados: JJ[dir][0 quieto | 1 | 2]
+  (function buildJJ() {
+    const mk = rows => {
+      const c = document.createElement('canvas'); c.width = 14; c.height = rows.length + 2;
+      const g = c.getContext('2d'), on = (x, y) => y >= 0 && y < rows.length && x >= 0 && x < 12 && rows[y][x] !== '.';
+      for (let y = -1; y <= rows.length; y++) for (let x = -1; x <= 12; x++) {   // contorno: alrededor de lo pintado
+        if (on(x, y)) continue;
+        if (on(x - 1, y) || on(x + 1, y) || on(x, y - 1) || on(x, y + 1)) { g.fillStyle = 'rgba(20,12,10,0.9)'; g.fillRect(x + 1, y + 1, 1, 1); }
+      }
+      rows.forEach((row, y) => { for (let x = 0; x < 12; x++) if (row[x] !== '.') { g.fillStyle = JJ_PAL[row[x]]; g.fillRect(x + 1, y + 1, 1, 1); } });
+      return c;
+    };
+    const flip = rows => rows.map(r => [...r].reverse().join(''));
+    ['down', 'up'].forEach(d => { JJ[d] = JJ_LEGS.front.map(l => mk(JJ_TOP[d].concat(l))); });
+    JJ.left = JJ_LEGS.side.map(l => mk(JJ_TOP.left.concat(l)));
+    JJ.right = JJ_LEGS.side.map(l => mk(flip(JJ_TOP.left.concat(l))));
+  })();
+  // pose (mini escenas): rot = inclinación desde los pies (π/2 = tumbado de bruces hacia la derecha); arms = brazos en alto
+  function drawPlayer(pose) {
+    const x = Math.round(P.x), y = Math.round(P.y);
+    const st = P.moving ? Math.sin(P.phase * Math.PI) : 0, f = st > 0.3 ? 1 : st < -0.3 ? 2 : 0;
+    const side = P.dir === 'left' || P.dir === 'right', img = JJ[P.dir][side ? (f ? 1 : 2) * (P.moving ? 1 : 0) : f];
+    const rot = pose ? pose.rot : 0;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';                                                         // sombra en el suelo (más larga si está tumbado)
+    const sw = 10 + Math.round(Math.sin(rot) * 16); ctx.fillRect(x - 5, y - 1, sw, 2); ctx.fillRect(x - 4, y - 2, sw - 2, 1);
+    if (rot) { ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.drawImage(img, -7, -21); ctx.restore(); return; }
+    ctx.drawImage(img, x - 7, y - 21 + (P.moving && f === 0 ? -1 : 0));
+    if (pose && pose.arms) {                                                                    // brazos estirados hacia arriba, sujetando la caja
+      ctx.fillStyle = '#140c0a'; ctx.fillRect(x - 3, y - 21, 4, 10); ctx.fillRect(x + 1, y - 21, 4, 10);
+      ctx.fillStyle = JJ_PAL.S; ctx.fillRect(x - 2, y - 20, 2, 8); ctx.fillRect(x + 2, y - 20, 2, 8);
+      ctx.fillStyle = JJ_PAL.T; ctx.fillRect(x - 2, y - 13, 2, 2); ctx.fillRect(x + 2, y - 13, 2, 2);   // mangas
+    }
   }
 
   // ---------- controles: flechas/WASD; con ratón, clic (o arrastrar) adonde ir; en móvil, joystick ----------
   const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
   const busy = () => !running || document.getElementById('settings').classList.contains('open') || document.getElementById('phoneUI').classList.contains('open');
   addEventListener('keydown', e => {
+    if (e.code === 'KeyF' && !busy()) { if (moveBox1()) e.preventDefault(); return; }   // F: apartar la caja (si está al lado)
     const k = KEYMAP[e.code]; if (!k || busy()) return;
     keys.add(k); moved = true; e.preventDefault();
   });
@@ -3651,11 +3840,15 @@
   let dragging = false, mark = null;
   function aim(e) {
     const p = toRoom(e);
-    P.tx = clamp(p.x, FLOOR.x0 + 5, FLOOR.x1 - 5); P.ty = clamp(p.y, FLOOR.y0 + 5, FLOOR.y1 - 2);
+    const bx = boxOf(room.walk);
+    P.tx = clamp(p.x, bx.x0 + 4, bx.x1 - 4); P.ty = clamp(p.y, bx.y0 + 4, bx.y1 - 1);
     mark = { x: P.tx, y: P.ty, t: performance.now() }; moved = true;
   }
   cv.addEventListener('pointerdown', e => {
-    if (busy() || e.pointerType !== 'mouse') return;               // con el dedo ya no se va tocando: para eso está el joystick
+    if (busy()) return;
+    const tp = toRoom(e), B = HALL_DEF.BOX1;                       // tocar (o clicar) la caja 1 estando al lado la aparta
+    if (box1 === 'here' && room === HALL && tp.x > B.x - 4 && tp.x < B.x + B.w + 4 && tp.y > B.fy - B.h - 4 && tp.y < B.fy + B.d + 4 && moveBox1()) { e.preventDefault(); return; }
+    if (e.pointerType !== 'mouse') return;                         // con el dedo ya no se va tocando: para eso está el joystick
     dragging = true; aim(e);
     try { cv.setPointerCapture(e.pointerId); } catch (_) {}
     e.preventDefault();
@@ -3701,9 +3894,129 @@
     saved = true;
     if (window.PDSave) window.PDSave.save({
       at: 'apagon',
-      player: { x: P.x, y: P.y, dir: P.dir, ang: P.ang },
+      player: { x: P.x, y: P.y, dir: P.dir, ang: P.ang, room: room.name },
       phone: window.PDPhone ? window.PDPhone.snapshot() : null
     });
+  }
+
+  // ---------- pasar de una habitación a otra: la puerta grande de la sala ↔ la puerta doble de la entrada ----------
+  // Al empujar contra la puerta se funde a negro, se cambia de habitación y se vuelve a ver (SWAP_DUR cada mitad).
+  const SWAP_DUR = 0.3;
+  let swap = null;                                                   // { at, to }
+  function doorCheck(t) {
+    if (swap || !P.moving) return;
+    const DW = HALL_DEF.DOOR_W;
+    if (room === SALA && P.dir === 'right' && P.x >= FLOOR.x1 - 7 && P.y > DOOR_E.y + 6 && P.y < DOOR_E.y + DOOR_E.h - 1) swap = { at: t, to: HALL };
+    else if (room === HALL && P.dir === 'left' && P.x <= 60 && P.y > DW.y + 4 && P.y < DW.y + DW.h) swap = { at: t, to: SALA };
+    if (swap) { const GA = window.GameAudio; if (GA) { GA.blip(180, 0.08, 'square', 0.05, 90); setTimeout(() => GA.blip(120, 0.1, 'square', 0.05, 70), 90); } }   // la puerta: picaporte y abrir
+  }
+  // ---------- caja 1 de la entrada: tapa el cuadro de luz. Estando al lado, con F (o tocándola / clic) empieza una
+  // MINI ESCENA: la cámara se acerca (con bandas de cine), Phanterus levanta la caja por encima de la cabeza, se
+  // tambalea, tropieza y cae de bruces, y la caja sale volando justo encima del montón de cajas 2. Se levanta y la
+  // cámara vuelve. Durante la escena no se puede mover. ----------
+  const BOX1_NEAR = 22;
+  // momentos de la escena (s desde que empieza): acercar, levantar, tambalearse, caer, tirar (vuelo), en el suelo, levantarse, alejar
+  const CUT = { zoomIn: 0.6, lift: 1.2, wobble: 1.7, fall: 2.05, throwAt: 1.85, land: 2.45, lie: 3.0, up: 3.4, end: 4.0, ZOOM: 2 };
+  let box1 = 'here', tNow = 0, cut = null;                           // box1: 'here' | 'cut' | 'moved'; cut: { t0, x, y, fx: {...} }
+  const box1Cv = (() => {                                            // la caja ya pintada, con el mismo tinte sepia que el fondo
+    const B = HALL_DEF.BOX1, c = document.createElement('canvas'); c.width = B.w + 1; c.height = B.d + B.h + 2;
+    const g = c.getContext('2d'); drawCrate(g, 0, B.h, B.w, B.d, B.h, 0);
+    const mask = document.createElement('canvas'); mask.width = c.width; mask.height = c.height; mask.getContext('2d').drawImage(c, 0, 0);
+    g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgb(240,228,208)'; g.fillRect(0, 0, c.width, c.height);
+    g.globalCompositeOperation = 'destination-in'; g.drawImage(mask, 0, 0);
+    return c;
+  })();
+  const box1Center = () => ({ x: HALL_BOX1.x + HALL_BOX1.w / 2, y: HALL_BOX1.y + HALL_BOX1.h / 2 });
+  function nearBox1() {
+    if (box1 !== 'here' || room !== HALL || swap || cut) return false;
+    const c = box1Center(); return Math.hypot(P.x - c.x, P.y - c.y) < BOX1_NEAR;
+  }
+  function moveBox1() {
+    if (!nearBox1()) return false;
+    box1 = 'cut'; cut = { t0: tNow, done: {} };
+    Object.assign(P, { dir: 'right', ang: 0, tx: null, moving: false, phase: 0 }); keys.clear(); mark = null;
+    HALL.solid = HALL.solid.filter(s => s !== HALL_BOX1);           // ya no estorba: se puede llegar al cuadro de luz
+    return true;
+  }
+  const cutFocus = () => ({ x: (P.x + HALL_DEF.BOX1_TO.x + 10) / 2, y: (P.y - 12 + HALL_DEF.BOX1_TO.fy) / 2 });   // centro de la cámara: Phanterus y el montón
+  // foco de circo: sobre Phanterus (con la caja en alto), sigue a la caja en el vuelo, se queda viéndola caer en el
+  // montón y vuelve a él, tirado en el suelo, hasta que se levanta
+  const SPOT_R = 27;
+  function spotAt(st) {
+    const s = st.s, C = CUT, B = HALL_DEF.BOX1, onP = { x: P.x, y: P.y - 15 }, lying = { x: P.x + 9, y: P.y - 5 };
+    const onBox = p => ({ x: p.x + B.w / 2, y: p.y + (B.d + B.h) / 2 + 2 }), mix = (a, b, u) => ({ x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u });
+    if (s < C.throwAt) return onP;
+    if (s < C.land) return mix(onP, onBox(st.box), ease(cutU(s, C.throwAt, C.throwAt + 0.25)));
+    if (s < C.land + 0.35) return onBox(st.box);
+    if (s < C.lie) return mix(onBox(st.box), lying, ease(cutU(s, C.land + 0.35, C.lie)));
+    return mix(lying, onP, ease(cutU(s, C.lie, C.up)));
+  }
+  const cutU = (s, a, b) => clamp((s - a) / (b - a), 0, 1);          // avance (0..1) de un tramo de la escena
+  function cutState(t) {                                             // cómo está todo en el segundo s de la escena
+    const s = t - cut.t0, C = CUT, B = HALL_DEF.BOX1, T = HALL_DEF.BOX1_TO;
+    const held = { x: P.x - B.w / 2 + 2, y: P.y - 21 - (B.d + B.h) + 5 };                       // la caja en alto, sobre la cabeza
+    const home = { x: B.x, y: B.fy - B.h }, dest = { x: T.x, y: T.fy - T.lift - B.h };
+    let box, rot = 0, arms = false;
+    if (s < C.zoomIn) box = home;
+    else if (s < C.lift) { const u = ease(cutU(s, C.zoomIn, C.lift)); box = { x: home.x + (held.x - home.x) * u, y: home.y + (held.y - home.y) * u - 6 * Math.sin(Math.PI * u) }; arms = u > 0.35; }
+    else if (s < C.throwAt) { const w = Math.sin((s - C.lift) * 22) * 1.5; box = { x: held.x + w, y: held.y + Math.abs(w) * 0.5 }; arms = true; rot = Math.sin((s - C.lift) * 22) * 0.06 + cutU(s, C.wobble, C.throwAt) * 0.4; }
+    else if (s < C.land) {                                           // vuela en arco y cae justo encima del montón
+      const u = cutU(s, C.throwAt, C.land), from = { x: held.x + 6, y: held.y + 4 };
+      box = { x: from.x + (dest.x - from.x) * u, y: from.y + (dest.y - from.y) * u - 22 * Math.sin(Math.PI * u) };
+    } else box = dest;
+    if (s >= C.throwAt) {                                            // tropieza y se cae de bruces; luego se levanta
+      if (s < C.fall) rot = 0.4 + ease(cutU(s, C.throwAt, C.fall)) * (Math.PI / 2 - 0.4);
+      else if (s < C.lie) rot = Math.PI / 2;
+      else rot = (Math.PI / 2) * (1 - ease(cutU(s, C.lie, C.up)));
+    }
+    const zin = ease(cutU(s, 0, C.zoomIn)), zout = ease(cutU(s, C.up, C.end));
+    return { s, box, rot, arms, zoom: 1 + (C.ZOOM - 1) * zin * (1 - zout), bars: zin * (1 - zout) };
+  }
+  function cutTick(t) {                                              // sonidos de la escena y final
+    if (!cut) return null;
+    const st = cutState(t), d = cut.done, GA = window.GameAudio;
+    const once = (k, at, fn) => { if (!d[k] && st.s >= at) { d[k] = true; if (GA) fn(GA); } };
+    once('lift', CUT.zoomIn + 0.1, G => { G.blip(140, 0.16, 'triangle', 0.05, 90); });                                   // ¡aúpa!
+    once('trip', CUT.throwAt, G => { G.blip(300, 0.1, 'square', 0.04, 160); });                                          // tropieza
+    once('body', CUT.fall, G => { G.blip(70, 0.22, 'square', 0.09, 35); G.blip(110, 0.12, 'triangle', 0.05, 60); });     // se cae al suelo
+    once('box', CUT.land, G => { G.blip(60, 0.25, 'square', 0.1, 30); setTimeout(() => G.blip(90, 0.12, 'square', 0.05, 50), 110); });   // la caja cae al montón
+    if (st.s >= CUT.end) { cut = null; box1 = 'moved'; return null; }
+    return st;
+  }
+  function box1Pos(t, st) {                                          // dónde se pinta la caja 1 ahora
+    const B = HALL_DEF.BOX1, T = HALL_DEF.BOX1_TO;
+    if (st) return st.box;
+    return box1 === 'here' ? { x: B.x, y: B.fy - B.h } : { x: T.x, y: T.fy - T.lift - B.h };
+  }
+  function drawBox1(t, st) { const p = box1Pos(t, st); ctx.drawImage(box1Cv, Math.round(p.x), Math.round(p.y)); }
+  function drawPuff(x, y, s0, s) {                                   // nube de polvo que se abre y se va
+    const u = (s - s0) / 0.6; if (u < 0 || u > 1) return;
+    ctx.fillStyle = `rgba(200,192,178,${0.7 * (1 - u)})`;
+    for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2, r = 2 + u * 9; ctx.fillRect(Math.round(x + Math.cos(a) * r * 1.4), Math.round(y + Math.sin(a) * r * 0.6), 2, 2); }
+  }
+  // zoom de cámara: se copia lo pintado y se amplía la parte que interesa
+  const zoomCv = document.createElement('canvas'); zoomCv.width = W * RES; zoomCv.height = H * RES;
+  const zctx = zoomCv.getContext('2d');
+  function applyZoom(z, fx, fy, bars) {
+    if (z > 1.001) {
+      const vw = W / z, vh = H / z, sx = clamp(fx - vw / 2, 0, W - vw), sy = clamp(fy - vh / 2, 0, H - vh);
+      zctx.clearRect(0, 0, zoomCv.width, zoomCv.height); zctx.drawImage(cv, 0, 0);
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(zoomCv, sx * RES, sy * RES, vw * RES, vh * RES, 0, 0, W * RES, H * RES); ctx.restore();
+    }
+    if (bars > 0) { ctx.fillStyle = '#000'; const bh = Math.round(H * 0.11 * bars); ctx.fillRect(0, 0, W, bh); ctx.fillRect(0, H - bh, W, bh); }   // bandas de cine
+  }
+
+  function swapTick(t) {                                             // devuelve lo negro que está la pantalla (0..1)
+    if (!swap) return 0;
+    const u = (t - swap.at) / SWAP_DUR;
+    if (u >= 1 && room !== swap.to) {                                // a oscuras: se cambia de habitación junto a la otra cara de la puerta
+      room = swap.to; P.tx = null; mark = null;
+      if (room === HALL) Object.assign(P, { x: 64, y: clamp(P.y - DOOR_E.y + HALL_DEF.DOOR_W.y, 110, 134), dir: 'right', ang: 0 });
+      else Object.assign(P, { x: 282, y: clamp(P.y - HALL_DEF.DOOR_W.y + DOOR_E.y, 112, 150), dir: 'left', ang: Math.PI });
+    }
+    if (u >= 2) { swap = null; return 0; }
+    return u < 1 ? ease(u) : 1 - ease(u - 1);
   }
 
   // ---------- bocadillos de cómic del protagonista (uno detrás de otro) ----------
@@ -3767,29 +4080,30 @@
   // una máscara por ángulo la deja opaca en el centro y la va disolviendo hacia los lados, sin bordes marcados.
   const beamCv = document.createElement('canvas'); beamCv.width = W * RES; beamCv.height = H * RES;
   const bctx = beamCv.getContext('2d');
-  const BEAM_LEN = 115, BEAM_HALF = 0.6;                             // alcance (px lógicos) y medio ángulo del haz (rad)
-  const BEAM_PROFILE = [[0, 0], [0.12, 0.08], [0.28, 0.35], [0.42, 0.8], [0.5, 1], [0.58, 0.8], [0.72, 0.35], [0.88, 0.08], [1, 0]];
+  // linterna de MÓVIL: un LED pequeño, luz blanca fría, abierta y floja, que alumbra cerca y no llega lejos
+  const BEAM_LEN = 58, BEAM_HALF = 0.85;                             // alcance (px lógicos) y medio ángulo del haz (rad)
+  const BEAM_PROFILE = [[0, 0], [0.14, 0.22], [0.32, 0.72], [0.5, 1], [0.68, 0.72], [0.86, 0.22], [1, 0]];
   function beamLayer(ox, oy, ang, fl) {
     const X = ox * RES, Y = oy * RES, L = BEAM_LEN * RES, box = [X - L, Y - L, L * 2, L * 2], conic = !!bctx.createConicGradient;
     bctx.clearRect(0, 0, beamCv.width, beamCv.height); bctx.save();
-    // la luz no atraviesa las paredes: solo alumbra el suelo de la sala y la cara de la pared del fondo (que se ve de frente)
-    const FY = WALL.y0 + WALL.t;
-    bctx.beginPath(); bctx.rect(FLOOR.x0 * RES, FY * RES, (FLOOR.x1 - FLOOR.x0) * RES, (FLOOR.y1 - FY) * RES); bctx.clip();
+    // la luz no atraviesa las paredes: solo alumbra el suelo de la habitación y las paredes del fondo (que se ven de frente)
+    bctx.beginPath(); room.lit.forEach(r => bctx.rect(r.x * RES, r.y * RES, r.w * RES, r.h * RES)); bctx.clip();
     if (!conic) { bctx.beginPath(); bctx.moveTo(X, Y); bctx.arc(X, Y, L, ang - BEAM_HALF * 0.7, ang + BEAM_HALF * 0.7); bctx.closePath(); bctx.clip(); }   // navegadores antiguos: cono sencillo
     const rad = bctx.createRadialGradient(X, Y, 2 * RES, X, Y, L);
-    rad.addColorStop(0, `rgba(255,250,232,${0.8 * fl})`); rad.addColorStop(0.3, `rgba(255,248,226,${0.45 * fl})`);
-    rad.addColorStop(0.7, `rgba(255,246,220,${0.14 * fl})`); rad.addColorStop(1, 'rgba(255,246,220,0)');
+    rad.addColorStop(0, `rgba(238,244,255,${0.62 * fl})`); rad.addColorStop(0.35, `rgba(236,242,255,${0.3 * fl})`);
+    rad.addColorStop(0.75, `rgba(232,240,255,${0.08 * fl})`); rad.addColorStop(1, 'rgba(232,240,255,0)');
     bctx.fillStyle = rad; bctx.fillRect(...box);
-    const hx = X + Math.cos(ang) * 50 * RES, hy = Y + (Math.sin(ang) * 50 + 5) * RES;          // círculo de luz donde el haz toca el suelo
-    const pool = bctx.createRadialGradient(hx, hy, 2 * RES, hx, hy, 26 * RES);
-    pool.addColorStop(0, `rgba(255,252,236,${0.3 * fl})`); pool.addColorStop(1, 'rgba(255,252,236,0)');
-    bctx.fillStyle = pool; bctx.fillRect(hx - 26 * RES, hy - 26 * RES, 52 * RES, 52 * RES);
+    const hx = X + Math.cos(ang) * 13 * RES, hy = Y + (Math.sin(ang) * 13 + 6) * RES;          // charco de luz justo delante, en el suelo
+    const pool = bctx.createRadialGradient(hx, hy, 2 * RES, hx, hy, 24 * RES);
+    pool.addColorStop(0, `rgba(240,246,255,${0.36 * fl})`); pool.addColorStop(0.5, `rgba(238,244,255,${0.14 * fl})`); pool.addColorStop(1, 'rgba(238,244,255,0)');
+    bctx.fillStyle = pool; bctx.fillRect(hx - 24 * RES, hy - 24 * RES, 48 * RES, 48 * RES);
     const c = Math.cos(ang), s = Math.sin(ang);                                                // dónde choca el rayo central con la pared
-    const d = Math.min(c > 0 ? (FLOOR.x1 - ox) / c : c < 0 ? (FLOOR.x0 - ox) / c : Infinity, s > 0 ? (FLOOR.y1 - oy) / s : s < 0 ? (FLOOR.y0 - oy) / s : Infinity);
+    let d = inRects(room.floor, ox, oy) ? 0 : BEAM_LEN;                                       // (con la mano ya sobre la pared, sin círculo)
+    while (d < BEAM_LEN && inRects(room.floor, ox + c * d, oy + s * d)) d += 1;               // se avanza hasta salir del suelo
     if (d < BEAM_LEN) {                                                                        // ahí la luz se queda y se concentra
-      const wx = (ox + c * d) * RES, wy = (oy + s * d) * RES, k = 1 - d / BEAM_LEN, R18 = 18 * RES;
+      const wx = (ox + c * d) * RES, wy = (oy + s * d) * RES, k = 1 - d / BEAM_LEN, R18 = 12 * RES;
       const sp = bctx.createRadialGradient(wx, wy, 0, wx, wy, R18);
-      sp.addColorStop(0, `rgba(255,250,232,${0.45 * k * fl})`); sp.addColorStop(1, 'rgba(255,250,232,0)');
+      sp.addColorStop(0, `rgba(240,246,255,${0.4 * k * fl})`); sp.addColorStop(1, 'rgba(240,246,255,0)');
       bctx.fillStyle = sp; bctx.fillRect(wx - R18, wy - R18, R18 * 2, R18 * 2);
     }
     if (conic) {                                                                               // máscara por ángulo: centro opaco, lados que se disuelven
@@ -3799,11 +4113,39 @@
       bctx.globalCompositeOperation = 'destination-in'; bctx.fillStyle = cg; bctx.fillRect(...box);
     }
     bctx.globalCompositeOperation = 'source-over';                                            // destello del móvil en la mano (sin máscara, pero
-    const R6 = 6 * RES, spot = bctx.createRadialGradient(X, Y, 0, X, Y, R6);                  // tampoco atraviesa la pared si está pegado a ella)
-    spot.addColorStop(0, 'rgba(255,255,244,0.95)'); spot.addColorStop(1, 'rgba(255,255,244,0)');
+    const R6 = 4 * RES, spot = bctx.createRadialGradient(X, Y, 0, X, Y, R6);                  // tampoco atraviesa la pared si está pegado a ella)
+    spot.addColorStop(0, 'rgba(250,252,255,0.85)'); spot.addColorStop(1, 'rgba(250,252,255,0)');
     bctx.fillStyle = spot; bctx.fillRect(X - R6, Y - R6, R6 * 2, R6 * 2);
     bctx.restore();
     return beamCv;
+  }
+
+  const darkCv = document.createElement('canvas'); darkCv.width = W * RES; darkCv.height = H * RES;   // capa de oscuridad
+  const dctx = darkCv.getContext('2d');
+  // la claridad del ventanal de la sala entra por los cristales de la puerta doble: recorta la oscuridad de la entrada
+  function hallReveal(t, lvl) {
+    const DW = HALL_DEF.DOOR_W, sway = Math.sin(t * 0.5) * 2;
+    dctx.save(); dctx.setTransform(RES, 0, 0, RES, 0, 0);
+    const g = dctx.createLinearGradient(54, 0, 132, 0);
+    g.addColorStop(0, `rgba(0,0,0,${0.72 * lvl})`); g.addColorStop(0.45, `rgba(0,0,0,${0.32 * lvl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    dctx.fillStyle = g; dctx.beginPath();
+    [[54, DW.y + 7], [54, DW.y + DW.h - 7], [132 + sway, DW.y + DW.h + 5], [132 + sway, DW.y]].forEach(([x, y], i) => i ? dctx.lineTo(x, y) : dctx.moveTo(x, y));
+    dctx.closePath(); dctx.fill(); dctx.fillStyle = 'rgba(0,0,0,0.9)'; dctx.fillRect(48, DW.y + 7, 6, DW.h - 14);   // los cristales
+    dctx.restore();
+  }
+  // luces de la entrada (sin ventanas): lámpara de techo hasta el apagón; después, a oscuras, solo la claridad del
+  // ventanal de la sala que entra por los cristales de la puerta doble
+  function hallLights(t, power, lvl) {
+    const D = HALL_DEF, DW = D.DOOR_W, sway = Math.sin(t * 0.5) * 2;
+    if (power > 0) {
+      const lamp = ctx.createRadialGradient(D.LAMP.x, D.LAMP.y, 4, D.LAMP.x, D.LAMP.y, 80);
+      lamp.addColorStop(0, `rgba(255,214,140,${0.3 * lvl * power})`); lamp.addColorStop(0.5, `rgba(255,200,120,${0.12 * lvl * power})`); lamp.addColorStop(1, 'rgba(255,200,120,0)');
+      ctx.fillStyle = lamp; ctx.fillRect(0, 0, W, H);
+    }
+    const dl = ctx.createLinearGradient(54, 0, 130, 0);                // se va apagando hacia dentro, sin borde
+    dl.addColorStop(0, `rgba(255,236,200,${0.12 * lvl})`); dl.addColorStop(0.45, `rgba(255,236,200,${0.05 * lvl})`); dl.addColorStop(1, 'rgba(255,236,200,0)');   // solo tinte cálido: la luz ya recorta la oscuridad
+    ctx.fillStyle = dl; poly([[54, DW.y + 7], [54, DW.y + DW.h - 7], [130 + sway, DW.y + DW.h + 4], [130 + sway, DW.y + 1]]);
+    ctx.fillStyle = 'rgba(225,238,245,0.55)'; ctx.fillRect(49, DW.y + 7, 4, DW.h - 14);   // los cristales, iluminados desde la sala
   }
 
   const FADE_IN = 1.6, TOUCH = matchMedia('(pointer: coarse)').matches;
@@ -3812,31 +4154,70 @@
   function frame(now) {
     if (!running) return;
     const t = now / 1000 - t0, dt = Math.min(0.05, (now - last) / 1000); last = now;
-    update(dt);
+    tNow = t; update(dt); doorCheck(t);
+    const swapBlack = swapTick(t);
     const lvl = 0.94 + 0.06 * Math.sin(t * 1.6) - (hash(Math.floor(t * 18)) > 0.97 ? 0.25 : 0);
     const power = powerAt(t);                                            // luz eléctrica (1 = encendida); la del día no depende de ella
     outageSounds(t); autosave(t);
     ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;   // a partir de aquí, en px lógicos
 
-    ctx.drawImage(bg, 0, 0);
-    // reflejo del espejo: la luz no deja ver nada dentro
-    ctx.save(); ctx.beginPath(); ctx.rect(148, 14, 44, 8); ctx.clip(); ctx.globalCompositeOperation = 'screen';
-    const sh = Math.sin(t * 0.35) * 4;
-    ctx.fillStyle = 'rgba(235,242,248,0.25)'; ctx.fillRect(148, 14, 44, 8);
-    ctx.fillStyle = 'rgba(255,255,255,0.7)'; poly([[160 + sh, 14], [168 + sh, 14], [164 + sh, 22], [156 + sh, 22]]);
-    ctx.fillStyle = 'rgba(255,255,255,0.35)'; poly([[172 + sh, 14], [175 + sh, 14], [171 + sh, 22], [168 + sh, 22]]);
-    ctx.restore();
+    const inSala = room === SALA;
+    ctx.drawImage(inSala ? bg : hallBg, 0, 0);
+    if (inSala) {                                                    // reflejo del espejo: la luz no deja ver nada dentro
+      ctx.save(); ctx.beginPath(); ctx.rect(148, 14, 44, 8); ctx.clip(); ctx.globalCompositeOperation = 'screen';
+      const sh = Math.sin(t * 0.35) * 4;
+      ctx.fillStyle = 'rgba(235,242,248,0.25)'; ctx.fillRect(148, 14, 44, 8);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; poly([[160 + sh, 14], [168 + sh, 14], [164 + sh, 22], [156 + sh, 22]]);
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'; poly([[172 + sh, 14], [175 + sh, 14], [171 + sh, 22], [168 + sh, 22]]);
+      ctx.restore();
+    }
 
     if (mark) {                                                      // marca de destino al tocar
       const a = 1 - (now - mark.t) / 600;
       if (a > 0) { ctx.fillStyle = `rgba(232,224,208,${a * 0.8})`; const mx = Math.round(mark.x), my = Math.round(mark.y); ctx.fillRect(mx - 3, my, 2, 1); ctx.fillRect(mx + 2, my, 2, 1); ctx.fillRect(mx, my - 2, 1, 1); ctx.fillRect(mx, my + 2, 1, 1); }
       else mark = null;
     }
-    drawPlayer();
+    const cst = cutTick(t);
+    if (!inSala) {                                                   // la caja 1 delante o detrás del personaje según dónde esté cada uno
+      const front = !!cst || (box1 === 'here' && P.y < HALL_BOX1.y + HALL_BOX1.h + 2);
+      if (front) { drawPlayer(cst); drawBox1(t, cst); } else { drawBox1(t, cst); drawPlayer(cst); }
+      if (cst) {                                                     // polvo: al caer él al suelo y al caer la caja en el montón
+        const T = HALL_DEF.BOX1_TO;
+        drawPuff(P.x + 17, P.y - 1, CUT.fall, cst.s); drawPuff(T.x + HALL_DEF.BOX1.w / 2, T.fy + 4, CUT.land, cst.s);
+      }
+    } else drawPlayer();
 
     // penumbra y luces: tarde por la ventana, lámpara de techo cálida y la tele, fría y parpadeante
-    ctx.fillStyle = `rgba(10,5,4,${0.22 + 0.26 * (1 - power)})`; ctx.fillRect(0, 0, W, H);   // sin luz eléctrica: penumbra, pero son las 4 de la tarde
+    // OSCURIDAD como capa aparte: las luces que de verdad iluminan (linterna, claridad de la sala en la entrada) la
+    // RECORTAN, así se ve el suelo, las paredes y las puertas con sus colores; encima solo va un tinte suave de cada luz.
+    // Sin luz eléctrica: penumbra en la sala (son las 4 de la tarde); en la entrada, sin ventanas, oscuridad casi total
+    const beam = flashOn ? beamLayer(P.x + Math.cos(P.ang) * 5, P.y - 8 + Math.sin(P.ang) * 3, P.ang, 0.96 + 0.04 * Math.sin(t * 23)) : null;
+    dctx.globalCompositeOperation = 'source-over'; dctx.clearRect(0, 0, darkCv.width, darkCv.height);
+    dctx.fillStyle = inSala ? `rgba(10,5,4,${0.22 + 0.26 * (1 - power)})` : `rgba(3,2,2,${0.3 + 0.66 * (1 - power)})`; dctx.fillRect(0, 0, darkCv.width, darkCv.height);
+    dctx.globalCompositeOperation = 'destination-out';
+    if (beam) { dctx.drawImage(beam, 0, 0); dctx.drawImage(beam, 0, 0); }          // dos veces: cerca del móvil se ve casi como de día
+    if (!inSala) hallReveal(t, lvl);
+    if (cst && cst.bars > 0) {                                       // mini escena: FOCO DE CIRCO. Todo lo demás a negro y un círculo de luz
+      const sp = spotAt(cst), X = sp.x * RES, Y = sp.y * RES, R = SPOT_R * RES;   // de borde marcado que sigue la acción
+      dctx.globalCompositeOperation = 'source-over'; dctx.fillStyle = `rgba(0,0,0,${0.97 * cst.bars})`; dctx.fillRect(0, 0, darkCv.width, darkCv.height);
+      dctx.globalCompositeOperation = 'destination-out';
+      const g = dctx.createRadialGradient(X, Y, 0, X, Y, R);
+      g.addColorStop(0, `rgba(0,0,0,${cst.bars})`); g.addColorStop(0.82, `rgba(0,0,0,${cst.bars})`); g.addColorStop(0.92, `rgba(0,0,0,${0.55 * cst.bars})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      dctx.fillStyle = g; dctx.fillRect(X - R, Y - R, R * 2, R * 2);
+    }
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(darkCv, 0, 0); ctx.restore();
+    if (cst && cst.bars > 0) {                                       // el foco da una luz cálida de escenario y un aro más brillante en el borde
+      const sp = spotAt(cst);
+      ctx.save(); ctx.globalCompositeOperation = 'screen';
+      const g = ctx.createRadialGradient(sp.x, sp.y, 2, sp.x, sp.y, SPOT_R);
+      g.addColorStop(0, `rgba(255,240,205,${0.26 * cst.bars})`); g.addColorStop(0.8, `rgba(255,236,196,${0.14 * cst.bars})`); g.addColorStop(0.88, `rgba(255,236,196,${0.22 * cst.bars})`); g.addColorStop(1, 'rgba(255,236,196,0)');
+      ctx.fillStyle = g; ctx.fillRect(sp.x - SPOT_R, sp.y - SPOT_R, SPOT_R * 2, SPOT_R * 2);
+      ctx.restore();
+    }
     ctx.save(); ctx.globalCompositeOperation = 'screen';
+    const showLights = !(cst && cst.bars > 0.3);                     // con el foco de circo encendido, nada más brilla
+    if (!inSala) { if (showLights) hallLights(t, power, lvl); }
+    else {
     // luz del día de fuera: claridad desde el ventanal que se apaga hacia el centro de la sala
     const fill = ctx.createLinearGradient(26, 0, 190, 0);
     fill.addColorStop(0, `rgba(255,236,200,${0.16 * lvl})`); fill.addColorStop(1, 'rgba(255,236,200,0)');
@@ -3874,10 +4255,9 @@
       ctx.fillStyle = near; ctx.fillRect(sx0 - 2, sy - 10, sx1 - sx0 + 4, 10);
       ctx.fillStyle = `rgba(${tvC},${(0.5 + 0.4 * tvk) * power})`; ctx.fillRect(sx0 + 1, sy, sx1 - sx0 - 2, 1);
     }
-    if (flashOn) {                                                                             // linterna del móvil: cono hacia donde mira
-      const ox = P.x + Math.cos(P.ang) * 5, oy = P.y - 8 + Math.sin(P.ang) * 3;
-      const fl = 0.96 + 0.04 * Math.sin(t * 23);
-      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(beamLayer(ox, oy, P.ang, fl), 0, 0); ctx.restore();
+    }
+    if (beam && showLights) {                                                                  // linterna del móvil: tinte blanco frío, flojo, encima de lo recortado
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 0.28; ctx.drawImage(beam, 0, 0); ctx.restore();
     }
     for (let i = 0; i < 30; i++) {                                                             // polvo en el aire
       const x = (hash(i) * W + t * (2 + hash(i * 2) * 4) + Math.sin(t * 0.6 + i) * 3) % W, y = (hash(i * 3) * H + t * (1 + hash(i * 5) * 2)) % H;
@@ -3888,19 +4268,26 @@
     ctx.drawImage(vig, 0, 0);
     for (let i = 0; i < 120; i++) { ctx.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)'; ctx.fillRect((Math.random() * W) | 0, (Math.random() * H) | 0, 1, 1); }
     drawBubble(t); buzzTick(t);
+    if (nearBox1() && window.PD) {                                   // aviso junto a la caja: cómo apartarla
+      const PD = window.PD, msg = PD.norm(TOUCH ? 'Toca la caja' : 'F  Mover caja'), w = PD.measure(msg);
+      const hx = Math.round(clamp(box1Center().x - w / 2, 4, W - w - 4)), hy = HALL_DEF.BOX1.fy + HALL_DEF.BOX1.d + 3;   // debajo de la caja (arriba van los bocadillos)
+      ctx.globalAlpha = 0.75; ctx.fillStyle = '#000'; ctx.fillRect(hx - 3, hy - 2, w + 6, 11); ctx.globalAlpha = 1;
+      PD.drawText(ctx, msg, hx, hy, '#e8e0d0');
+    }
 
     // ayuda de controles: se va al empezar a moverse
     if (moved && movedAt == null) movedAt = t;
     const helpA = clamp((t - FADE_IN) / 0.6, 0, 1) * (movedAt == null ? 1 : 1 - clamp((t - movedAt - 1.2) / 0.8, 0, 1));
     const PD = window.PD;
-    if (helpA > 0 && PD) {
+    if (helpA > 0 && PD && inSala) {
       const msg = PD.norm(TOUCH ? 'Usa el joystick para moverte' : 'Flechas o WASD para moverte'), w = PD.measure(msg);
       const hx = Math.round(194 - w / 2), hy = TV.y - 14;                                        // en el suelo libre, entre las sillas y la pared derecha
       ctx.globalAlpha = helpA * 0.75; ctx.fillStyle = '#000'; ctx.fillRect(hx - 4, hy - 2, w + 8, 11);
       ctx.globalAlpha = helpA; PD.drawText(ctx, msg, hx + 1, hy + 1, 'rgba(0,0,0,0.9)'); PD.drawText(ctx, msg, hx, hy, '#e8e0d0'); ctx.globalAlpha = 1;
     }
 
-    const black = 1 - ease(clamp(t / FADE_IN, 0, 1));                // entrada desde negro
+    if (cst) { const fc = cutFocus(); applyZoom(cst.zoom, fc.x, fc.y, cst.bars); }       // cámara de la mini escena
+    const black = Math.max(1 - ease(clamp(t / FADE_IN, 0, 1)), swapBlack);   // entrada desde negro; fundido al cruzar una puerta
     if (black > 0) { ctx.fillStyle = `rgba(0,0,0,${black})`; ctx.fillRect(0, 0, W, H); }
     raf = requestAnimationFrame(frame);
   }
@@ -3910,7 +4297,11 @@
     if (!bg) build();
     const resumed = !!opts && opts.from === 'apagon', sp = resumed && opts.player;
     Object.assign(P, { x: 170, y: 74, dir: 'down', ang: Math.PI / 2, moving: false, phase: 0, tx: null, ty: null, stuck: 0 });   // junto al sofá, donde estaba el móvil
-    if (sp && isFinite(sp.x) && isFinite(sp.y) && !blocked(sp.x, sp.y)) {                     // donde estaba al guardarse (si sigue siendo un sitio válido)
+    room = SALA; swap = null;
+    box1 = 'here'; cut = null; if (!HALL.solid.includes(HALL_BOX1)) HALL.solid.push(HALL_BOX1);         // la caja vuelve delante del cuadro de luz
+    const spRoom = sp && sp.room === HALL.name ? HALL : SALA;                                   // la habitación en la que estaba (sala o entrada)
+    if (sp && isFinite(sp.x) && isFinite(sp.y) && !blocked(sp.x, sp.y, spRoom)) {              // donde estaba al guardarse (si sigue siendo un sitio válido)
+      room = spRoom;
       Object.assign(P, { x: sp.x, y: sp.y, dir: ['up', 'down', 'left', 'right'].includes(sp.dir) ? sp.dir : 'down', ang: isFinite(sp.ang) ? sp.ang : Math.PI / 2 });
     }
     flashOn = !!(window.PDPhone && window.PDPhone.flashlight);
@@ -3922,7 +4313,7 @@
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   }
   function stop() { running = false; cancelAnimationFrame(raf); cv.hidden = true; keys.clear(); dragging = false; stopBuzz(); joyEnd(); joyEl.hidden = true; }
-  window.PDRoom = { start, stop, get running() { return running; }, get player() { return { x: P.x, y: P.y, dir: P.dir }; } };
+  window.PDRoom = { start, stop, get running() { return running; }, get player() { return { x: P.x, y: P.y, dir: P.dir, room: room.name }; } };
 })();
 </script>
 </body>

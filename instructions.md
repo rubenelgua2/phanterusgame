@@ -70,6 +70,25 @@ Tras el "ok" del chat: el móvil se apaga, la escena funde a negro y aparece el 
 - Después del primer bocadillo, otro: "Voy a preguntarle a mi madre". Al acabar, el icono del móvil vibra (tiembla, zumbido y vibración real en Android) hasta que se abre el móvil. <!-- HECHO -->
 - Colisiones: bloques enteros según el dibujo del usuario, no se puede pasar por detrás de muebles ni cajas (franja de arriba, columna de cajas, mesa + sillas, franja de abajo). Si hace falta esconder algo detrás, se abre el hueco. <!-- HECHO -->
 
+- Pared de la sala: sin papel pintado; pintura lisa amarillo anaranjado (el mismo color), con humedades y rodapié. <!-- HECHO -->
+
+## 2º Parte: la ENTRADA
+
+Plano del usuario (entrada en forma de L, ~16 m²). Se llega desde la sala por su puerta grande de la derecha, que da a la puerta doble de la izquierda de la entrada (y al revés). Al empujar contra la puerta: fundido a negro corto, sonido de picaporte y aparece al otro lado. <!-- HECHO -->
+
+- Mismo suelo de baldosas que la sala y la misma pintura amarillo anaranjado en las paredes del fondo (sin papel). <!-- HECHO -->
+- Mudanza (según el dibujo del usuario): polvo de un mueble quitado bajo la pared del medio, marca de un cuadro quitado en esa pared (pintura menos gastada y el clavo), cajas 2 amontonadas (una abierta encima) junto a la puerta de la calle, con suciedad y trozos de cartón por el suelo. <!-- HECHO -->
+- CUADRO DE LUZ (la "cajita al lado de la entrada" de mamá): en la pared izquierda del entrante, junto a la puerta de la calle, tapado por la CAJA 1. <!-- HECHO -->
+- Caja 1: estando al lado sale "F  MOVER CAJA" (en móvil "TOCA LA CAJA") debajo de la caja; con F, tocándola o con clic empieza una MINI ESCENA (~4 s, sin poder moverse): la cámara se acerca ×2 con bandas de cine, se apaga todo y queda un FOCO DE CIRCO (círculo de luz de borde marcado) sobre Phanterus; levanta la caja por encima de la cabeza, se tambalea, tropieza y cae de bruces, la caja sale volando (el foco la sigue) y cae justo encima del montón de cajas 2 con una nube de polvo; el foco vuelve a él, se levanta y la cámara se aleja. Antes no se puede pasar; después se llega al cuadro de luz. (No se guarda: al continuar vuelve a su sitio.) <!-- HECHO -->
+- Colisiones de la caja 1 y del montón de cajas 2: bloques enteros como se ven (tapa y frente), igual que los muebles de la sala. <!-- HECHO -->
+- Puertas un 15% más estrechas (sala y entrada). <!-- HECHO -->
+- Qué pasa al llegar al cuadro de luz (mirar el diferencial). <!-- PENDIENTE -->
+- Puertas cerradas (no se abren todavía): arriba a la derecha, arriba a la izquierda, la del medio, la de la pared derecha y la de abajo a la derecha. La puerta de la CALLE es la de abajo del entrante (sin decorar). <!-- HECHO -->
+- Luz: sin ventanas. Lámpara de techo hasta el apagón; después, oscuridad casi total, rota solo por la luz del ventanal de la sala que entra por los cristales de la puerta doble. La linterna funciona igual (no atraviesa paredes). <!-- HECHO -->
+- Linterna de MÓVIL (en todo el juego): luz blanca fría, abierta y floja; alumbra un charco cerca del personaje y llega poco lejos (~58 px). <!-- HECHO -->
+- Cómo se pinta la luz: la oscuridad es una capa aparte y las luces que iluminan (linterna, claridad de la sala en la entrada) la RECORTAN, así se ven el suelo, las paredes y las puertas con sus colores de verdad; encima solo va un tinte suave (frío la linterna, cálido el día). No pintar luces "blanqueando" encima de lo negro: queda una neblina gris que no deja ver nada. <!-- NORMA -->
+- La partida guardada recuerda en qué habitación estabas (sala o entrada). <!-- HECHO -->
+
 ### Móvil en la 2ª escena
 - Al empezar la sala el móvil vuelve a estar activo (icono abajo a la derecha) y abre en la pantalla de inicio: mismo fondo que el desbloqueo (sin la hora ni el aviso: `phone-home.png`), barra de estado, hora 16:05, fecha "Jueves 24 sep". <!-- HECHO -->
 - WhatsApp: abre la conversación anterior con Danielon135 tal cual quedó (o la última pantalla de WhatsApp que se vio); la barra de abajo vuelve al inicio. <!-- HECHO -->
@@ -86,9 +105,9 @@ Tras el "ok" del chat: el móvil se apaga, la escena funde a negro y aparece el 
 - Linterna: a pantalla completa, con una linterna metálica dibujada (se ilumina el cristal y sale el haz) y un interruptor grande. Empieza APAGADA; se enciende con el interruptor y guarda el estado al cerrar y volver a abrir el móvil. <!-- HECHO -->
 - Con la linterna encendida el personaje alumbra hacia donde camina: haz con bordes difuminados, círculo de luz en el suelo y destello en la mano. <!-- HECHO -->
 - Física de la linterna: la luz no atraviesa las paredes (solo alumbra el suelo y la cara de la pared del fondo); donde el haz choca con una pared se concentra un círculo de luz. <!-- HECHO -->
-- Protagonista PROVISIONAL (placeholder): flechas/WASD en PC (o clic/arrastrar con el ratón adonde ir); en móvil, joystick abajo a la izquierda (cuanto más se empuja, más rápido anda). Tocar la pantalla ya no mueve al personaje. <!-- joystick: HECHO -->
-- En el móvil la partida (intro y sala) se juega en HORIZONTAL: en vertical sale a pantalla completa el aviso "GIRA EL MÓVIL" (con un móvil que gira) y tapa el juego. En Android, al dar a NUEVO JUEGO/CONTINUAR se pone en pantalla completa y se bloquea la orientación en horizontal; al volver al menú se desbloquea (el menú sí se puede usar en vertical). <!-- HECHO --> Choca con paredes y muebles. <!-- HECHO -->
-- Sprite definitivo del protagonista a partir de las fotos del usuario. <!-- PENDIENTE -->
+- Controles del protagonista: flechas/WASD en PC (o clic/arrastrar con el ratón adonde ir); en móvil, joystick abajo a la izquierda (cuanto más se empuja, más rápido anda). Tocar la pantalla ya no mueve al personaje. Choca con paredes y muebles. <!-- joystick: HECHO -->
+- En el móvil la partida (intro y sala) se juega en HORIZONTAL: en vertical sale a pantalla completa el aviso "GIRA EL MÓVIL" (con un móvil que gira) y tapa el juego. En Android, al dar a NUEVO JUEGO/CONTINUAR se pone en pantalla completa y se bloquea la orientación en horizontal; al volver al menú se desbloquea (el menú sí se puede usar en vertical). <!-- HECHO -->
+- Protagonista: JUAN JOSÉ (Phanterus), sacado de su foto, en pixel art de 12×20 px con contorno oscuro: pelo corto castaño oscuro, gafas rectangulares (montura oscura y cristales que brillan), sonrisa grande, mofletes, corpulento, camiseta ROJA de "DELAWARE" (letras gris azulado y escudo redondo), pantalón oscuro y tatuaje en el antebrazo. 4 direcciones (izquierda = derecha en espejo) y paso al andar. <!-- HECHO -->
 
 ## Partida guardada
 
