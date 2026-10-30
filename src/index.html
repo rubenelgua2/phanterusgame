@@ -212,6 +212,39 @@
     9% { transform: translateX(-2px) rotate(-8deg); } 12% { transform: translateX(2px) rotate(8deg); }
     15% { transform: translateX(-1px) rotate(-5deg); } 18% { transform: translateX(1px) rotate(5deg); }
   }
+  /* en el móvil la partida (intro y sala) obliga a ponerlo en horizontal: en vertical, aviso a pantalla completa */
+  #rotate {
+    position: fixed; inset: 0; z-index: 100; display: none;
+    flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--px) * 6);
+    background: #000; text-align: center; padding: 0 6vw;
+  }
+  @media (orientation: portrait) and (pointer: coarse) { body:has(#newgame.open) #rotate { display: flex; } }
+  .rotate-phone {
+    width: calc(var(--px) * 14); height: calc(var(--px) * 24); margin-bottom: calc(var(--px) * 4);
+    border: var(--px) solid #e8e0d0; border-radius: calc(var(--px) * 2); position: relative;
+    animation: rotatephone 2.4s ease-in-out infinite;
+  }
+  .rotate-phone::after {                         /* botón de inicio */
+    content: ''; position: absolute; left: 50%; bottom: calc(var(--px) * 1.5); transform: translateX(-50%);
+    width: calc(var(--px) * 4); height: var(--px); background: #e8e0d0;
+  }
+  @keyframes rotatephone { 0%, 25% { transform: rotate(0); } 55%, 85% { transform: rotate(-90deg); } 100% { transform: rotate(0); } }
+  @media (prefers-reduced-motion: reduce) { .rotate-phone { animation: none; transform: rotate(-90deg); } }
+  /* joystick del móvil (sala): abajo a la izquierda, el pulgar arrastra la bola */
+  .joystick {
+    position: absolute; z-index: 3; touch-action: none;
+    left: calc(var(--px) * 6 + env(safe-area-inset-left));
+    bottom: calc(var(--px) * 6 + env(safe-area-inset-bottom));
+    width: clamp(104px, calc(var(--px) * 34), 150px); aspect-ratio: 1; border-radius: 50%;   /* que quepa bien el pulgar */
+    background: rgba(0, 0, 0, .35); border: calc(var(--px) * 0.5) solid rgba(232, 224, 208, .25);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .joy-knob {
+    width: 42%; aspect-ratio: 1; border-radius: 50%; pointer-events: none;
+    background: rgba(232, 224, 208, .55); border: calc(var(--px) * 0.5) solid rgba(255, 255, 255, .35);
+  }
+  .joystick.active { border-color: rgba(232, 224, 208, .45); }
+  .joystick.active .joy-knob { background: rgba(232, 224, 208, .8); }
   /* ventana estática del smartphone (UI) */
   #phoneUI {
     position: absolute; inset: 0; z-index: 4;
@@ -286,6 +319,11 @@
         <button class="btn" id="musUp" type="button" data-label="+" aria-label="Subir música"></button>
       </div>
       <div class="row-actions" id="fsRow" style="margin-top: calc(var(--px) * 5)"><button class="btn" id="btnFull" type="button" data-label="PANTALLA COMPLETA" aria-label="Pantalla completa"></button></div>
+      <!-- solo en la web (build): desbloquea lo que hay hecho del juego, que aún está en desarrollo -->
+      <div class="row-actions" id="wipRow" style="margin-top: calc(var(--px) * 5); flex-direction: column; align-items: center; gap: calc(var(--px) * 2)" hidden>
+        <button class="btn" id="btnWip" type="button" data-label="(.WIP.)" aria-label="Desbloquear el juego en desarrollo" aria-pressed="false"></button>
+        <span id="wipState" data-px="BLOQUEADO" data-color="#a89090"></span>
+      </div>
       <div class="row-actions" style="margin-top: calc(var(--px) * 4)"><button class="btn" id="settingsClose" type="button" data-label="VOLVER" aria-label="Volver"></button></div>
     </div>
   </div>
@@ -331,6 +369,7 @@
       <button type="button" class="intro-icon-btn" id="introMenu" aria-label="Menú principal"></button>
     </div>
     <button class="btn intro-hud-phone" id="hudPhone" type="button" aria-label="Abrir teléfono" hidden></button>
+    <div class="joystick" id="joystick" role="application" aria-label="Joystick para mover al personaje" hidden><div class="joy-knob"></div></div>
     <div id="phoneUI" role="dialog" aria-modal="true" aria-label="Teléfono">
       <div class="phone-device">
         <canvas id="phoneUICanvas" width="240" height="480" role="img" aria-label="Pantalla del teléfono"></canvas>
@@ -344,6 +383,13 @@
     <span data-px="HASTA PRONTO..." data-scale="3" data-color="#d10a0a"></span>
     <span data-px="YA PUEDES CERRAR ESTA VENTANA." data-color="#a89090"></span>
     <button class="btn" id="byeBack" type="button" data-label="VOLVER AL MENU" aria-label="Volver al menú"></button>
+  </div>
+
+  <!-- En el móvil la partida se juega en horizontal: en vertical se tapa todo con este aviso -->
+  <div id="rotate" role="alert" aria-label="Gira el móvil para jugar en horizontal">
+    <div class="rotate-phone" aria-hidden="true"></div>
+    <span data-px="GIRA EL MOVIL" data-scale="3" data-color="#d10a0a"></span>
+    <div class="warn-lines"><span data-px="LA PARTIDA SE JUEGA" data-color="#a89090"></span><span data-px="EN HORIZONTAL" data-color="#a89090"></span></div>
   </div>
 
 <script>
@@ -984,6 +1030,7 @@
     ':':'.....|..X..|.....|.....|.....|..X..|.....', '-':'.....|.....|.....|XXX..|.....|.....|.....',
     '+':'.....|..X..|..X..|XXXXX|..X..|..X..|.....', '%':'XX..X|XX..X|...X.|..X..|.X...|X..XX|X..XX',
     '?':'.XXX.|X...X|....X|...X.|..X..|.....|..X..', '!':'..X..|..X..|..X..|..X..|..X..|.....|..X..',
+    '(':'...X.|..X..|.X...|.X...|.X...|..X..|...X.', ')':'.X...|..X..|...X.|...X.|...X.|..X..|.X...',
     '¿':'..X..|.....|..X..|.X...|X....|X...X|.XXX.', '¡':'..X..|.....|..X..|..X..|..X..|..X..|..X..',
     "'":'..X..|..X..|.....|.....|.....|.....|.....'
   };
@@ -1073,7 +1120,7 @@
     return c;
   }
   // los botones del menú principal miden todos lo mismo (el ancho del más largo visible): columna/fila armónica
-  const MENU_INNER = Math.max(0, ...[...document.querySelectorAll('#menuButtons .btn[data-label]:not([hidden]), #btnContinue')]
+  const MENU_INNER = Math.max(0, ...[...document.querySelectorAll('#menuButtons .btn[data-label]:not([hidden]), #btnContinue, #btnNew')]
     .map(b => measure(norm(b.dataset.label)) + 2 * (6 + 3)));
   document.querySelectorAll('.btn[data-label]').forEach(b => {
     const label = norm(b.dataset.label), minInner = b.closest('#menuButtons') ? MENU_INNER : 0;
@@ -1523,6 +1570,7 @@
     if (!current) return;
     if (settingsStacked) { closeSettings(); return; }
     if (current.id === 'newgame') {
+      landscape(false);                                       // el menú se puede usar en vertical
       closePhoneUI();
       if (window.PDIntro) window.PDIntro.stop();
     }
@@ -1574,7 +1622,20 @@
   });
 
   /* ---------- Nuevo juego / Continuar ---------- */
+  // En el móvil la partida va en horizontal. Android: pantalla completa + bloqueo de la orientación (necesita el clic).
+  // Donde no se puede (iPhone), el aviso #rotate tapa el juego hasta que se gira.
+  function landscape(on) {
+    if (!matchMedia('(pointer: coarse)').matches) return;
+    const so = screen.orientation, d = document, el = d.documentElement;
+    if (!on) { try { if (so && so.unlock) so.unlock(); } catch (e) {} return; }
+    const lock = () => { try { if (so && so.lock) so.lock('landscape').catch(() => {}); } catch (e) {} };
+    try {
+      if (!(d.fullscreenElement || d.webkitFullscreenElement) && el.requestFullscreen) el.requestFullscreen().then(lock, () => {});
+      else lock();
+    } catch (e) {}
+  }
   function startNewGame() {
+    landscape(true);
     PDSave.clear();                                           // solo puede haber una partida: la nueva sustituye a la guardada
     openOverlay($('newgame'), $('introSettings'), $('btnNew'));
     if (window.PDIntro) window.PDIntro.start();
@@ -1590,14 +1651,35 @@
   $('btnContinue').addEventListener('click', () => {
     const s = PDSave.load();
     if (!s) { refreshContinue(); return; }
+    landscape(true);
     openOverlay($('newgame'), $('introSettings'), $('btnContinue'));
     if (window.PDIntro) window.PDIntro.resume(s);
   });
   // CONTINUAR solo se ve si hay partida guardada; al aparecer o desaparecer, el menú se recoloca
+  // (.WIP.): en la web (build) el juego en desarrollo sale bloqueado: solo la tragaperras. El botón de Ajustes lo
+  // desbloquea (NUEVO JUEGO y CONTINUAR) y se recuerda en este navegador. En local (npm run dev) todo está abierto.
+  const WEB_BUILD = false;                                  // scripts/build.mjs lo pone a true
+  let wipOn = false; try { wipOn = localStorage.getItem('pd_wip') === '1'; } catch (e) {}
+  const locked = () => WEB_BUILD && !wipOn;
   function refreshContinue() {
-    const b = $('btnContinue'), has = PDSave.exists;
+    const b = $('btnContinue'), has = PDSave.exists && !locked();
     if (b.hidden !== has) return;
     b.hidden = !has; applyLayout();
+  }
+  function applyWip() {
+    $('btnNew').hidden = locked();
+    $('btnWip').setAttribute('aria-pressed', String(wipOn));
+    renderPx($('wipState'), wipOn ? 'DESBLOQUEADO' : 'BLOQUEADO');
+    refreshContinue(); applyLayout();
+  }
+  if (WEB_BUILD) {
+    $('wipRow').hidden = false;
+    $('btnWip').addEventListener('click', () => {
+      wipOn = !wipOn; GameAudio.click();
+      try { if (wipOn) localStorage.setItem('pd_wip', '1'); else localStorage.removeItem('pd_wip'); } catch (e) {}
+      applyWip();
+    });
+    applyWip();
   }
   refreshContinue();
   $('introMenu').addEventListener('click', () => { GameAudio.click(); closeOverlay(); });
@@ -1972,6 +2054,9 @@
     const REPLY = 'Daniel me acabo de despertar puto gordo esperate.';
     const REPLY2 = 'Gordo, luego quedamos para las 6 si quieres.';
     const REPLY_OK = 'ok';
+    // chat con mamá (2ª escena, tras el apagón): el jugador escribe la pregunta y ella contesta con dos mensajes seguidos
+    const MOM_ASK = 'Mamá, se ha ido la luz, ¿qué hago?';
+    const MOM_REPLIES = ['Juanito, ve a la cajita que hay al lado de la entrada.', 'Si el diferencial está subido, entonces nos la han cortao esos hijos de puta.'];
     const PIN_DOTS = [[78, 112], [106, 112], [134, 112], [162, 112]];
     const KEYS = [
       ['1', 56, 178], ['2', 120, 178], ['3', 184, 178],
@@ -1981,7 +2066,7 @@
     ];
     const KEY_R = 26;
     let screen = 'lock', pin = '', hits = [], shakeT = 0, flashKey = null, flashUntil = 0;
-    let imgs = { lock: null, pin: null, chat: null, home: null }, ready = false;
+    let imgs = { lock: null, pin: null, chat: null, home: null, sticker: null }, ready = false;
     let anim = null, rafId = 0, chatRaf = 0, dragY0 = null, chatReveal = 1, poweringOff = false;
     // 2ª escena: el móvil arranca en la pantalla de inicio (WhatsApp + Linterna)
     let homeMode = false, flash = false;
@@ -1995,6 +2080,10 @@
     // idle → typing → sent → waiting → awaitOk → typing → done
     let unlocked = false, chatSeq = 'idle', chatTyped = 0, chatT0 = 0, firstBubble = null;
     let typeTarget = REPLY, sentReply = false, sentOk = false;
+    // mamá: idle → typing → sent → waiting → read → waiting → answer → tray → done (momGot = mensajes suyos ya llegados)
+    // answer: Juanito puede contestar; tray: panel de stickers abierto; done: sticker enviado
+    // momOk: ya se puede escribir (después del bocadillo "Voy a preguntarle a mi madre")
+    let momOk = false, momSeq = 'idle', momTyped = 0, momT0 = 0, momGot = 0;
     const c = () => document.getElementById('phoneUICanvas');
     const easeOutCubic = u => 1 - Math.pow(1 - u, 3);
     const easeInOut = u => u < .5 ? 4*u*u*u : 1 - Math.pow(-2*u+2, 3)/2;
@@ -2070,6 +2159,7 @@
       ':':'.....|..X..|..X..|.....|..X..|..X..|.....',
       '!':'..X..|..X..|..X..|..X..|..X..|.....|..X..',
       '?':'.XXX.|X...X|....X|...X.|..X..|.....|..X..',
+      '¿':'..X..|.....|..X..|.X...|X....|X...X|.XXX.',
       '-':'.....|.....|.....|XXXXX|.....|.....|.....',
       "'":'..X..|..X..|.X...|.....|.....|.....|.....',
       ' ':'.....'
@@ -2134,13 +2224,14 @@
       unlocked = false; chatSeq = 'idle'; chatTyped = 0; chatT0 = 0; firstBubble = null;
       typeTarget = REPLY; sentReply = false; sentOk = false;
       homeMode = false; setFlash(false); chatWith = 'daniel'; waScreen = 'chat'; momFocus = false;
+      momOk = false; momSeq = 'idle'; momTyped = 0; momT0 = 0; momGot = 0;
       if (rafId) cancelAnimationFrame(rafId); rafId = 0;
       if (chatRaf) cancelAnimationFrame(chatRaf); chatRaf = 0;
     }
     function suspend() {
       // Apagar UI sin perder chat / desbloqueo
       anim = null; hits = []; pin = ''; shakeT = 0; flashKey = null; dragY0 = null;
-      poweringOff = false;
+      poweringOff = false; if (momSeq === 'tray') momSeq = 'answer';   // el panel de stickers se cierra al apagar
       if (rafId) cancelAnimationFrame(rafId); rafId = 0;
       if (chatRaf) cancelAnimationFrame(chatRaf); chatRaf = 0;
     }
@@ -2183,6 +2274,7 @@
       ]).then(([a, b, d, h]) => {
         imgs.lock = a; imgs.pin = b; imgs.chat = d; imgs.home = h; ready = true; cb();
       });
+      loadImg('assets/sticker-mama.webp').then(im => { imgs.sticker = im; });   // el sticker va aparte: no retrasa abrir el móvil
     }
     function sprite(name) { return imgs[name === 'flash' || name === 'list' ? 'home' : name]; }   // linterna y lista de chats se pintan sobre el marco del inicio
 
@@ -2310,9 +2402,10 @@
         if (y + WA_ROW > S.y + S.h - 20) return;
         avatar(g, S.x + 22, y + 18, r.av);
         if (r.who) {
+          const prev = r.who === 'mama' ? momPreview() : r.prev, time = r.who === 'mama' && prev ? HOME_TIME : r.time;
           mTextLo(g, r.name, S.x + 44, y + 8, '#121418');
-          mTextLo(g, r.time, S.x + S.w - 8 - mMeasureLo(r.time), y + 8, '#8a9099');
-          if (r.prev) mTextLo(g, r.prev, S.x + 44, y + 22, '#667079'); else scribble(g, S.x + 44, y + 24, 90, '#d5d9de', i + 1);
+          mTextLo(g, time, S.x + S.w - 8 - mMeasureLo(time), y + 8, '#8a9099');
+          if (prev) mTextLo(g, clipLo(prev, S.w - 64), S.x + 44, y + 22, '#667079'); else scribble(g, S.x + 44, y + 24, 90, '#d5d9de', i + 1);
           if (r.pin) {                                               // chincheta de "anclado"
             const px = S.x + S.w - 15, py = y + 22;
             g.fillStyle = '#8a9099'; g.fillRect(px, py, 6, 3); g.fillRect(px + 1, py + 3, 4, 2); g.fillRect(px + 2, py + 5, 2, 3);
@@ -2329,13 +2422,106 @@
       g.fillStyle = '#ffffff'; roundRect(g, S.x + S.w - 32, S.y + S.h - 55, 14, 11, 3); g.fill(); g.fillRect(S.x + S.w - 30, S.y + S.h - 45, 3, 3);
       g.fillStyle = '#9aa0a8'; roundRect(g, 98, 439, 44, 4, 2); g.fill();                    // barra de inicio
     }
-    function paintMomChat(g) {                                       // chat con mamá: vacío por ahora
-      mTextLo(g, 'Mamá', 66, 42, '#ffffff'); backChevron(g);
-      if (momFocus) { g.fillStyle = '#2a2e34'; g.fillRect(COMPOSE.tx, 426, 1, 9); }
-      else mTextLo(g, 'Mensaje', COMPOSE.tx, COMPOSE.ty, '#a0a6ad');
+    function clipLo(t, w) {                                          // recorta con "..." para que quepa en w px
+      t = mNormLo(t); if (mMeasureLo(t) <= w) return t;
+      while (t.length > 1 && mMeasureLo(t + '...') > w) t = t.slice(0, -1);
+      return t.trimEnd() + '...';
     }
+    function momPreview() {                                          // último mensaje del chat con mamá (para la lista)
+      if (momSeq === 'done') return 'Tú: Sticker';
+      if (momGot) return MOM_REPLIES[momGot - 1];
+      return momSeq === 'idle' || momSeq === 'typing' ? null : 'Tú: ' + MOM_ASK;
+    }
+    // ---------- sticker animado con el que contesta Juanito (hoja de 50 fotogramas de 104 px, 10 por fila, ~10 fps) ----------
+    const STK = { src: 104, cols: 10, n: 50, dt: 103 };
+    const TRAY = { x: 24, y: 298, w: 192, h: 114 }, CELL = 42;      // panel de stickers: sale encima del campo de texto
+    const trayCell = i => ({ x: TRAY.x + 8 + (i % 4) * (CELL + 4), y: TRAY.y + 22 + Math.floor(i / 4) * (CELL + 4) });
+    const stkFrame = () => Math.floor(performance.now() / STK.dt) % STK.n;
+    function stickerAt(g, x, y, s) {
+      const im = imgs.sticker;
+      if (!im) { g.fillStyle = '#d5d9de'; roundRect(g, x, y, s, s, 8); g.fill(); return; }   // aún cargando
+      const i = stkFrame();
+      g.save(); g.imageSmoothingEnabled = s < STK.src;               // en miniatura, suavizado para que no se rompa
+      g.drawImage(im, (i % STK.cols) * STK.src, Math.floor(i / STK.cols) * STK.src, STK.src, STK.src, x, y, s, s);
+      g.restore();
+    }
+    function stickerIcon(g, x, y) {                                  // icono de stickers (con la esquina despegada) dentro del campo
+      g.strokeStyle = '#8a9099'; g.lineWidth = 1.5; g.beginPath();
+      g.moveTo(x + 7, y + 12); g.lineTo(x + 3, y + 12); g.quadraticCurveTo(x, y + 12, x, y + 9); g.lineTo(x, y + 3); g.quadraticCurveTo(x, y, x + 3, y);
+      g.lineTo(x + 9, y); g.quadraticCurveTo(x + 12, y, x + 12, y + 3); g.lineTo(x + 12, y + 7); g.lineTo(x + 7, y + 12);
+      g.lineTo(x + 7, y + 9); g.quadraticCurveTo(x + 7, y + 7, x + 9, y + 7); g.lineTo(x + 12, y + 7); g.stroke();
+      g.fillStyle = '#8a9099'; g.fillRect(x + 3, y + 4, 2, 2); g.fillRect(x + 7, y + 4, 2, 2);
+    }
+    function paintTray(g) {                                          // "Recientes": el sticker de Juanito y otros que no se distinguen
+      const T = TRAY;
+      g.fillStyle = 'rgba(0,0,0,0.12)'; roundRect(g, T.x, T.y + 2, T.w, T.h, 10); g.fill();
+      g.fillStyle = '#ffffff'; roundRect(g, T.x, T.y, T.w, T.h, 10); g.fill();
+      mTextLo(g, 'Recientes', T.x + 10, T.y + 7, '#667079');
+      g.fillStyle = '#1fa855'; g.fillRect(T.x + 10, T.y + 16, mMeasureLo('Recientes'), 2);
+      ['#e3c9a8', '#c9d6e3', '#e3c9d4', '#d4e3c9', '#e3dcc9', '#cfc9e3', '#c9e3df'].forEach((col, k) => {
+        const c = trayCell(k + 1);
+        g.fillStyle = col; roundRect(g, c.x + 4, c.y + 4, CELL - 8, CELL - 8, 12); g.fill();
+        g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(c.x + 14, c.y + 16, 3, 3); g.fillRect(c.x + 25, c.y + 16, 3, 3); g.fillRect(c.x + 15, c.y + 26, 12, 2);
+      });
+      const c = trayCell(0); stickerAt(g, c.x, c.y, CELL);
+    }
+    function paintMomChat(g) {
+      mTextLo(g, 'Mamá', 66, 42, '#ffffff'); backChevron(g);
+      let y = 82;
+      if (momSeq === 'typing') paintComposer(g, MOM_ASK.slice(0, momTyped));
+      else {
+        if (momSeq === 'idle' && momFocus) { g.fillStyle = '#2a2e34'; g.fillRect(COMPOSE.tx, 426, 1, 9); }
+        else mTextLo(g, 'Mensaje', COMPOSE.tx, COMPOSE.ty, '#a0a6ad');
+        stickerIcon(g, 152, 426);
+      }
+      if (momSeq === 'idle' || momSeq === 'typing') return;
+      y += paintOutAt(g, MOM_ASK, y, 1) + 10;                        // la pregunta, ya enviada
+      for (let i = 0; i < momGot; i++) { const b = drawInBubble(g, MOM_REPLIES[i], 28, y, 1); y = b.y + b.h + 10; }
+      if (momSeq === 'waiting') paintTyping(g, y, performance.now() - momT0);   // "…" mientras escribe
+      if (momSeq === 'done') stickerAt(g, PW - 26 - STK.src, y, STK.src);      // sin bocadillo, como en WhatsApp
+      if (momSeq === 'tray') paintTray(g);
+    }
+    function openTray() { if (momSeq !== 'answer' || anim) return; momSeq = 'tray'; frame(); runMomSeq(); }
+    function closeTray() { if (momSeq !== 'tray') return; momSeq = 'answer'; if (uiOpen() && !anim && screen === 'chat') frame(); }
+    function sendSticker() {
+      if (momSeq !== 'tray' || anim) return;
+      momSeq = 'done'; frame(); runMomSeq();
+      document.dispatchEvent(new CustomEvent('pd:mom-chat-done'));   // para el siguiente paso de la historia
+    }
+    function startMom() {
+      if (screen !== 'chat' || anim || momSeq !== 'idle') return;
+      momSeq = 'typing'; momTyped = 0; momT0 = performance.now();
+      runMomSeq();
+    }
+    const momWait = i => 1200 + MOM_REPLIES[i].length * 22;          // los puntos duran más cuanto más largo es su mensaje
+    function runMomSeq() {
+      if (chatRaf) cancelAnimationFrame(chatRaf);
+      const step = () => {
+        chatRaf = 0;
+        if (poweringOff || anim || screen !== 'chat' || chatWith !== 'mama') return;   // se pausa; sigue al volver al chat
+        const now = performance.now(), el = now - momT0;
+        if (momSeq === 'typing') {
+          let n = 0, acc = 0;
+          for (let i = 0; i < MOM_ASK.length; i++) { acc += typeDelay(i, MOM_ASK[i]); if (el >= acc) n = i + 1; else break; }
+          momTyped = reduce() ? MOM_ASK.length : n;
+          if (momTyped >= MOM_ASK.length) { momSeq = 'sent'; momT0 = now; }
+        } else if (momSeq === 'sent') {
+          if (el > (reduce() ? 80 : 480)) { momSeq = 'waiting'; momT0 = now; }
+        } else if (momSeq === 'waiting') {
+          if (el > (reduce() ? 200 : momWait(momGot))) { momGot++; momSeq = momGot < MOM_REPLIES.length ? 'read' : 'answer'; momT0 = now; }
+        } else if (momSeq === 'read') {                              // un momento antes de que vuelva a escribir
+          if (el > (reduce() ? 80 : 900)) { momSeq = 'waiting'; momT0 = now; }
+        }
+        // con el sticker a la vista (panel o enviado) solo se repinta cuando cambia su fotograma
+        if (!(momSeq === 'tray' || momSeq === 'done') || stkFrame() !== stkShown) { stkShown = stkFrame(); frame(); }
+        if (momSeq === 'answer') return;                             // espera a que Juanito conteste
+        chatRaf = requestAnimationFrame(step);
+      };
+      chatRaf = requestAnimationFrame(step);
+    }
+    let stkShown = -1;
     function openChat(who) { chatWith = who; waScreen = 'chat'; momFocus = false; startSwap('list', 'chat'); }
-    function toList() { waScreen = 'list'; momFocus = false; startSwap('chat', 'list'); }
+    function toList() { waScreen = 'list'; momFocus = false; if (momSeq === 'tray') momSeq = 'answer'; startSwap('chat', 'list'); }
 
     function backChevron(g) {                                        // "<" en la cabecera del chat para volver
       g.fillStyle = '#ffffff';
@@ -2343,13 +2529,13 @@
     }
     function startSwap(from, to) {                                   // abrir/cerrar app: fundido con un poco de zoom
       if (anim) return;
-      if (reduce()) { screen = to; frame(); return; }
+      if (reduce()) { screen = to; frame(); if (to === 'chat') resumeChatAnim(); return; }
       anim = { type: 'swap', from, to, t0: performance.now(), dur: 300 };
       tick();
     }
     // WhatsApp vuelve a la última pantalla que se vio (el chat o la lista); la linterna empieza apagada: se enciende con su interruptor
     function openApp(name) { startSwap('home', name === 'chat' ? waScreen : name); }
-    function goHome() { if (screen !== 'home') startSwap(screen, 'home'); }
+    function goHome() { if (momSeq === 'tray') momSeq = 'answer'; if (screen !== 'home') startSwap(screen, 'home'); }
 
     function paintLockExtras(g) {
       // solo nombre + preview (sin etiquetas de app ni chevrons)
@@ -2448,7 +2634,7 @@
 
       if (chatSeq === 'typing') {
         paintComposer(g, typeTarget.slice(0, chatTyped));
-      }
+      } else stickerIcon(g, 152, 426);                               // como en todos los chats (aquí no se usa); se oculta al escribir
 
       // 1ª respuesta enviada
       if (sentReply) y += paintOutAt(g, REPLY, y, 1) + 10;
@@ -2586,6 +2772,14 @@
       return ch === ' ' ? 90 : /[.,!]/.test(ch) ? 140 : 36 + (i % 5) * 4;
     }
     function resumeChatAnim() {
+      if (chatWith === 'mama') {                                     // retoma la conversación con mamá donde se quedó (y el sticker animado)
+        if (momSeq === 'idle' || momSeq === 'answer') return;
+        let acc = 0;
+        if (momSeq === 'typing') for (let i = 0; i < momTyped; i++) acc += typeDelay(i, MOM_ASK[i]);
+        momT0 = performance.now() - acc;
+        runMomSeq();
+        return;
+      }
       if (chatSeq === 'typing') {
         let acc = 0;
         for (let i = 0; i < chatTyped; i++) acc += typeDelay(i, typeTarget[i]);
@@ -2617,7 +2811,7 @@
         frame(e);
         if (u >= 1) {
           if (anim.type === 'toPin') { screen = 'pin'; anim = null; frame(); }
-          else if (anim.type === 'swap') { screen = anim.to; anim = null; frame(); }
+          else if (anim.type === 'swap') { screen = anim.to; anim = null; frame(); if (screen === 'chat') resumeChatAnim(); }
           else { anim = null; enterChat(true); }
         } else tick();
       });
@@ -2704,8 +2898,15 @@
         if (chatWith === 'daniel' && (chatSeq === 'idle' || chatSeq === 'awaitOk') && chatReveal > 0.9) {
           hit(COMPOSE.x, COMPOSE.y, COMPOSE.w, COMPOSE.h, startReply);
           cv.style.cursor = 'pointer';
-        } else if (chatWith === 'mama') {                            // por ahora solo deja el cursor en el campo (escribir: siguiente paso)
-          hit(COMPOSE.x, COMPOSE.y, COMPOSE.w, COMPOSE.h, () => { momFocus = true; frame(); });
+        } else if (chatWith === 'mama' && momSeq === 'idle') {       // antes del bocadillo "Voy a preguntarle a mi madre" solo deja el cursor
+          hit(COMPOSE.x, COMPOSE.y, COMPOSE.w, COMPOSE.h, () => { if (momOk) startMom(); else { momFocus = true; frame(); } });
+          cv.style.cursor = 'pointer';
+        } else if (chatWith === 'mama' && momSeq === 'answer') {     // contestar a mamá: se abre el panel de stickers
+          hit(COMPOSE.x, COMPOSE.y, COMPOSE.w, COMPOSE.h, openTray);
+          cv.style.cursor = 'pointer';
+        } else if (chatWith === 'mama' && momSeq === 'tray') {       // tocar el sticker lo envía; fuera del panel, se cierra
+          hit(SCREEN.x, 60, SCREEN.w, TRAY.y - 60, closeTray); hit(COMPOSE.x, COMPOSE.y, COMPOSE.w, COMPOSE.h, closeTray);
+          const c0 = trayCell(0); hit(c0.x, c0.y, CELL, CELL, sendSticker);
           cv.style.cursor = 'pointer';
         } else {
           cv.style.cursor = 'default';
@@ -2719,7 +2920,9 @@
             : screen === 'home' ? 'Pantalla de inicio: ' + HOME_TIME + '. Apps: WhatsApp y Linterna'
               : screen === 'flash' ? 'Linterna ' + (flash ? 'encendida' : 'apagada') + '. Toca el boton para cambiar'
                 : screen === 'list' ? 'WhatsApp: chats. Mama (anclado), ' + FROM + ' y otros'
-                  : chatWith === 'mama' ? 'Chat con Mama'
+                  : chatWith === 'mama' ? (momOk && momSeq === 'idle' ? 'Toca el campo de texto para escribir a Mama'
+                    : momSeq === 'answer' ? 'Toca el campo de texto para contestar a Mama'
+                      : momSeq === 'tray' ? 'Stickers recientes: toca el primero para enviarlo' : 'Chat con Mama')
                     : (chatSeq === 'idle' || chatSeq === 'awaitOk') ? 'Toca el campo de texto para responder'
                       : 'Chat con ' + FROM);
     }
@@ -2785,7 +2988,8 @@
       setFlash(!!(s && s.flash));
       enableHome();
     }
-    return { reset, render, open, bind, powerOff, enableHome, snapshot, restore, get flashlight() { return flash; } };
+    function allowMom() { if (momOk) return; momOk = true; if (uiOpen() && !anim && screen === 'chat' && chatWith === 'mama') frame(); }
+    return { reset, render, open, bind, powerOff, enableHome, snapshot, restore, allowMom, get flashlight() { return flash; } };
   })();
   window.PDPhone = PhoneApp;
 
@@ -3395,8 +3599,10 @@
   }
   const keys = new Set();
   function update(dt) {
-    let dx = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), dy = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0);
-    if (dx || dy) P.tx = null;                                      // el teclado manda sobre el toque
+    let dx = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), dy = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0), k = 1;
+    const jm = Math.hypot(joy.x, joy.y);
+    if (dx || dy) P.tx = null;                                      // el teclado manda sobre el joystick y el ratón
+    else if (jm > JOY_DEAD && !busy()) { dx = joy.x; dy = joy.y; k = Math.min(1, (jm - JOY_DEAD) / (1 - JOY_DEAD) * 1.25); P.tx = null; }   // poco empuje = andar despacio
     else if (P.tx != null) {
       const vx = P.tx - P.x, vy = P.ty - P.y, d = Math.hypot(vx, vy);
       if (d < 1.2) P.tx = null; else { dx = vx / d; dy = vy / d; }
@@ -3405,7 +3611,7 @@
     P.moving = len > 0;
     if (!P.moving) { P.phase = 0; return; }
     dx /= len; dy /= len;
-    const ox = P.x, oy = P.y, sx = dx * SPEED * dt, sy = dy * SPEED * dt;
+    const ox = P.x, oy = P.y, sx = dx * SPEED * k * dt, sy = dy * SPEED * k * dt;
     if (!blocked(P.x + sx, P.y)) P.x += sx;                         // por ejes: si choca, se desliza por el borde
     if (!blocked(P.x, P.y + sy)) P.y += sy;
     if (P.tx != null && Math.hypot(P.x - ox, P.y - oy) < 0.01) { P.stuck += dt; if (P.stuck > 0.25) P.tx = null; } else P.stuck = 0;
@@ -3429,7 +3635,7 @@
     else r(x - 3, y - 14, 6, 3, HAIR);
   }
 
-  // ---------- controles: flechas/WASD; con ratón o dedo, tocar (o arrastrar) adonde ir ----------
+  // ---------- controles: flechas/WASD; con ratón, clic (o arrastrar) adonde ir; en móvil, joystick ----------
   const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
   const busy = () => !running || document.getElementById('settings').classList.contains('open') || document.getElementById('phoneUI').classList.contains('open');
   addEventListener('keydown', e => {
@@ -3449,13 +3655,33 @@
     mark = { x: P.tx, y: P.ty, t: performance.now() }; moved = true;
   }
   cv.addEventListener('pointerdown', e => {
-    if (busy()) return;
+    if (busy() || e.pointerType !== 'mouse') return;               // con el dedo ya no se va tocando: para eso está el joystick
     dragging = true; aim(e);
     try { cv.setPointerCapture(e.pointerId); } catch (_) {}
     e.preventDefault();
   });
   cv.addEventListener('pointermove', e => { if (dragging) aim(e); });
   ['pointerup', 'pointercancel'].forEach(ev => cv.addEventListener(ev, () => { dragging = false; }));
+
+  // joystick (solo en pantallas táctiles): la bola sigue al pulgar dentro del círculo; joy = dirección y fuerza (0..1)
+  const joyEl = document.getElementById('joystick'), knob = joyEl.querySelector('.joy-knob');
+  const joy = { x: 0, y: 0, id: null }, JOY_DEAD = 0.18;
+  function joyMove(e) {
+    const r = joyEl.getBoundingClientRect(), R = (r.width - knob.offsetWidth) / 2;
+    let x = (e.clientX - r.left - r.width / 2) / R, y = (e.clientY - r.top - r.height / 2) / R;
+    const m = Math.hypot(x, y); if (m > 1) { x /= m; y /= m; }
+    joy.x = x; joy.y = y; knob.style.transform = `translate(${x * R}px, ${y * R}px)`;
+    if (Math.hypot(x, y) > JOY_DEAD) moved = true;
+  }
+  function joyEnd() { joy.x = joy.y = 0; joy.id = null; knob.style.transform = ''; joyEl.classList.remove('active'); }
+  joyEl.addEventListener('pointerdown', e => {
+    if (busy() || joy.id != null) return;
+    joy.id = e.pointerId; joyEl.classList.add('active');
+    try { joyEl.setPointerCapture(e.pointerId); } catch (_) {}
+    joyMove(e); e.preventDefault();
+  });
+  joyEl.addEventListener('pointermove', e => { if (e.pointerId === joy.id) { if (busy()) joyEnd(); else joyMove(e); } });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => joyEl.addEventListener(ev, e => { if (e.pointerId === joy.id) joyEnd(); }));
 
   // ---------- bucle ----------
   // ---------- apagón: a los 5 s se va la luz de la casa (parpadea, se apaga con un chasquido) ----------
@@ -3498,7 +3724,7 @@
     const end = sayAt + S.text.length * SAY_DT + S.hold, a = 1 - clamp((t - end) / 0.5, 0, 1);
     if (a <= 0) {
       sayI++; sayAt = null; sayNext = t + SAY_GAP;
-      if (sayI === SAYS.length) startBuzz(t);
+      if (sayI === SAYS.length) { startBuzz(t); if (window.PDPhone) window.PDPhone.allowMom(); }   // ya puede escribirle a su madre
       return;
     }
     // Se dibuja en px reales del lienzo (×RES). k = tamaño de cada píxel de la letra: lo más fino que se siga leyendo bien
@@ -3668,7 +3894,7 @@
     const helpA = clamp((t - FADE_IN) / 0.6, 0, 1) * (movedAt == null ? 1 : 1 - clamp((t - movedAt - 1.2) / 0.8, 0, 1));
     const PD = window.PD;
     if (helpA > 0 && PD) {
-      const msg = PD.norm(TOUCH ? 'Toca donde quieras ir' : 'Flechas o WASD para moverte'), w = PD.measure(msg);
+      const msg = PD.norm(TOUCH ? 'Usa el joystick para moverte' : 'Flechas o WASD para moverte'), w = PD.measure(msg);
       const hx = Math.round(194 - w / 2), hy = TV.y - 14;                                        // en el suelo libre, entre las sillas y la pared derecha
       ctx.globalAlpha = helpA * 0.75; ctx.fillStyle = '#000'; ctx.fillRect(hx - 4, hy - 2, w + 8, 11);
       ctx.globalAlpha = helpA; PD.drawText(ctx, msg, hx + 1, hy + 1, 'rgba(0,0,0,0.9)'); PD.drawText(ctx, msg, hx, hy, '#e8e0d0'); ctx.globalAlpha = 1;
@@ -3691,11 +3917,11 @@
     keys.clear(); mark = null; moved = false; movedAt = null; dragging = false;
     outAt = resumed ? -10 : OUT_AT; outFx = resumed ? 2 : 0; saved = resumed;
     sayI = 0; sayNext = resumed ? FADE_IN + 1 : OUT_AT + SAY_AFTER; sayAt = null; stopBuzz();
-    cv.hidden = false; running = true;
+    cv.hidden = false; running = true; joyEnd(); joyEl.hidden = !TOUCH;
     t0 = performance.now() / 1000; last = performance.now();
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   }
-  function stop() { running = false; cancelAnimationFrame(raf); cv.hidden = true; keys.clear(); dragging = false; stopBuzz(); }
+  function stop() { running = false; cancelAnimationFrame(raf); cv.hidden = true; keys.clear(); dragging = false; stopBuzz(); joyEnd(); joyEl.hidden = true; }
   window.PDRoom = { start, stop, get running() { return running; }, get player() { return { x: P.x, y: P.y, dir: P.dir }; } };
 })();
 </script>

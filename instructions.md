@@ -43,6 +43,7 @@ Audio en ./audios/1parte2audio.mp3, convertir a un formato mas ligero para la we
 - La escritura del jugador va **solo** en la barra inferior; la burbuja verde aparece **al enviar**.
 - El clic para empezar a escribir es el **campo de input** (abajo), no la burbuja del mensaje recibido.
 - El texto del input no debe solapar el botón/flecha de enviar.
+- Todos los chats llevan el icono de stickers dentro del campo de texto (a la derecha), aunque solo se use en el de Mamá. Se oculta mientras se escribe para no tapar el texto. <!-- HECHO -->
 - Nunca llamar `PDPhone.reset()` al abrir/cerrar el móvil — solo al `PDIntro.start()`.
 - El historial de chat debe sobrevivir apagados hasta nueva partida.
 - Assets viejos (`tlf*`, `phone-frame`, `phone-ref`, `phone-lock-screen`) eliminados <!-- HECHO -->
@@ -73,11 +74,20 @@ Tras el "ok" del chat: el móvil se apaga, la escena funde a negro y aparece el 
 - Al empezar la sala el móvil vuelve a estar activo (icono abajo a la derecha) y abre en la pantalla de inicio: mismo fondo que el desbloqueo (sin la hora ni el aviso: `phone-home.png`), barra de estado, hora 16:05, fecha "Jueves 24 sep". <!-- HECHO -->
 - WhatsApp: abre la conversación anterior con Danielon135 tal cual quedó (o la última pantalla de WhatsApp que se vio); la barra de abajo vuelve al inicio. <!-- HECHO -->
 - WhatsApp: "<" en un chat lleva a la lista de chats: "Mamá" anclada (chincheta), "danielon135" con "Tú: ok" y más contactos con texto ilegible. <!-- HECHO -->
-- Chat con Mamá: se abre desde la lista; vacío, con el campo "Mensaje" (al tocarlo queda el cursor). Escribirle: siguiente paso. <!-- PENDIENTE -->
+- Chat con Mamá: se abre desde la lista; vacío, con el campo "Mensaje". Antes del bocadillo "Voy a preguntarle a mi madre" solo deja el cursor; después, al tocar el campo se escribe la pregunta. <!-- HECHO -->
+- Conversación con Mamá, con las mismas animaciones que la de Daniel (escritura letra a letra SOLO en la barra de abajo → se envía la burbuja verde → "…" → respuesta): <!-- HECHO -->
+    - Juanito: "Mamá, se ha ido la luz, ¿qué hago?"
+    - Mamá: "Juanito, ve a la cajita que hay al lado de la entrada."
+    - Mamá (vuelve a escribir, "…" otra vez): "Si el diferencial está subido, entonces nos la han cortao esos hijos de puta."
+    - Los "…" duran más cuanto más largo es el mensaje. Si se cierra el móvil o se sale del chat a mitad, se pausa y sigue al volver.
+    - Juanito contesta con un sticker animado: al tocar el campo se abre el panel de stickers "Recientes" (el suyo + otros que no se distinguen); al tocar el suyo se envía, sin bocadillo, y se mueve en bucle. Tocar fuera del panel lo cierra. Sticker: `assets/sticker-mama.webp` (hoja de 50 fotogramas de 104 px, 10 por fila, ~10 fps; sacado del sticker de WhatsApp del usuario).
+    - En la lista de chats, Mamá pasa a mostrar su último mensaje ("Tú: Sticker" al final) y la hora 16:05. Al enviar el sticker se lanza `pd:mom-chat-done` (para enganchar el siguiente paso).
+- Misión 1: ir a la cajita (cuadro de luz) junto a la entrada y mirar el diferencial. <!-- PENDIENTE -->
 - Linterna: a pantalla completa, con una linterna metálica dibujada (se ilumina el cristal y sale el haz) y un interruptor grande. Empieza APAGADA; se enciende con el interruptor y guarda el estado al cerrar y volver a abrir el móvil. <!-- HECHO -->
 - Con la linterna encendida el personaje alumbra hacia donde camina: haz con bordes difuminados, círculo de luz en el suelo y destello en la mano. <!-- HECHO -->
 - Física de la linterna: la luz no atraviesa las paredes (solo alumbra el suelo y la cara de la pared del fondo); donde el haz choca con una pared se concentra un círculo de luz. <!-- HECHO -->
-- Protagonista PROVISIONAL (placeholder): flechas/WASD en PC; en móvil tocar o arrastrar adonde ir. Choca con paredes y muebles. <!-- HECHO -->
+- Protagonista PROVISIONAL (placeholder): flechas/WASD en PC (o clic/arrastrar con el ratón adonde ir); en móvil, joystick abajo a la izquierda (cuanto más se empuja, más rápido anda). Tocar la pantalla ya no mueve al personaje. <!-- joystick: HECHO -->
+- En el móvil la partida (intro y sala) se juega en HORIZONTAL: en vertical sale a pantalla completa el aviso "GIRA EL MÓVIL" (con un móvil que gira) y tapa el juego. En Android, al dar a NUEVO JUEGO/CONTINUAR se pone en pantalla completa y se bloquea la orientación en horizontal; al volver al menú se desbloquea (el menú sí se puede usar en vertical). <!-- HECHO --> Choca con paredes y muebles. <!-- HECHO -->
 - Sprite definitivo del protagonista a partir de las fotos del usuario. <!-- PENDIENTE -->
 
 ## Partida guardada
@@ -94,6 +104,11 @@ Tras el "ok" del chat: el móvil se apaga, la escena funde a negro y aparece el 
 - Sonido limpio: las notas no se solapan (melodía y bajo una nota cada vez, cada instrumento en su altura, sin eco encima). <!-- HECHO -->
 - Ajustes → MÚSICA: volumen propio de la música (se guarda); el volumen general también la baja. <!-- HECHO -->
 - La música suena SOLO en el menú: al dar a NUEVO JUEGO se corta al instante (aunque sea el primer clic no llega a sonar). <!-- HECHO -->
+
+## Web (VPS)
+
+- Publicado en https://tontunaland.online/phanterusgame/ con `npm run deploy`. <!-- HECHO -->
+- Ajustes → botón (.WIP.) SOLO en la web (el build pone `WEB_BUILD = true`; en local con `npm run dev` no sale y todo está abierto). Por defecto en la web solo se ve la tragaperras (NUEVO JUEGO y CONTINUAR ocultos); al darle a (.WIP.) se desbloquea el juego tal como está y debajo pone DESBLOQUEADO. Se recuerda en el navegador (`pd_wip`); darle otra vez lo vuelve a bloquear. <!-- HECHO -->
 
 ## Fixes
 
