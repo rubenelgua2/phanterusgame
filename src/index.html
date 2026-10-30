@@ -1031,6 +1031,7 @@
     '+':'.....|..X..|..X..|XXXXX|..X..|..X..|.....', '%':'XX..X|XX..X|...X.|..X..|.X...|X..XX|X..XX',
     '?':'.XXX.|X...X|....X|...X.|..X..|.....|..X..', '!':'..X..|..X..|..X..|..X..|..X..|.....|..X..',
     '(':'...X.|..X..|.X...|.X...|.X...|..X..|...X.', ')':'.X...|..X..|...X.|...X.|...X.|..X..|.X...',
+    '/':'....X|....X|...X.|..X..|.X...|X....|X....',
     '¿':'..X..|.....|..X..|.X...|X....|X...X|.XXX.', '¡':'..X..|.....|..X..|..X..|..X..|..X..|..X..',
     "'":'..X..|..X..|.....|.....|.....|.....|.....'
   };
@@ -3743,7 +3744,7 @@
   }
   const keys = new Set();
   function update(dt) {
-    if (swap || cut) { P.moving = false; P.phase = 0; return; }      // cruzando una puerta (fundido) o en una mini escena: quieto
+    if (swap || cut || panel) { P.moving = false; P.phase = 0; return; }   // cruzando una puerta (fundido), en una mini escena o con el cuadro abierto: quieto
     let dx =(keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), dy = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0), k = 1;
     const jm = Math.hypot(joy.x, joy.y);
     if (dx || dy) P.tx = null;                                      // el teclado manda sobre el joystick y el ratón
@@ -3825,9 +3826,16 @@
 
   // ---------- controles: flechas/WASD; con ratón, clic (o arrastrar) adonde ir; en móvil, joystick ----------
   const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
-  const busy = () => !running || document.getElementById('settings').classList.contains('open') || document.getElementById('phoneUI').classList.contains('open');
+  const busy = () => !running || panel || document.getElementById('settings').classList.contains('open') || document.getElementById('phoneUI').classList.contains('open');
   addEventListener('keydown', e => {
-    if (e.code === 'KeyF' && !busy()) { if (moveBox1()) e.preventDefault(); return; }   // F: apartar la caja (si está al lado)
+    if (panel && running) {                                          // cuadro de luz abierto: W/S (o flechas) el DIF; F o Escape, cerrar
+      if (e.code === 'KeyF' || e.code === 'Escape') closeFuse();
+      else if (e.code === 'KeyW' || e.code === 'ArrowUp') setDif(true);
+      else if (e.code === 'KeyS' || e.code === 'ArrowDown') setDif(false);
+      else return;
+      e.preventDefault(); return;
+    }
+    if (e.code === 'KeyF' && !busy()) { if (moveBox1() || openFuse()) e.preventDefault(); return; }   // F: apartar la caja o abrir el cuadro (si está al lado)
     const k = KEYMAP[e.code]; if (!k || busy()) return;
     keys.add(k); moved = true; e.preventDefault();
   });
@@ -3845,9 +3853,12 @@
     mark = { x: P.tx, y: P.ty, t: performance.now() }; moved = true;
   }
   cv.addEventListener('pointerdown', e => {
+    const tp = toRoom(e), B = HALL_DEF.BOX1;
+    if (panel && running) { panelTap(tp); e.preventDefault(); return; }   // con el cuadro abierto: interruptores o cerrar
     if (busy()) return;
-    const tp = toRoom(e), B = HALL_DEF.BOX1;                       // tocar (o clicar) la caja 1 estando al lado la aparta
+    // tocar (o clicar) la caja 1 o el cuadro de luz estando al lado
     if (box1 === 'here' && room === HALL && tp.x > B.x - 4 && tp.x < B.x + B.w + 4 && tp.y > B.fy - B.h - 4 && tp.y < B.fy + B.d + 4 && moveBox1()) { e.preventDefault(); return; }
+    if (inBox(tp, HALL_DEF.FUSE, 5) && openFuse()) { e.preventDefault(); return; }
     if (e.pointerType !== 'mouse') return;                         // con el dedo ya no se va tocando: para eso está el joystick
     dragging = true; aim(e);
     try { cv.setPointerCapture(e.pointerId); } catch (_) {}
@@ -3880,7 +3891,15 @@
   // ---------- apagón: a los 5 s se va la luz de la casa (parpadea, se apaga con un chasquido) ----------
   const OUT_AT = 5, OUT_FLICK = [[0, 0.07, 0], [0.07, 0.2, 1], [0.2, 0.32, 0], [0.32, 0.5, 0.6], [0.5, 0.58, 0]];
   let outAt = OUT_AT;                                                // al continuar una partida guardada, la luz ya se fue (outAt < 0)
-  const powerAt = t => { if (t < outAt) return 1; const f = OUT_FLICK.find(([a, b]) => t - outAt >= a && t - outAt < b); return f ? f[2] : 0; };
+  const flickAt = (t, at) => { const f = OUT_FLICK.find(([a, b]) => t - at >= a && t - at < b); return f ? f[2] : 0; };
+  const powerAt = t => {
+    if (t < outAt) return 1;
+    if (back && t >= back.on) {                                      // el DIF subido: vuelve la luz (con un parpadeo) hasta que salta otra vez
+      if (t < back.off) { const u = t - back.on; return u < 0.08 ? 1 : u < 0.16 ? 0.25 : 1; }
+      return flickAt(t, back.off);
+    }
+    return flickAt(t, outAt);
+  };
   let outFx = 0;                                                     // sonidos del apagón ya hechos (0, 1 o 2)
   function outageSounds(t) {
     const GA = window.GameAudio; if (!GA) return;
@@ -3994,6 +4013,113 @@
     ctx.fillStyle = `rgba(200,192,178,${0.7 * (1 - u)})`;
     for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2, r = 2 + u * 9; ctx.fillRect(Math.round(x + Math.cos(a) * r * 1.4), Math.round(y + Math.sin(a) * r * 0.6), 2, 2); }
   }
+  // ---------- CUADRO DE LUZ (minijuego): con la caja ya apartada, F (o tocarlo) lo abre. Es un cuadro antiguo con muchos
+  // interruptores; el diferencial (DIF) es el más oscuro. Está bajado. Al subirlo la primera vez se cierra el cuadro y
+  // vuelve la luz unos 5 s: "Uff, menos mal"; en cuanto acaba de decirlo, la luz se va otra vez y el DIF salta:
+  // "Me cago en dios". Después, si se vuelve a subir, salta solo. ----------
+  const FUSE_NEAR = 16, UFF_HOLD = 3.25;
+  const FP = { x: 98, y: 10, w: 124, h: 140 };                       // el cuadro abierto, en px lógicos (centrado en pantalla)
+  const DIF = { x: 110, y: 46, w: 24, h: 32 };
+  const BRK = [];                                                    // los demás interruptores: 6 junto al DIF y 8 en la fila de abajo
+  for (let i = 0; i < 6; i++) BRK.push({ x: 138 + i * 12, y: 46, w: 11, h: 32 });
+  for (let i = 0; i < 8; i++) BRK.push({ x: 110 + i * 12, y: 92, w: 11, h: 32 });
+  let panel = false, panelCloseAt = null, difUp = false, difTripAt = null, fuse = 'idle', back = null;   // fuse: 'idle' | 'on' | 'done'
+  const brkUp = BRK.map((_, i) => i !== 9);
+  const inBox = (p, r, m) => p.x >= r.x - (m || 0) && p.x < r.x + r.w + (m || 0) && p.y >= r.y - (m || 0) && p.y < r.y + r.h + (m || 0);
+  function nearFuse() {
+    if (box1 !== 'moved' || room !== HALL || swap || cut || panel) return false;
+    const F = HALL_DEF.FUSE; return Math.hypot(P.x - (F.x + F.w + 4), P.y - (F.y + F.h / 2 + 2)) < FUSE_NEAR;
+  }
+  function openFuse() {
+    if (!nearFuse()) return false;
+    panel = true; panelCloseAt = null; P.moving = false; P.tx = null; keys.clear(); joyEnd();
+    const GA = window.GameAudio; if (GA) { GA.blip(240, 0.25, 'sawtooth', 0.03, 180); GA.blip(90, 0.08, 'square', 0.05, 60); }   // la puerta de chapa chirría
+    return true;
+  }
+  function closeFuse() { if (!panel) return; panel = false; panelCloseAt = null; const GA = window.GameAudio; if (GA) GA.blip(110, 0.08, 'square', 0.06, 70); }
+  function setDif(up) {
+    if (difUp === up || panelCloseAt) return;
+    difUp = up;
+    const GA = window.GameAudio; if (GA) GA.blip(up ? 520 : 300, 0.05, 'square', 0.08, up ? 900 : 140);   // clac
+    if (!up) return;
+    const t = tNow;
+    if (fuse === 'idle') {                                           // vuelve la luz... un rato
+      fuse = 'on'; back = { on: t + 0.7, off: Infinity, fx: {} }; panelCloseAt = t + 0.5;
+      say('Uff, menos mal', UFF_HOLD, t + 1.3, tt => {               // nada más decirlo: otra vez sin luz y el DIF salta
+        back.off = tt; difUp = false; fuse = 'done';
+        say('Me cago en dios', 2.6, tt + 0.7);
+      });
+    } else difTripAt = t + 0.2;                                      // ya no aguanta: salta solo
+  }
+  function fuseTick(t) {
+    if (panelCloseAt && t >= panelCloseAt) closeFuse();
+    if (difTripAt && t >= difTripAt) { difTripAt = null; difUp = false; const GA = window.GameAudio; if (GA) { GA.blip(70, 0.14, 'square', 0.1, 40); GA.blip(2400, 0.05, 'square', 0.03, 600); } }
+    if (!back) return;
+    const GA = window.GameAudio, fx = back.fx; if (!GA) return;
+    if (!fx.on && t >= back.on) { fx.on = 1; GA.blip(60, 0.5, 'sine', 0.06, 120); GA.blip(1800, 0.3, 'sine', 0.02, 1500); }   // zumbido: vuelve la luz y la tele
+    if (!fx.off && t >= back.off) { fx.off = 1; GA.blip(70, 0.18, 'square', 0.12, 40); setTimeout(() => GA.blip(1400, 0.45, 'sine', 0.05, 80), 120); }   // salta otra vez
+  }
+  function panelTap(p) {
+    if (inBox(p, DIF, 2)) { setDif(!difUp); return; }
+    const i = BRK.findIndex(b => inBox(p, b, 1));
+    if (i >= 0) { brkUp[i] = !brkUp[i]; const GA = window.GameAudio; if (GA) GA.blip(brkUp[i] ? 600 : 360, 0.04, 'square', 0.05, brkUp[i] ? 900 : 200); return; }   // no hacen nada
+    if (!inBox(p, FP) && !(p.x >= FP.x - 18 && p.x < FP.x && p.y >= FP.y && p.y < FP.y + FP.h)) closeFuse();
+  }
+  // etiqueta pequeña que sale del objeto (con la tecla F en PC). En px reales del lienzo, con la letra fina
+  function drawTag(ax, ay, label) {
+    const PD = window.PD; if (!PD) return;
+    const k = textK(), msg = PD.norm(label), key = TOUCH ? '' : 'F';
+    const pad = 2 * k, tw = PD.measure(msg) * k, kw = key ? PD.measure(key) * k + 4 * k : 0, gap = key ? 3 * k : 0;
+    const w = pad * 2 + kw + gap + tw, h = 7 * k + pad * 2 + (key ? 2 * k : 0), ph = 3 * k;
+    const X = Math.round(ax * RES), Y = Math.round(ay * RES) + 2 * k, bx = clamp(X - Math.round(w / 2), 2, W * RES - w - 2), by = Y + ph;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = 'rgba(14,9,8,0.88)'; ctx.fillRect(bx, by, w, h);
+    for (let i = 0; i < ph; i++) ctx.fillRect(X - i, Y + i, i * 2 + 1, 1);                    // pico hacia el objeto
+    let x = bx + pad;
+    if (key) { ctx.fillStyle = '#e8e0d0'; ctx.fillRect(x, by + pad, kw, 9 * k); PD.drawText(ctx, key, x + 2 * k, by + pad + k, '#140c0a', k); x += kw + gap; }
+    PD.drawText(ctx, msg, x, by + pad + (key ? k : 0), '#e8e0d0', k);
+    ctx.restore();
+  }
+  function drawFusePanel(t) {                                        // el cuadro abierto, a pantalla
+    const R = (x, y, w, h, c, a) => { ctx.globalAlpha = a == null ? 1 : a; ctx.fillStyle = c; ctx.fillRect(x, y, w, h); ctx.globalAlpha = 1; };
+    R(0, 0, W, H, '#000', 0.72);
+    const F = FP;
+    ctx.fillStyle = '#1a1612'; poly([[F.x, F.y + 3], [F.x - 18, F.y + 12], [F.x - 18, F.y + F.h - 9], [F.x, F.y + F.h - 3]]);   // la puerta, abierta
+    ctx.fillStyle = '#b3ab90'; poly([[F.x - 1, F.y + 5], [F.x - 16, F.y + 13], [F.x - 16, F.y + F.h - 10], [F.x - 1, F.y + F.h - 5]]);
+    R(F.x - 12, F.y + 60, 3, 14, '#5a564c');                                                     // el cierre
+    R(F.x - 2, F.y - 2, F.w + 4, F.h + 4, '#1a1612'); R(F.x, F.y, F.w, F.h, '#c8c0a4');           // la caja de chapa esmaltada, vieja
+    for (let i = 0; i < 160; i++) { const k = hash(i * 2.7 + 1); R(F.x + Math.floor(hash(i * 1.9) * F.w), F.y + Math.floor(hash(i * 3.1) * F.h), 1, 1, k > 0.8 ? '#8a5a3a' : k > 0.5 ? '#b1a98c' : '#d6cfb4', 0.8); }
+    [[F.x + 3, F.y + 3], [F.x + F.w - 6, F.y + 3], [F.x + 3, F.y + F.h - 6], [F.x + F.w - 6, F.y + F.h - 6]].forEach(([x, y]) => { R(x, y, 3, 3, '#7a7568'); R(x + 1, y, 1, 3, '#4a463e'); });   // tornillos
+    ctx.fillStyle = '#d9b62e'; poly([[F.x + F.w - 16, F.y + 15], [F.x + F.w - 10, F.y + 4], [F.x + F.w - 4, F.y + 15]]);       // pegatina de peligro con el rayo
+    R(F.x + F.w - 10, F.y + 7, 2, 3, '#1a1612'); R(F.x + F.w - 11, F.y + 10, 2, 1, '#1a1612'); R(F.x + F.w - 10, F.y + 11, 1, 3, '#1a1612');
+    R(F.x + 8, F.y + 18, F.w - 16, F.h - 40, '#34322d');                                          // el fondo, con los cables
+    [[118, '#6b4a2a'], [124, '#3a5a8a'], [130, '#7a7a7a']].forEach(([x, c]) => R(x, F.y + 18, 2, DIF.y - F.y - 18, c));
+    for (let i = 0; i < 8; i++) R(114 + i * 12, 124, 1, F.y + F.h - 22 - 124, ['#6b4a2a', '#3a5a8a', '#7a7a7a'][i % 3]);
+    [DIF.y, 92].forEach(y => {                                                                   // carril y la tira de papel con los nombres a boli
+      R(F.x + 9, y + 14, F.w - 18, 4, '#8f949a'); R(F.x + 10, y - 8, F.w - 20, 6, '#e8dfc4');
+      for (let x = F.x + 13; x < F.x + F.w - 14; x += 12) R(x + Math.floor(hash(x + y) * 2), y - 6, 4 + Math.floor(hash(x * 1.7 + y) * 4), 1, '#4a4a6a', 0.8);
+    });
+    BRK.forEach((b, i) => {                                                                      // interruptores viejos de plástico amarillento
+      R(b.x - 1, b.y - 1, b.w + 2, b.h + 2, '#2a2620'); R(b.x, b.y, b.w, b.h, '#d6cdb2'); R(b.x, b.y, b.w, 1, '#ece4cc');
+      R(b.x + 3, b.y + 9, 5, 14, '#9a917a');                                                     // ranura clara: se ve si la palanca está arriba o abajo
+      const ly = brkUp[i] ? b.y + 9 : b.y + 17; R(b.x + 3, ly, 5, 6, '#141210'); R(b.x + 3, ly, 5, 1, '#5a544a');
+      R(b.x + 2, b.y + b.h - 6, 7, 3, '#bdb498');
+    });
+    const D = DIF, up = difUp;                                                                   // el DIFERENCIAL: más oscuro y con DIF escrito
+    R(D.x - 1, D.y - 1, D.w + 2, D.h + 2, '#141210'); R(D.x, D.y, D.w, D.h, '#77716a'); R(D.x, D.y, D.w, 1, '#948d84');
+    if (window.PD) window.PD.drawText(ctx, 'DIF', D.x + 3, D.y + 2, '#efe8d8');
+    R(D.x + 6, D.y + 10, 12, 19, '#2a2622'); R(D.x + 7, D.y + 11, 10, 17, '#b9b2a2');                // ranura clara
+    const dy = up ? D.y + 11 : D.y + 20; R(D.x + 7, dy, 10, 8, '#0e0c0a'); R(D.x + 7, dy, 10, 1, '#5a544a');
+    R(D.x + 19, D.y + 11, 3, 3, up ? '#4caf50' : '#4a463e'); R(D.x + 19, D.y + 24, 3, 3, up ? '#4a463e' : '#c0392b');   // I arriba / O abajo
+    R(D.x + 2, D.y + D.h - 5, 4, 3, '#c9b23a');                                                  // botón de prueba
+    // ayuda (letra fina, debajo del cuadro)
+    const PD = window.PD; if (!PD) return;
+    const k = textK(), msg = PD.norm(TOUCH ? 'Toca el DIF para subirlo o bajarlo. Toca fuera para cerrar' : 'Clic o W/S: subir o bajar el DIF.  F: cerrar');
+    const w = PD.measure(msg) * k, x = Math.round(W * RES / 2 - w / 2), y = (F.y + F.h + 6) * RES;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = 'rgba(14,9,8,0.85)'; ctx.fillRect(x - 3 * k, y - 2 * k, w + 6 * k, 11 * k);
+    PD.drawText(ctx, msg, x, y, '#e8e0d0', k); ctx.restore();
+  }
+
   // zoom de cámara: se copia lo pintado y se amplía la parte que interesa
   const zoomCv = document.createElement('canvas'); zoomCv.width = W * RES; zoomCv.height = H * RES;
   const zctx = zoomCv.getContext('2d');
@@ -4020,8 +4146,14 @@
   }
 
   // ---------- bocadillos de cómic del protagonista (uno detrás de otro) ----------
-  // Al acabar el último, el móvil empieza a vibrar hasta que el jugador lo abre.
-  const SAYS = [{ text: 'Vaya, qué momento para que se vaya la luz', hold: 3.2 }, { text: 'Voy a preguntarle a mi madre', hold: 2.6 }];
+  // Al acabar el de "Voy a preguntarle a mi madre", el móvil empieza a vibrar hasta que el jugador lo abre.
+  // then(t): lo que pasa cuando un bocadillo termina. Los de más adelante se añaden con say()
+  const SAYS = [{ text: 'Vaya, qué momento para que se vaya la luz', hold: 3.2 },
+    { text: 'Voy a preguntarle a mi madre', hold: 2.6, then: t => { startBuzz(t); if (window.PDPhone) window.PDPhone.allowMom(); } }];   // ya puede escribirle a su madre
+  const SAYS_INTRO = SAYS.length;
+  function say(text, hold, at, then) { if (sayI >= SAYS.length) sayNext = Math.max(sayNext, at); SAYS.push({ text, hold, then }); }
+  // tamaño del píxel de la letra fina (bocadillos y avisos): lo más fino que se siga leyendo bien en esta pantalla
+  function textK() { const r = cv.getBoundingClientRect(), screenPx = Math.min(r.width / W, r.height / H) / RES; return clamp(Math.ceil(1.4 / Math.max(0.01, screenPx)), 1, RES); }
   const SAY_AFTER = 1.2, SAY_DT = 0.045, SAY_GAP = 0.8;              // el primero, 1,2 s después del apagón
   let sayI = 0, sayNext = OUT_AT + SAY_AFTER, sayAt = null, sayLines = null;
   const phoneOpen = () => document.getElementById('phoneUI').classList.contains('open');
@@ -4036,13 +4168,12 @@
     }
     const end = sayAt + S.text.length * SAY_DT + S.hold, a = 1 - clamp((t - end) / 0.5, 0, 1);
     if (a <= 0) {
-      sayI++; sayAt = null; sayNext = t + SAY_GAP;
-      if (sayI === SAYS.length) { startBuzz(t); if (window.PDPhone) window.PDPhone.allowMom(); }   // ya puede escribirle a su madre
+      sayI++; sayAt = null; sayNext = Math.max(sayNext, t + SAY_GAP);
+      if (S.then) S.then(t);
       return;
     }
     // Se dibuja en px reales del lienzo (×RES). k = tamaño de cada píxel de la letra: lo más fino que se siga leyendo bien
-    const r = cv.getBoundingClientRect(), screenPx = Math.min(r.width / W, r.height / H) / RES;   // px de pantalla por px del lienzo
-    const k = clamp(Math.ceil(1.4 / Math.max(0.01, screenPx)), 1, RES);
+    const k = textK();
     const pad = 3 * k, lh = 9 * k, w = Math.max(...sayLines.map(l => PD.measure(l))) * k + pad * 2, h = sayLines.length * lh - 2 * k + pad * 2;
     const CW = W * RES, px = P.x * RES, head = (P.y - 18) * RES;
     const bx = clamp(Math.round(px - w / 2), 3, CW - w - 3), by = Math.max(3, Math.round(head - h - 4 * k));
@@ -4158,7 +4289,7 @@
     const swapBlack = swapTick(t);
     const lvl = 0.94 + 0.06 * Math.sin(t * 1.6) - (hash(Math.floor(t * 18)) > 0.97 ? 0.25 : 0);
     const power = powerAt(t);                                            // luz eléctrica (1 = encendida); la del día no depende de ella
-    outageSounds(t); autosave(t);
+    outageSounds(t); autosave(t); fuseTick(t);
     ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;   // a partir de aquí, en px lógicos
 
     const inSala = room === SALA;
@@ -4268,12 +4399,10 @@
     ctx.drawImage(vig, 0, 0);
     for (let i = 0; i < 120; i++) { ctx.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)'; ctx.fillRect((Math.random() * W) | 0, (Math.random() * H) | 0, 1, 1); }
     drawBubble(t); buzzTick(t);
-    if (nearBox1() && window.PD) {                                   // aviso junto a la caja: cómo apartarla
-      const PD = window.PD, msg = PD.norm(TOUCH ? 'Toca la caja' : 'F  Mover caja'), w = PD.measure(msg);
-      const hx = Math.round(clamp(box1Center().x - w / 2, 4, W - w - 4)), hy = HALL_DEF.BOX1.fy + HALL_DEF.BOX1.d + 3;   // debajo de la caja (arriba van los bocadillos)
-      ctx.globalAlpha = 0.75; ctx.fillStyle = '#000'; ctx.fillRect(hx - 3, hy - 2, w + 6, 11); ctx.globalAlpha = 1;
-      PD.drawText(ctx, msg, hx, hy, '#e8e0d0');
-    }
+    // avisos de interacción: una etiqueta pequeña que sale del objeto (debajo; arriba van los bocadillos)
+    if (nearBox1()) drawTag(box1Center().x, HALL_DEF.BOX1.fy + HALL_DEF.BOX1.d, TOUCH ? 'Toca para mover' : 'Mover caja');
+    else if (nearFuse()) drawTag(HALL_DEF.FUSE.x + HALL_DEF.FUSE.w / 2, HALL_DEF.FUSE.y + HALL_DEF.FUSE.h, TOUCH ? 'Toca para abrir' : 'Abrir cuadro');
+    if (panel) drawFusePanel(t);
 
     // ayuda de controles: se va al empezar a moverse
     if (moved && movedAt == null) movedAt = t;
@@ -4298,7 +4427,8 @@
     const resumed = !!opts && opts.from === 'apagon', sp = resumed && opts.player;
     Object.assign(P, { x: 170, y: 74, dir: 'down', ang: Math.PI / 2, moving: false, phase: 0, tx: null, ty: null, stuck: 0 });   // junto al sofá, donde estaba el móvil
     room = SALA; swap = null;
-    box1 = 'here'; cut = null; if (!HALL.solid.includes(HALL_BOX1)) HALL.solid.push(HALL_BOX1);         // la caja vuelve delante del cuadro de luz
+    box1 = 'here'; cut = null; if (!HALL.solid.includes(HALL_BOX1)) HALL.solid.push(HALL_BOX1);
+    panel = false; panelCloseAt = null; difUp = false; difTripAt = null; fuse = 'idle'; back = null; brkUp.forEach((_, i) => { brkUp[i] = i !== 9; });   // cuadro de luz como al principio         // la caja vuelve delante del cuadro de luz
     const spRoom = sp && sp.room === HALL.name ? HALL : SALA;                                   // la habitación en la que estaba (sala o entrada)
     if (sp && isFinite(sp.x) && isFinite(sp.y) && !blocked(sp.x, sp.y, spRoom)) {              // donde estaba al guardarse (si sigue siendo un sitio válido)
       room = spRoom;
@@ -4307,7 +4437,7 @@
     flashOn = !!(window.PDPhone && window.PDPhone.flashlight);
     keys.clear(); mark = null; moved = false; movedAt = null; dragging = false;
     outAt = resumed ? -10 : OUT_AT; outFx = resumed ? 2 : 0; saved = resumed;
-    sayI = 0; sayNext = resumed ? FADE_IN + 1 : OUT_AT + SAY_AFTER; sayAt = null; stopBuzz();
+    SAYS.length = SAYS_INTRO; sayI = 0; sayNext = resumed ? FADE_IN + 1 : OUT_AT + SAY_AFTER; sayAt = null; stopBuzz();
     cv.hidden = false; running = true; joyEnd(); joyEl.hidden = !TOUCH;
     t0 = performance.now() / 1000; last = performance.now();
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
