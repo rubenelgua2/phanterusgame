@@ -3497,12 +3497,15 @@
     name: 'sala', solid: SOLID,
     walk: [{ x: FLOOR.x0 + 1, y: FLOOR.y0 + 1, w: FLOOR.x1 - FLOOR.x0 - 2, h: FLOOR.y1 - FLOOR.y0 - 2 }],
     floor: [{ x: FLOOR.x0, y: FLOOR.y0, w: FLOOR.x1 - FLOOR.x0, h: FLOOR.y1 - FLOOR.y0 }],
-    lit: [{ x: FLOOR.x0, y: WALL.y0 + WALL.t, w: FLOOR.x1 - FLOOR.x0, h: FLOOR.y1 - WALL.y0 - WALL.t }]
+    lit: [{ x: FLOOR.x0, y: WALL.y0 + WALL.t, w: FLOOR.x1 - FLOOR.x0, h: FLOOR.y1 - WALL.y0 - WALL.t },
+      { x: FLOOR.x1, y: DOOR_E.y - 2, w: 4, h: DOOR_E.h + 4 }]         // la mitad de dentro de la puerta grande
   };
   // caja 1 como bloque entero (tapa y frente, como se ve; igual que los muebles de la sala): no se puede pasar por detrás. Se quita al moverla
   const HALL_BOX1 = { x: HALL_DEF.BOX1.x, y: HALL_DEF.BOX1.fy - HALL_DEF.BOX1.h, w: HALL_DEF.BOX1.w, h: HALL_DEF.BOX1.h + HALL_DEF.BOX1.d };
   const HALL = {
-    name: 'entrada', walk: HALL_DEF.walk, floor: HALL_DEF.floor, lit: HALL_DEF.floor.concat(HALL_DEF.faces),
+    name: 'entrada', walk: HALL_DEF.walk, floor: HALL_DEF.floor,
+    lit: HALL_DEF.floor.concat(HALL_DEF.faces, [                     // + la mitad de dentro de cada puerta vista desde arriba (la linterna la alumbra)
+      { x: 264, y: 59, w: 6, h: 24 }, { x: 219, y: 141, w: 28, h: 5 }, { x: 124, y: 169, w: 30, h: 5 }, { x: 50, y: 101, w: 5, h: 39 }]),
     solid: [{ x: 93, y: 145, w: 5, h: 15 }, HALL_DEF.PILE, HALL_BOX1]   // cuadro de luz, montón de cajas 2 y caja 1
   };
 
@@ -3613,12 +3616,12 @@
     R(F.x0, FY0 - 1, F.x1 - F.x0, 1, '#957a33'); R(F.x0 - 1, F.y0, 1, F.y1 - F.y0, '#5c4a20');           // bordes de dentro
     R(F.x1, F.y0, 1, F.y1 - F.y0, '#5c4a20'); R(F.x0, F.y1, F.x1 - F.x0, 1, '#5c4a20');
 
-    // PUERTA GRANDE (pared derecha): aquí solo el hueco con el umbral de piedra y el marco. Las dos hojas (finas, de
-    // madera con su cristal) se pintan encima en cada fotograma, igual de cerradas que cuando se abren (drawDoorSwing)
+    // PUERTA GRANDE (pared derecha): aquí solo la mitad de dentro del hueco (umbral de piedra y marco); lo de fuera sigue
+    // siendo pared. Las dos hojas (finas, con su cristal) se pintan encima en cada fotograma, igual que al abrirse
     const DE = DOOR_E, ex = WL.x1 - WL.t;
-    R(ex - 1, DE.y - 2, WL.t + 2, 2, '#7c6244'); R(ex - 1, DE.y + DE.h, WL.t + 2, 2, '#7c6244');      // marco
-    R(ex, DE.y, WL.t, DE.h, '#6b6458'); R(ex + WL.t - 1, DE.y, 1, DE.h, '#4a443a');                     // umbral
-    for (let i = 0; i < 18; i++) Pt(ex + 1 + Math.floor(hash(i * 2.9) * (WL.t - 2)), DE.y + Math.floor(hash(i * 5.3) * DE.h), hash(i) > 0.5 ? '#7d766a' : '#5c564b');
+    R(ex - 1, DE.y - 2, 4, 2, '#7c6244'); R(ex - 1, DE.y + DE.h, 4, 2, '#7c6244');                    // marco
+    R(ex, DE.y, 3, DE.h, '#6b6458');                                                                     // umbral
+    for (let i = 0; i < 12; i++) Pt(ex + Math.floor(hash(i * 2.9) * 3), DE.y + Math.floor(hash(i * 5.3) * DE.h), hash(i) > 0.5 ? '#7d766a' : '#5c564b');
 
     // VENTANAL en la pared izquierda, a lo largo de la mesa (entra la luz de la tarde por cada hoja)
     const wx = WL.x0, PANE = WIN.h / 4;
@@ -3791,31 +3794,32 @@
     // CUADRO QUITADO en la pared del medio: la pintura que tapaba está menos gastada, con polvo en el borde y el clavo
     R(168, 102, 17, 8, '#c4a258'); R(168, 102, 17, 1, '#9c7d3c', 0.8); R(168, 109, 17, 1, '#9c7d3c', 0.6);
     R(168, 102, 1, 8, '#9c7d3c', 0.7); R(184, 102, 1, 8, '#9c7d3c', 0.7); Pt(176, 101, '#2a2016'); Pt(176, 100, '#6b5a40', 0.6);
-    // puertas vistas desde arriba (en las paredes de los lados y en las de abajo): la hoja FINA en el centro del grosor
-    // de la pared, umbral de piedra a los dos lados, jambas de madera, bisagras y pomo de latón por las dos caras.
-    // horiz = en una pared de abajo (la hoja va a lo ancho). street = la de la calle: madera más oscura y cerradura
+    // puertas vistas desde arriba (en las paredes de los lados y en las de abajo): solo se ve la MITAD DE DENTRO, la que
+    // da a la habitación (lo de fuera no lo vería el personaje: ahí sigue la pared). Hoja fina en el centro del grosor de
+    // la pared, umbral de piedra, jamba, bisagra y pomo de latón por el lado de dentro. Sin brillos: a oscuras solo se ve
+    // si la alumbra la linterna. horiz = en una pared de abajo. street = la de la calle: madera más oscura y cerradura
     const sill = (x, y, w, h) => { R(x, y, w, h, '#6b6458'); for (let i = 0; i < Math.floor(w * h / 6); i++) Pt(x + Math.floor(hash(i * 2.9 + x + y) * w), y + Math.floor(hash(i * 5.3 + y) * h), hash(i + x + y) > 0.5 ? '#7d766a' : '#5c564b'); };
     const topDoor = (x, y, len, horiz, street) => {
       const dark = street ? '#1e1108' : '#2a1a0c', wood = street ? '#5a3418' : '#7a5430', hi = street ? '#7a4a24' : '#9a6c40';
-      if (horiz) {
-        R(x - 2, y - 1, 2, 8, '#7c6244'); R(x + len, y - 1, 2, 8, '#7c6244'); R(x - 2, y - 1, 2, 1, '#98794f'); R(x + len, y - 1, 2, 1, '#98794f');   // jambas
-        sill(x, y, len, 6);
+      if (horiz) {                                                    // dentro = arriba (y menores)
+        R(x - 2, y - 1, 2, 5, '#7c6244'); R(x + len, y - 1, 2, 5, '#7c6244'); R(x - 2, y - 1, 2, 1, '#98794f'); R(x + len, y - 1, 2, 1, '#98794f');   // jambas
+        sill(x, y, len, 2);
         R(x, y + 2, len, 2, dark); R(x + 1, y + 2, len - 2, 1, wood); R(x + 2, y + 2, len - 6, 1, hi);                             // la hoja
-        R(x + 1, y + 1, 2, 1, '#8f949a'); R(x + 1, y + 4, 2, 1, '#8f949a');                                                           // bisagras
-        R(x + len - 5, y, 2, 2, '#c8a040'); R(x + len - 5, y + 4, 2, 2, '#c8a040'); Pt(x + len - 5, y, '#f0d890'); Pt(x + len - 5, y + 4, '#f0d890');   // pomos
-        if (street) { R(x + len - 8, y + 4, 1, 2, '#c8a040'); Pt(x + len - 8, y + 5, '#1a120a'); R(x + Math.floor(len / 2) - 4, y, 8, 1, '#3a2a1a', 0.5); }   // cerradura y felpudo asomando
-      } else {
-        R(x - 1, y - 2, 8, 2, '#7c6244'); R(x - 1, y + len, 8, 2, '#7c6244'); R(x - 1, y - 2, 8, 1, '#98794f');
-        sill(x, y, 6, len);
+        R(x + 1, y + 1, 2, 1, '#8f949a');                                                                                            // bisagra
+        R(x + len - 5, y, 2, 2, '#c8a040'); Pt(x + len - 5, y, '#e0c070');                                                          // pomo
+        if (street) R(x + len - 8, y, 1, 2, '#a88a3a');                                                                             // cerradura
+      } else {                                                        // dentro = izquierda (x menores)
+        R(x - 1, y - 2, 5, 2, '#7c6244'); R(x - 1, y + len, 5, 2, '#7c6244'); R(x - 1, y - 2, 5, 1, '#98794f');
+        sill(x, y, 2, len);
         R(x + 2, y, 2, len, dark); R(x + 2, y + 1, 1, len - 2, wood); R(x + 2, y + 2, 1, len - 6, hi);
-        R(x + 1, y + 1, 1, 2, '#8f949a'); R(x + 4, y + 1, 1, 2, '#8f949a');
-        R(x, y + len - 6, 2, 2, '#c8a040'); R(x + 4, y + len - 6, 2, 2, '#c8a040'); Pt(x, y + len - 6, '#f0d890'); Pt(x + 4, y + len - 6, '#f0d890');
+        R(x + 1, y + 1, 1, 2, '#8f949a');
+        R(x, y + len - 6, 2, 2, '#c8a040'); Pt(x, y + len - 6, '#e0c070');
       }
     };
     topDoor(266, 61, 20, false);                                                                       // la de la pared derecha
-    // puerta doble a la SALA (pared izquierda): hueco y marco; las hojas, en cada fotograma (drawDoorSwing)
+    // puerta doble a la SALA (pared izquierda; dentro = derecha): umbral y jambas de la mitad de dentro; las hojas, en cada fotograma
     const DW = D.DOOR_W, wx = 48;
-    R(wx - 1, DW.y - 2, 8, 2, '#7c6244'); R(wx - 1, DW.y + DW.h, 8, 2, '#7c6244'); sill(wx, DW.y, 6, DW.h); R(wx, DW.y, 1, DW.h, '#4a443a');
+    R(wx + 3, DW.y - 2, 4, 2, '#7c6244'); R(wx + 3, DW.y + DW.h, 4, 2, '#7c6244'); sill(wx + 3, DW.y, 3, DW.h);
     // puertas en las paredes de abajo: la de la derecha y la de la CALLE
     topDoor(221, 142, 24, true); topDoor(D.EXIT.x, 170, D.EXIT.w, true, true);
     // CUADRO DE LUZ en la pared izquierda del entrante (gris, metálico, con su tapa); la caja 1 lo tapa
@@ -4437,17 +4441,6 @@
     dctx.fillStyle = g; dctx.beginPath();
     [[54, DW.y + 7], [54, DW.y + DW.h - 7], [132 + sway, DW.y + DW.h + 5], [132 + sway, DW.y]].forEach(([x, y], i) => i ? dctx.lineTo(x, y) : dctx.moveTo(x, y));
     dctx.closePath(); dctx.fill(); dctx.fillStyle = 'rgba(0,0,0,0.9)'; if (doorOpenness(t, HALL) > 0) dctx.fillRect(48, DW.y, 6, DW.h); else dctx.fillRect(49, DW.y + 5, 4, DW.h - 10);   // los cristales de las hojas (o el hueco, si está abierta)
-    // a oscuras las puertas se siguen adivinando: un poco de su silueta (jambas, hoja y pomos) asoma de la negrura
-    dctx.fillStyle = 'rgba(0,0,0,0.3)';
-    dctx.fillRect(265, 59, 8, 24);                                   // pared derecha
-    dctx.fillRect(219, 141, 28, 8); dctx.fillRect(HALL_DEF.EXIT.x - 2, 169, HALL_DEF.EXIT.w + 4, 8);   // las de abajo
-    dctx.fillRect(47, DW.y - 2, 8, DW.h + 4);                       // la doble, a la sala
-    // la de la CALLE: por debajo se cuela una rendija de luz del día
-    const E = HALL_DEF.EXIT, ecx = E.x + E.w / 2;
-    dctx.translate(ecx, 171); dctx.scale(1, 0.4);                    // charco de luz ovalado, que se apaga hacia dentro
-    const sg = dctx.createRadialGradient(0, 0, 2, 0, 0, E.w * 0.75);
-    sg.addColorStop(0, `rgba(0,0,0,${0.55 * lvl})`); sg.addColorStop(1, 'rgba(0,0,0,0)');
-    dctx.fillStyle = sg; dctx.fillRect(-E.w, -E.w * 1.2, E.w * 2, E.w * 1.2);
     dctx.restore();
   }
   // luces de la entrada (sin ventanas): lámpara de techo hasta el apagón; después, a oscuras, solo la claridad del
@@ -4462,7 +4455,6 @@
     const dl = ctx.createLinearGradient(54, 0, 130, 0);                // se va apagando hacia dentro, sin borde
     dl.addColorStop(0, `rgba(255,236,200,${0.12 * lvl})`); dl.addColorStop(0.45, `rgba(255,236,200,${0.05 * lvl})`); dl.addColorStop(1, 'rgba(255,236,200,0)');   // solo tinte cálido: la luz ya recorta la oscuridad
     ctx.fillStyle = dl; poly([[54, DW.y + 7], [54, DW.y + DW.h - 7], [130 + sway, DW.y + DW.h + 4], [130 + sway, DW.y + 1]]);
-    const E = HALL_DEF.EXIT; ctx.fillStyle = `rgba(255,236,200,${0.3 * lvl})`; ctx.fillRect(E.x + 1, 171, E.w - 2, 1);   // rendija bajo la puerta de la calle
   }
 
   const FADE_IN = 1.6, TOUCH = matchMedia('(pointer: coarse)').matches;
