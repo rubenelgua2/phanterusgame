@@ -3543,19 +3543,20 @@
   // Muebles según el dibujo: la cama con el cabecero contra la pared de abajo y una mesita a cada lado, una caja grande
   // llena de ropa arriba a la izquierda y marcas de suciedad de los muebles que ya no están (mudanza).
   const MOM_DEF = {
-    caps: [{ x: 24, y: 24, w: 272, h: 6 }, { x: 24, y: 24, w: 6, h: 132 }, { x: 290, y: 24, w: 6, h: 132 }, { x: 24, y: 150, w: 272, h: 6 }],
-    faces: [{ x: 30, y: 30, w: 260, h: 20 }],
-    floor: [{ x: 30, y: 50, w: 260, h: 100 }],
-    walk: [{ x: 31, y: 51, w: 258, h: 98 }],
+    caps: [{ x: 54, y: 24, w: 242, h: 6 }, { x: 54, y: 24, w: 6, h: 132 }, { x: 290, y: 24, w: 6, h: 132 }, { x: 54, y: 150, w: 242, h: 6 }],
+    faces: [{ x: 60, y: 30, w: 230, h: 20 }],
+    floor: [{ x: 60, y: 50, w: 230, h: 100 }],
+    walk: [{ x: 61, y: 51, w: 228, h: 98 }],
     BALC: { y: 76, h: 40 },                                          // puerta doble al balcón (pared izquierda)
+    WX: 54,                                                          // x de la pared izquierda: a su izquierda, fuera, se ve el balcón
     BED: { x: 120, y: 92, w: 46, h: 58 }, NIGHT: [{ x: 104, y: 136, w: 14, h: 13 }, { x: 168, y: 136, w: 14, h: 13 }],
-    BOX: { x: 44, fy: 52, w: 22, d: 12, h: 10 },                     // caja grande con ropa
+    BOX: { x: 70, fy: 52, w: 22, d: 12, h: 10 },                     // caja grande con ropa
     DOOR_S: { x: 236, w: 24 }, DOOR_BATH: { x: 236, w: 22 }
   };
   const MOM = {
     name: 'madre', walk: MOM_DEF.walk, floor: MOM_DEF.floor,
-    lit: MOM_DEF.floor.concat(MOM_DEF.faces, [{ x: 234, y: 150, w: 28, h: 3 }, { x: 27, y: 74, w: 4, h: 44 }]),
-    solid: [{ x: 102, y: 92, w: 82, h: 58 }, { x: 43, y: 40, w: 24, h: 26 }]   // cama con sus mesitas; la caja de ropa
+    lit: MOM_DEF.floor.concat(MOM_DEF.faces, [{ x: 234, y: 150, w: 28, h: 3 }, { x: 57, y: 74, w: 4, h: 44 }]),
+    solid: [{ x: 102, y: 92, w: 82, h: 58 }, { x: 69, y: 40, w: 24, h: 26 }]   // cama con sus mesitas; la caja de ropa
   };
   // El baño, pequeño (unos 2 m²): azulejo blanco con una cenefa de mosaico, váter, lavabo con mueble y espejo, plato de ducha
   const BATH_DEF = {
@@ -3570,7 +3571,21 @@
     lit: BATH_DEF.floor.concat(BATH_DEF.faces, [{ x: 148, y: 120, w: 26, h: 3 }]),
     solid: [{ x: 130, y: 62, w: 16, h: 22 }, { x: 150, y: 62, w: 26, h: 14 }, { x: 176, y: 62, w: 20, h: 32 }]   // váter, lavabo, ducha
   };
-  const ROOMS = { sala: SALA, entrada: HALL, madre: MOM, bano: BATH };
+  // ---------- BALCÓN (BA1): une el cuarto de la madre (puerta doble al este, abierta) y el salón (puerta de cristal al sur).
+  // Suelo de granito rojo en baldosa, pared norte de piedra amarillenta (la típica de las casas españolas) y, al oeste,
+  // barandilla blanca de aluminio por la que se ve la calle, abajo.
+  const BALC_DEF = {
+    caps: [{ x: 150, y: 20, w: 56, h: 6 }, { x: 200, y: 20, w: 6, h: 106 }, { x: 150, y: 120, w: 56, h: 6 }],
+    faces: [{ x: 150, y: 26, w: 50, h: 20 }],
+    floor: [{ x: 152, y: 46, w: 48, h: 74 }],
+    walk: [{ x: 159, y: 47, w: 40, h: 72 }],
+    EAST: { x: 200, y: 60, h: 40 }, SOUTH: { x: 164, w: 26 }, POT: { x: 186, y: 47, w: 12, h: 11 }
+  };
+  const BALC = {
+    name: 'balcon', walk: BALC_DEF.walk, floor: BALC_DEF.floor, lit: BALC_DEF.floor.concat(BALC_DEF.faces),
+    solid: [{ x: 184, y: 46, w: 16, h: 13 }]                         // la maceta grande del rincón
+  };
+  const ROOMS = { sala: SALA, entrada: HALL, madre: MOM, bano: BATH, balcon: BALC };
   let room = SALA;
   const inRects = (rs, x, y) => rs.some(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
   const boxOf = rs => ({ x0: Math.min(...rs.map(r => r.x)), y0: Math.min(...rs.map(r => r.y)), x1: Math.max(...rs.map(r => r.x + r.w)), y1: Math.max(...rs.map(r => r.y + r.h)) });
@@ -3648,8 +3663,8 @@
     for (let y = 0; y < 4; y++) R(DN.x, gy + y, DN.w, 1, `rgb(${214 - y * 4},${226 - y * 3},${234 - y * 2})`);   // cielo
     R(DN.x, gy + 4, DN.w, 1, '#3a3a3e'); R(DN.x, gy + 8, DN.w, 1, '#3a3a3e');                                  // barandilla
     for (let x = DN.x + 1; x < DN.x + DN.w; x += 3) R(x, gy + 5, 1, 3, '#4a4a50');
-    for (let y = gy + 9; y < dy1; y++) R(DN.x, y, DN.w, 1, (y - gy) % 4 === 0 ? '#a35f43' : '#c97f5c');        // suelo del balcón
-    for (let x = DN.x + 3; x < DN.x + DN.w; x += 6) R(x, gy + 9, 1, dy1 - gy - 9, '#a35f43');
+    for (let y = gy + 9; y < dy1; y++) R(DN.x, y, DN.w, 1, (y - gy) % 5 === 0 ? GRANITE.grout : GRANITE.base[(y >> 2) & 1]);   // suelo del balcón: granito rojo
+    for (let x = DN.x + 3; x < DN.x + DN.w; x += 5) R(x, gy + 9, 1, dy1 - gy - 9, GRANITE.grout);
     R(DN.x + DN.w - 6, gy + 10, 5, 4, '#7a3f26'); R(DN.x + DN.w - 7, gy + 7, 7, 4, '#3d7a45'); Pt(DN.x + DN.w - 5, gy + 7, '#5fa060');   // maceta
     R(DN.x, gy, DN.w, gh, '#fff3d6', 0.22);                                                                        // a pleno sol
     R(DN.x + DN.w / 2 - 1, dy0 + 1, 2, gh, '#7c6244');                                                // dos hojas de cristal
@@ -3784,7 +3799,7 @@
     const v = vig.getContext('2d'), g = v.createRadialGradient(W / 2, H / 2 + 6, 70, W / 2, H / 2 + 6, 200);
     g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.6, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0.85)');
     v.fillStyle = g; v.fillRect(0, 0, W, H);
-    buildHall(); buildMom(); buildBath();
+    buildHall(); buildBalc(); buildMom(); buildBath();   // el balcón antes que el cuarto: el cuarto lo ve por la puerta
   }
 
   // ---------- fondo de la ENTRADA: paredes, suelo y puertas (sin muebles todavía) ----------
@@ -3949,13 +3964,12 @@
       }
       [[1, 1], [w - 3, 1], [1, h - 3], [w - 3, h - 3]].forEach(([dx, dy]) => R(x + dx, y + dy, 2, 2, '#4a3a28', 0.5));   // patas
     };
-    dust(80, 51, 44, 8, 1); dust(86, 139, 15, 10, 2); dust(275, 62, 13, 56, 3);
-    // la puerta doble del BALCÓN (pared izquierda): abierta; por el hueco se ve el suelo de barro del balcón al sol
-    const BA = D.BALC;
-    R(23, BA.y - 2, 8, 2, '#7c6244'); R(23, BA.y + BA.h, 8, 2, '#7c6244');
-    for (let y = BA.y; y < BA.y + BA.h; y++) R(24, y, 6, 1, (y - BA.y) % 4 === 0 ? '#a35f43' : '#c97f5c');
-    R(24, BA.y, 6, BA.h, '#fff3d6', 0.25); R(14, BA.y - 4, 10, BA.h + 8, '#c97f5c', 0.85); R(14, BA.y - 4, 10, BA.h + 8, '#fff3d6', 0.25);   // el balcón, fuera
-    R(14, BA.y - 4, 1, BA.h + 8, '#3a3a3e'); for (let y = BA.y - 3; y < BA.y + BA.h + 4; y += 3) R(15, y, 2, 1, '#4a4a50');                   // su barandilla
+    dust(96, 51, 40, 8, 1); dust(86, 139, 15, 10, 2); dust(275, 62, 13, 56, 3);
+    // la puerta doble del BALCÓN (pared izquierda): abierta; por el hueco se ve el granito del balcón al sol
+    const BA = D.BALC, WX = D.WX;
+    R(WX - 1, BA.y - 2, 8, 2, '#7c6244'); R(WX - 1, BA.y + BA.h, 8, 2, '#7c6244');
+    for (let y = BA.y; y < BA.y + BA.h; y++) R(WX, y, 6, 1, (y - BA.y) % 5 === 0 ? GRANITE.grout : GRANITE.base[(y >> 2) & 1]);
+    R(WX, BA.y, 6, BA.h, '#fff3d6', 0.2);
     // CAMA de matrimonio con el cabecero contra la pared de abajo: pie arriba, colcha, sábana doblada y dos almohadas abajo
     const BD = D.BED;
     R(BD.x - 1, BD.y - 1, BD.w + 2, BD.h + 1, '#3a2618'); R(BD.x - 1, BD.y - 1, BD.w + 2, 2, '#5a3a20');                       // marco y pie
@@ -3981,6 +3995,223 @@
     // la puerta del BAÑO al fondo a la derecha y la de la entrada (abajo a la derecha, por donde se llega)
     frontDoor(D.DOOR_BATH.x, D.DOOR_BATH.w, FC, true);
     bottomDoor(D.DOOR_S.x, 150, D.DOOR_S.w);
+    sepia();
+    // EL BALCÓN, fuera, a la izquierda: es el mismo dibujo que se ve al salir (granito, pared de piedra, barandilla, maceta,
+    // la puerta de cristal del salón), colocado donde está de verdad: su pared este es la pared izquierda del cuarto
+    const bx = D.WX - BALC_DEF.EAST.x, by = D.BALC.y - BALC_DEF.EAST.y, BC = BALC_DEF.caps;
+    const y0 = BC[0].y, y1 = BC[2].y + BC[2].h;
+    b.drawImage(balcBg, 0, y0, BALC_DEF.EAST.x, y1 - y0, bx, y0 + by, BALC_DEF.EAST.x, y1 - y0);
+    for (let k = 0; k < 4; k++) { b.globalAlpha = 0.22 - k * 0.05; b.fillStyle = '#000'; b.fillRect(D.WX - 1 - k, y0 + by + 6, 1, y1 - y0 - 12); }   // sombra de la casa
+    b.globalAlpha = 1;
+  }
+
+  // ---------- fondo del BALCÓN ----------
+  // colores del granito rojo (suelo) y de la piedra de la pared: los usan también la sala y el cuarto al verlo por la puerta
+  const GRANITE = { base: ['#9a4a3a', '#8e4434'], grout: '#6a3024', speck: ['#b86a58', '#5e2a22', '#c88a78', '#7a382c'] };
+  const STONE = { base: '#c49a62', peb: ['#d9b77e', '#b08a52', '#e6cfa0', '#a07a46', '#cfa66c', '#8e6a3e'] };
+  // ---------- LA CALLE vista desde arriba (desde el balcón): calzada, bordillo y acera de ladrillo como la de la foto ----------
+  const STREET = { curb: 86, walk: 88, edge: 112, line: 43, dx: 40 };   // x: bordillo, acera, fin de la acera (la casa); línea central; dx: corrida a la derecha
+  function streetBase(b, R, Pt) {
+    const S = STREET;
+    b.save(); b.translate(S.dx, 0);
+    R(-S.dx, 0, S.walk + S.dx, H, '#454547');                                                   // asfalto
+    for (let i = 0; i < 160; i++) Pt(-S.dx + Math.floor(hash(i * 6.1) * S.dx), Math.floor(hash(i * 2.9) * H), ['#505053', '#3c3c3f'][i & 1], 0.8);
+    R(-S.dx, 0, 14, H, '#9a948a'); for (let y = 0; y < H; y += 6) R(-S.dx, y, 14, 1, '#7e7870');   // la acera de enfrente (baldosa gris)
+    R(-S.dx + 14, 0, 2, H, '#8f8c86'); R(-S.dx + 16, 0, 1, H, '#2a2a2c', 0.8);                    // y su bordillo
+    for (let i = 0; i < 520; i++) Pt(Math.floor(hash(i * 1.7) * S.curb), Math.floor(hash(i * 2.3) * H), ['#505053', '#3c3c3f', '#4a4a4d'][Math.floor(hash(i * 3.3) * 3)], 0.8);
+    for (let i = 0; i < 6; i++) { const y = Math.floor(hash(i * 7.1) * H), x = Math.floor(hash(i * 4.4) * 70); for (let k = 0; k < 14; k++) Pt(x + k + Math.floor(Math.sin(k * 0.8 + i) * 2), y + Math.floor(k * 0.4), '#2f2f31', 0.8); }   // grietas
+    R(68, 0, 18, H, '#3e3e40', 0.35);                                                           // la rodada junto a la acera, más gastada
+    for (let y = 2; y < H; y += 16) R(S.line, y, 2, 9, '#d8d4c4');                              // línea discontinua
+    R(S.curb, 0, 2, H, '#8f8c86'); R(S.curb, 0, 1, H, '#b0ada6'); R(S.curb - 1, 0, 1, H, '#2a2a2c', 0.8);   // bordillo
+    // acera: paños de adoquín (ladrillo en espiga, rojizo y beis) enmarcados por tiras grises; alguna tapa oscura
+    const BR = ['#c98a6a', '#b97a5c', '#d49a78', '#a86c50', '#c48466', '#d8a684'];
+    R(S.walk, 0, S.edge - S.walk, H, '#7a5a48');
+    for (let y = 0; y < H; y += 2) for (let x = S.walk; x < S.edge; x += 4) {
+      const off = ((y / 2) & 1) * 2, bx = x + off, c = BR[Math.floor(hash(bx * 1.3 + y * 7.7) * BR.length)];
+      if (((x + y) >> 2) & 1) R(bx, y, 3, 1, c); else { R(bx, y, 1, 2, c); R(bx + 2, y, 1, 2, c); }   // espiga: unos a lo largo y otros de canto
+    }
+    for (let y = 0; y < H; y += 34) R(S.walk, y, S.edge - S.walk, 2, '#8e8a84');                   // tiras grises entre paños
+    R(S.walk, 0, 2, H, '#8e8a84'); R(S.edge - 2, 0, 2, H, '#7a7672');                              // junto al bordillo y junto a la casa
+    [[96, 50], [100, 120]].forEach(([x, y]) => { R(x, y, 8, 8, '#3a3a3c'); R(x + 1, y + 1, 6, 6, '#2a2a2c'); for (let k = 2; k < 7; k += 2) R(x + 1, y + k, 6, 1, '#4a4a4c'); });   // tapas de registro
+    R(-S.dx, 0, S.edge + S.dx, H, '#d8e0e8', 0.1);                                               // un poco de bruma: está lejos, abajo
+    b.restore();
+  }
+  // ---------- COCHES vistos desde arriba (pixel art detallado): carrocería con brillo y sombra, capó con sus nervios,
+  // parabrisas y luna trasera con reflejo, techo, retrovisores, ruedas, faros, pilotos, matrícula e intermitentes ----------
+  const CAR = { w: 16, h: 30 };
+  const shadeHex = (hex, f) => { const n = parseInt(hex.slice(1), 16), c = [n >> 16, (n >> 8) & 255, n & 255].map(v => Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f)); return `rgb(${c[0]},${c[1]},${c[2]})`; };
+  function makeCar(color) {                                          // de frente hacia arriba; con el mismo tinte sepia que el fondo
+    const c = document.createElement('canvas'); c.width = CAR.w + 3; c.height = CAR.h + 4;
+    const g = c.getContext('2d'), R = (x, y, w, h, col, a) => { g.globalAlpha = a == null ? 1 : a; g.fillStyle = col; g.fillRect(x, y, w, h); g.globalAlpha = 1; };
+    const hi = shadeHex(color, 0.35), lt = shadeHex(color, 0.15), dk = shadeHex(color, -0.3), dd = shadeHex(color, -0.55), GL = '#1c2732', GH = '#6d8396';
+    // sombra en el asfalto: suave (núcleo más oscuro y borde que se difumina), un poco hacia la derecha y abajo por el sol de la tarde
+    R(3, 2, CAR.w - 1, CAR.h + 1, '#000', 0.12); R(2, 3, CAR.w + 1, CAR.h - 1, '#000', 0.12); R(3, 3, CAR.w - 1, CAR.h - 1, '#000', 0.14);
+    R(0, 4, 2, 4, '#0e0e0e'); R(CAR.w, 4, 2, 4, '#0e0e0e'); R(0, 21, 2, 4, '#0e0e0e'); R(CAR.w, 21, 2, 4, '#0e0e0e');   // ruedas asomando
+    R(1, 1, CAR.w - 1, CAR.h - 1, '#121212'); R(2, 0, CAR.w - 3, CAR.h + 1, '#121212');          // contorno (esquinas redondeadas)
+    R(2, 1, CAR.w - 3, CAR.h - 1, color);                                                         // carrocería
+    R(2, 2, 1, CAR.h - 3, hi); R(3, 2, 1, CAR.h - 3, lt); R(CAR.w - 3, 2, 1, CAR.h - 3, dk); R(CAR.w - 2, 2, 1, CAR.h - 3, dd);   // brillo a la izquierda, sombra a la derecha
+    R(2, 1, CAR.w - 3, 1, dk);                                                                    // paragolpes delantero
+    R(2, 1, 3, 1, '#f2eed6'); R(CAR.w - 4, 1, 3, 1, '#f2eed6'); R(6, 1, 4, 1, '#2a2a2a');          // faros y rejilla
+    R(8, 3, 1, 6, hi); R(5, 4, 1, 4, dk, 0.5); R(11, 4, 1, 4, dk, 0.5);                           // nervios del capó
+    R(4, 9, CAR.w - 7, 1, GL); R(3, 10, CAR.w - 5, 3, GL); R(4, 10, 2, 1, GH); R(6, 11, 2, 1, GH); R(3, 13, CAR.w - 5, 1, dd);   // parabrisas con reflejo
+    R(0, 10, 2, 1, dk); R(CAR.w, 10, 2, 1, dk);                                                   // retrovisores
+    R(4, 14, CAR.w - 7, 7, lt); R(4, 14, CAR.w - 7, 1, hi); R(5, 15, 1, 5, hi, 0.6);              // techo
+    R(2, 17, 1, 1, dd); R(CAR.w - 3, 17, 1, 1, dd);                                               // línea de puertas
+    R(3, 21, CAR.w - 5, 1, dd); R(4, 22, CAR.w - 7, 2, GL); R(5, 22, 2, 1, GH);                   // luna trasera
+    R(3, 24, CAR.w - 5, 1, dk); R(2, CAR.h - 1, CAR.w - 3, 1, dk);                                 // maletero y paragolpes trasero
+    R(2, CAR.h - 1, 3, 1, '#b01e1e'); R(CAR.w - 4, CAR.h - 1, 3, 1, '#b01e1e'); R(7, CAR.h - 1, 2, 1, '#d8d4c4');   // pilotos y matrícula
+    const mask = document.createElement('canvas'); mask.width = c.width; mask.height = c.height; mask.getContext('2d').drawImage(c, 0, 0);
+    g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgb(240,228,208)'; g.fillRect(0, 0, c.width, c.height);
+    g.globalCompositeOperation = 'destination-in'; g.drawImage(mask, 0, 0);
+    return c;
+  }
+  const CAR_COLORS = ['#e8e8e4', '#c23a32', '#9aa0a6', '#2a2a2e', '#3a6a4a', '#d8b860'];
+  const carSprites = {};
+  const carSprite = col => carSprites[col] || (carSprites[col] = makeCar(col));
+  const PARKED = { x: 64, y: 92, color: '#3d5e9a' };                // el coche azul, parado en el carril de subida con las cuatro intermitentes
+  // lights: esquinas cuyo intermitente se enciende (0 delante izq., 1 delante dcha., 2 detrás izq., 3 detrás dcha.,
+  // en el sentido de la marcha). ang: giro de la carrocería al cambiar de carril
+  function drawCar(col, x, y, down, lights, ang) {                   // x, y = esquina de arriba a la izquierda
+    const sp = carSprite(col), cx = x + CAR.w / 2, cy = y + CAR.h / 2;
+    ctx.save();
+    ctx.translate(ang ? cx : Math.round(cx), ang ? cy : Math.round(cy));
+    if (ang) ctx.rotate(ang);
+    if (down) ctx.scale(1, -1);                                      // los que bajan: el mismo coche, dado la vuelta (la luz sigue viniendo de la izquierda)
+    ctx.drawImage(sp, -CAR.w / 2, -CAR.h / 2);
+    if (lights && lights.length) {                                   // intermitentes naranjas, con su brillo
+      const L = [[-CAR.w / 2 + 2, -CAR.h / 2 + 1], [CAR.w / 2 - 3, -CAR.h / 2 + 1], [-CAR.w / 2 + 2, CAR.h / 2 - 1], [CAR.w / 2 - 3, CAR.h / 2 - 1]];
+      ctx.globalCompositeOperation = 'screen';
+      lights.forEach(i => {
+        const [lx, ly] = L[i], g = ctx.createRadialGradient(lx + 0.5, ly + 0.5, 0, lx + 0.5, ly + 0.5, 5);
+        g.addColorStop(0, 'rgba(255,170,40,0.7)'); g.addColorStop(1, 'rgba(255,170,40,0)');
+        ctx.fillStyle = g; ctx.fillRect(lx - 5, ly - 5, 11, 11);
+      });
+      ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#ffb030';
+      lights.forEach(i => ctx.fillRect(L[i][0], L[i][1], 1, 1));
+    }
+    ctx.restore();
+  }
+  // TRÁFICO (poco y al azar): pasan coches en los dos sentidos, de colores y velocidades distintas, a ratos sueltos y a
+  // veces dos seguidos. Los que suben se encuentran al coche azul parado: lo ven con tiempo, y si viene alguien de frente
+  // frenan y esperan detrás dejando distancia; cuando no viene nadie ponen el intermitente izquierdo, se abren al otro
+  // carril (terminan de abrirse antes de llegar a él), le adelantan con margen, ponen el derecho y vuelven a su carril.
+  let traffic = [], nextCar = 1.5;
+  const LANE = { down: 14, up: 62, pass: 34 };                       // x de cada carril (esquina izquierda del coche) y por dónde se adelanta
+  const OV = { look: 120, wait: 16, signal: 0.6, shift: 1.0, clear: 14, back: 0.35, oncoming: 190 };
+  // look: a qué distancia del coche azul empieza a decidir · wait: hueco que deja si tiene que esperar · clear: margen al volver
+  // oncoming: lo lejos que mira por si viene alguien de frente
+  const blinkOn = t => Math.floor(t / 0.35) % 2 === 0;
+  const overtaking = () => traffic.some(o => !o.down && (o.phase === 'shiftL' || o.phase === 'pass'));
+  function spawnCar(down, back = 0) {
+    const v = 30 + Math.random() * 24;
+    traffic.push({ down, x: down ? LANE.down : LANE.up, y: down ? -CAR.h - 6 - back : H + 6 + back, v, v0: v, ang: 0, phase: 'cruise', pt: 0, col: CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)] });
+  }
+  function trafficTick(t, dt) {
+    if (t >= nextCar) {
+      const down = Math.random() < 0.5;
+      // la entrada de su carril tiene que estar libre, y no baja nadie mientras otro está adelantando por su carril
+      const busy = traffic.some(o => o.down === down && (down ? o.y < 12 : o.y > H - CAR.h - 12)) || (down && overtaking());
+      if (busy) nextCar = t + 0.6;
+      else {
+        spawnCar(down);
+        if (Math.random() < 0.2) spawnCar(down, CAR.h + 20 + Math.random() * 30);   // a veces vienen dos seguidos
+        nextCar = t + 2.5 + Math.random() * 8;
+      }
+    }
+    for (const c of traffic) {
+      let want = c.v0;
+      // no echarse encima del de delante (mismo sentido y mismo carril)
+      for (const o of traffic) {
+        if (o === c || o.down !== c.down || Math.abs(o.x - c.x) >= CAR.w || (c.down ? o.y < c.y : o.y > c.y)) continue;
+        const gap = c.down ? o.y - (c.y + CAR.h) : c.y - (o.y + CAR.h);
+        if (gap < 36) want = Math.min(want, Math.max(0, (gap - 10) * 1.6));
+      }
+      if (!c.down) {
+        const gap = c.y - (PARKED.y + CAR.h);                        // hueco hasta la trasera del coche azul
+        const oncoming = () => traffic.some(o => o.down && o.y + CAR.h > c.y - OV.oncoming && o.y < c.y + CAR.h + 4);
+        // el que va detrás de otro que aún no ha adelantado espera su turno (le sigue a distancia)
+        const ahead = o => o !== c && !o.down && o.y < c.y, gapTo = o => c.y - (o.y + CAR.h);
+        const queued = traffic.some(o => ahead(o) && ((o.y > PARKED.y && (o.phase === 'cruise' || o.phase === 'signalL')) ||
+          ((o.phase === 'shiftL' || o.phase === 'pass') && gapTo(o) < 40)));      // ni se mete en el carril de otro que ya está adelantando
+        if (c.phase === 'cruise' && gap < OV.look && gap > -CAR.h) {
+          if (!queued && !oncoming()) { c.phase = 'signalL'; c.pt = t; }
+          else want = Math.min(want, Math.max(0, (gap - OV.wait) * 1.4));   // viene alguien (o no es su turno): frena y espera detrás, con distancia
+        }
+        if (c.phase === 'signalL') {
+          want = Math.min(want, Math.max(2, (gap - OV.wait - 4) * 1.2), c.v0 * 0.75);
+          if (t - c.pt >= OV.signal) { if (oncoming()) { c.phase = 'cruise'; } else { c.phase = 'shiftL'; c.pt = t; } }   // si aparece alguien, se queda
+        }
+        if (c.phase === 'shiftL' || c.phase === 'shiftR') {
+          const u = clamp((t - c.pt) / OV.shift, 0, 1), [a, b] = c.phase === 'shiftL' ? [LANE.up, LANE.pass] : [LANE.pass, LANE.up];
+          c.x = a + (b - a) * ease(u);
+          c.ang = (c.phase === 'shiftL' ? -1 : 1) * 0.13 * Math.sin(Math.PI * u);    // el morro apunta un poco hacia donde va
+          if (c.phase === 'shiftL' && u < 0.85) want = Math.min(want, Math.max(3, (gap - 16) * 1.5));   // no llegar al coche azul a medio abrirse
+          if (u >= 1) { c.ang = 0; c.phase = c.phase === 'shiftL' ? 'pass' : 'done'; c.pt = t; }
+        }
+        if (c.phase === 'pass' && c.y + CAR.h < PARKED.y - OV.clear) { c.phase = 'signalR'; c.pt = t; }
+        if (c.phase === 'signalR' && t - c.pt >= OV.back && !traffic.some(o => ahead(o) && o.x > LANE.pass + 4 && gapTo(o) < 18)) { c.phase = 'shiftR'; c.pt = t; }
+      }
+      c.v += clamp(want - c.v, -70 * dt, 26 * dt);                    // frena y acelera poco a poco
+      c.y += (c.down ? 1 : -1) * c.v * dt;
+    }
+    traffic = traffic.filter(c => c.y > -CAR.h - 12 && c.y < H + 12);
+  }
+  function drawStreet(t) {                                           // coches de la calle (debajo del balcón), con la misma bruma
+    ctx.save(); ctx.translate(STREET.dx, 0);
+    drawCar(PARKED.color, PARKED.x, PARKED.y, false, blinkOn(t * 1.3) ? [0, 1, 2, 3] : null, 0);   // las cuatro intermitentes
+    for (const c of traffic) {
+      const L = c.phase === 'signalL' || c.phase === 'shiftL' ? [0, 2] : c.phase === 'signalR' || c.phase === 'shiftR' ? [1, 3] : null;
+      drawCar(c.col, c.x, c.y, c.down, L && blinkOn(t) ? L : null, c.ang);
+    }
+    ctx.fillStyle = 'rgba(216,224,232,0.1)'; ctx.fillRect(-STREET.dx, 0, STREET.walk + STREET.dx, H);
+    ctx.restore();
+  }
+
+  let balcBg = null;
+  function buildBalc() {
+    balcBg = document.createElement('canvas'); balcBg.width = W; balcBg.height = H;
+    const b = balcBg.getContext('2d'), D = BALC_DEF, F = D.floor[0], FC = D.faces[0];
+    const { R, Pt, disc, caps, sill, sepia } = roomPainter(b);
+    // LA CALLE, abajo (se ve por encima de la barandilla): calzada con su línea discontinua y, junto a la casa, la acera de
+    // ladrillo (adoquín rojizo y beis, en paños enmarcados por tiras grises, con alguna tapa de registro). Los coches, en movimiento
+    R(0, 0, W, H, '#070304');                                                                   // lo que no se ve (la casa, a oscuras)
+    streetBase(b, R, Pt);
+    // tapas de las paredes (norte, este y sur; al oeste no hay pared: barandilla)
+    caps(D.caps);
+    // SUELO de granito rojo en baldosa
+    for (let y = F.y; y < F.y + F.h; y += 10) for (let x = F.x; x < F.x + F.w; x += 10) {
+      const w = Math.min(10, F.x + F.w - x), h = Math.min(10, F.y + F.h - y);
+      R(x, y, w, h, GRANITE.base[((x - F.x) / 10 + (y - F.y) / 10) & 1]);
+      for (let i = 0; i < 14; i++) Pt(x + Math.floor(hash(i * 2.7 + x * 0.3 + y) * w), y + Math.floor(hash(i * 5.1 + y * 0.7 + x) * h), GRANITE.speck[Math.floor(hash(i + x + y) * 4)], 0.85);
+      R(x, y, w, 1, GRANITE.grout); R(x, y, 1, h, GRANITE.grout);
+    }
+    for (let k = 0; k < 5; k++) R(F.x, F.y + k, F.w, 1, '#000', 0.25 - k * 0.05);                 // sombra de la pared norte
+    // PARED NORTE de piedra amarillenta (árido, como en la foto): fondo y piedrecitas con luz arriba y sombra abajo
+    R(FC.x, FC.y, FC.w, FC.h, STONE.base);
+    for (let i = 0; i < 520; i++) {
+      const x = FC.x + Math.floor(hash(i * 1.37) * FC.w), y = FC.y + Math.floor(hash(i * 2.71) * FC.h), c = STONE.peb[Math.floor(hash(i * 4.3) * 6)], w = 1 + Math.floor(hash(i * 3.9) * 2);
+      R(x, y, w, 1, c); Pt(x, y + 1, '#7a5a34', 0.45);
+    }
+    R(FC.x, FC.y, FC.w, 2, '#000', 0.25); R(FC.x, FC.y + FC.h - 2, FC.w, 2, '#7a5a34', 0.6);      // remate y el pie de la pared
+    // ESTE: el hueco de la puerta doble del cuarto de la madre (abierta hacia el cuarto, que se ve en penumbra)
+    const E = D.EAST;
+    R(200, E.y, 6, E.h, '#2a2220'); R(200, E.y, 3, E.h, '#3a2e28'); R(199, E.y - 2, 8, 2, '#7c6244'); R(199, E.y + E.h, 8, 2, '#7c6244');
+    // SUR: la puerta de cristal del salón (cerrada; se ve su mitad de dentro)
+    const S = D.SOUTH;
+    R(S.x - 2, 119, 2, 5, '#7c6244'); R(S.x + S.w, 119, 2, 5, '#7c6244'); sill(S.x, 120, S.w, 2);
+    R(S.x, 122, S.w, 2, '#5a4a3a'); R(S.x + 2, 122, S.w - 4, 1, '#a9c2cc'); R(S.x + 6, 122, 6, 1, '#e2eef2'); R(S.x + Math.floor(S.w / 2), 122, 1, 2, '#5a4a3a');
+    // OESTE: barandilla blanca de aluminio (pasamanos y barrotes vistos desde arriba)
+    // (empieza al pie de la pared norte, donde se apoya, y acaba en la pared sur)
+    R(152, 46, 6, 74, '#000', 0.25);
+    for (let y = 47; y < 120; y += 4) R(154, y, 2, 2, '#c9d0d4');                                // barrotes
+    R(152, 46, 3, 74, '#eef2f4'); R(152, 46, 1, 74, '#ffffff'); R(154, 46, 1, 74, '#b8c0c6');    // pasamanos
+    [46, 82, 117].forEach(y => R(151, y, 5, 3, '#dfe5e8'));                                       // postes
+    R(150, 26, 2, 20, '#8e6a3e'); R(150, 44, 6, 2, '#7a5a34', 0.6);                               // canto de la pared, donde acaba
+    // maceta grande en el rincón (geranio) y una regadera
+    const PO = D.POT;
+    R(PO.x + 1, PO.y + PO.h, PO.w, 2, '#000', 0.3); R(PO.x, PO.y + 3, PO.w, PO.h - 3, '#8a4a2a'); R(PO.x, PO.y + 3, PO.w, 1, '#a85e38');
+    disc(PO.x + 6, PO.y + 4, 6, '#3d7a45'); disc(PO.x + 5, PO.y + 3, 4, '#4f9a56'); [[2, 1], [8, 3], [5, 6], [9, 7]].forEach(([dx, dy]) => R(PO.x + dx, PO.y + dy, 2, 2, '#d23a3a'));
+    R(162, 104, 8, 6, '#3a6a8a'); R(162, 104, 8, 1, '#5a8aaa'); R(170, 105, 4, 1, '#3a6a8a');
     sepia();
   }
 
@@ -4267,15 +4498,21 @@
     hallMom: { kind: 'front', x: 63, y: 71, w: 26, h: 13, beyond: '#4a3a30' },
     momS: { kind: 'h1', x: 236, y: 150, w: 24, beyond: '#0a0604' },
     momBath: { kind: 'front', x: 235, y: 31, w: 24, h: 19, beyond: '#3a3836' },
-    momBalc: { kind: 'v2', x: 27, hole: 24, y0: MOM_DEF.BALC.y, y1: MOM_DEF.BALC.y + MOM_DEF.BALC.h, dir: 1, beyond: '#c97f5c', fixed: 0.9 },   // el balcón: abierta siempre (de momento no se sale)
+    momBalc: { kind: 'v2', x: 57, hole: 54, y0: MOM_DEF.BALC.y, y1: MOM_DEF.BALC.y + MOM_DEF.BALC.h, dir: 1, beyond: GRANITE.base[0], fixed: 0.9 },   // la del balcón: abierta siempre
+    balcE: { kind: 'hole' },                                       // en el balcón, el hueco de esa misma puerta (las hojas quedan dentro del cuarto)
+    balcS: { kind: 'h1', x: 164, y: 120, w: 26, beyond: '#4a3a2c', glass: true },   // puerta de cristal del balcón al salón...
+    salaN: { kind: 'front', x: 33, y: 9, w: 19, h: 21, beyond: GRANITE.base[0], glass: true },  // ...y la misma vista desde el salón
     bathS: { kind: 'h1', x: 150, y: 120, w: 22, beyond: '#4a3a30' }
   };
-  SALA.doors = [DOORS.salaE]; HALL.doors = [DOORS.hallW, DOORS.hallMom]; MOM.doors = [DOORS.momS, DOORS.momBath, DOORS.momBalc]; BATH.doors = [DOORS.bathS];
+  SALA.doors = [DOORS.salaE, DOORS.salaN]; BALC.doors = [DOORS.balcE, DOORS.balcS]; HALL.doors = [DOORS.hallW, DOORS.hallMom]; MOM.doors = [DOORS.momS, DOORS.momBath, DOORS.momBalc]; BATH.doors = [DOORS.bathS];
   // salidas: test (empujando contra la puerta), out (hasta dónde cruza), place (cómo aparece al otro lado) y path (los pasos que da dentro)
   const DWD = HALL_DEF.DOOR_W;
   SALA.exits = [{ door: DOORS.salaE, to: HALL, arrive: DOORS.hallW, out: { x: 291 }, path: { x: [52, 66] },
     test: () => P.dir === 'right' && P.x >= FLOOR.x1 - 7 && P.y > DOOR_E.y + 6 && P.y < DOOR_E.y + DOOR_E.h - 1,
-    place: () => ({ y: clamp(P.y - DOOR_E.y + DWD.y, 108, 136), dir: 'right', ang: 0 }) }];
+    place: () => ({ y: clamp(P.y - DOOR_E.y + DWD.y, 108, 136), dir: 'right', ang: 0 }) },
+    { door: DOORS.salaN, to: BALC, arrive: DOORS.balcS, out: { y: 27 }, path: { y: [124, 110] },   // la puerta de cristal al balcón
+      test: () => P.dir === 'up' && P.y <= 36 && P.x > 34 && P.x < 51,
+      place: () => ({ x: 177, dir: 'up', ang: -Math.PI / 2 }) }];
   HALL.exits = [
     { door: DOORS.hallW, to: SALA, arrive: DOORS.salaE, out: { x: 57 }, path: { x: [296, 282] },
       test: () => P.dir === 'left' && P.x <= 60 && P.y > DWD.y + 4 && P.y < DWD.y + DWD.h,
@@ -4290,6 +4527,16 @@
     { door: DOORS.momBath, to: BATH, arrive: DOORS.bathS, out: { y: 49 }, path: { y: [125, 112] },
       test: () => P.dir === 'up' && P.y <= 56 && P.x > 238 && P.x < 256,
       place: () => ({ x: 161, dir: 'up', ang: -Math.PI / 2 }) }];
+  MOM.exits.push({ door: DOORS.momBalc, to: BALC, arrive: DOORS.balcE, out: { x: 58 }, path: { x: [205, 192] },   // al balcón por la puerta doble
+    test: () => P.dir === 'left' && P.x <= 66 && P.y > MOM_DEF.BALC.y + 2 && P.y < MOM_DEF.BALC.y + MOM_DEF.BALC.h,
+    place: () => ({ y: clamp(P.y - MOM_DEF.BALC.y + BALC_DEF.EAST.y, 64, 98), dir: 'left', ang: Math.PI }) });
+  BALC.exits = [
+    { door: DOORS.balcE, to: MOM, arrive: DOORS.momBalc, out: { x: 202 }, path: { x: [56, 70] },
+      test: () => P.dir === 'right' && P.x >= 194 && P.y > BALC_DEF.EAST.y + 2 && P.y < BALC_DEF.EAST.y + BALC_DEF.EAST.h,
+      place: () => ({ y: clamp(P.y - BALC_DEF.EAST.y + MOM_DEF.BALC.y, 80, 114), dir: 'right', ang: 0 }) },
+    { door: DOORS.balcS, to: SALA, arrive: DOORS.salaN, out: { y: 122 }, path: { y: [31, 46] },
+      test: () => P.dir === 'down' && P.y >= 116 && P.x > 166 && P.x < 188,
+      place: () => ({ x: 42, dir: 'down', ang: Math.PI / 2 }) }];
   BATH.exits = [{ door: DOORS.bathS, to: MOM, arrive: DOORS.momBath, out: { y: 123 }, path: { y: [52, 64] },
     test: () => P.dir === 'down' && P.y >= 116 && P.x > 152 && P.x < 170,
     place: () => ({ x: 247, dir: 'down', ang: Math.PI / 2 }) }];
@@ -4313,7 +4560,7 @@
       ctx.fillStyle = d.beyond; ctx.lineCap = 'butt';
       if (d.kind === 'v2') {                                         // doble en una pared de los lados (vista desde arriba)
         const half = (d.y1 - d.y0) / 2;
-        if (a > 0) { ctx.globalAlpha = Math.min(1, a * 1.5); ctx.fillRect(d.hole, d.y0, 6, d.y1 - d.y0); ctx.globalAlpha = 1; }
+        if (a > 0 && d.fixed == null) { ctx.globalAlpha = Math.min(1, a * 1.5); ctx.fillRect(d.hole, d.y0, 6, d.y1 - d.y0); ctx.globalAlpha = 1; }   // (la del balcón, siempre abierta, ya está pintada en el fondo)
         for (const [hy, sy] of [[d.y0, 1], [d.y1, -1]]) {
           const ex = d.x + d.dir * Math.sin(th) * half, ey = hy + sy * Math.cos(th) * half;
           ctx.strokeStyle = '#2a1a0c'; ctx.lineWidth = 3.2; ctx.beginPath(); ctx.moveTo(d.x, hy); ctx.lineTo(ex, ey); ctx.stroke();
@@ -4326,14 +4573,15 @@
       } else if (a > 0 && d.kind === 'front') {                     // en la pared del fondo: el hueco y la hoja estrechándose hacia la bisagra
         ctx.fillRect(d.x, d.y, d.w, d.h);
         const pw = Math.max(1, Math.round(d.w * Math.cos(th)));
-        ctx.fillStyle = '#2a1a0c'; ctx.fillRect(d.x, d.y, pw + 1, d.h);
-        ctx.fillStyle = '#6e4a26'; ctx.fillRect(d.x, d.y + 1, pw, d.h - 1); ctx.fillStyle = '#8a5c34'; ctx.fillRect(d.x, d.y + 1, pw, 1);
+        ctx.fillStyle = d.glass ? '#7c6244' : '#2a1a0c'; ctx.fillRect(d.x, d.y, pw + 1, d.h);
+        ctx.fillStyle = d.glass ? '#a9c2cc' : '#6e4a26'; ctx.fillRect(d.x + (d.glass ? 1 : 0), d.y + 1, Math.max(1, pw - (d.glass ? 2 : 0)), d.h - 2);
+        ctx.fillStyle = d.glass ? '#e2eef2' : '#8a5c34'; ctx.fillRect(d.x, d.y + 1, pw, 1);
         if (pw > 5) { ctx.fillStyle = '#b8943a'; ctx.fillRect(d.x + pw - 3, d.y + Math.floor(d.h / 2), 2, 1); }
       } else if (a > 0 && d.kind === 'h1') {                        // en una pared de abajo: el hueco y la hoja girando hacia dentro (arriba)
         ctx.fillRect(d.x, d.y, d.w, 6);
         const ex = d.x + Math.cos(th) * d.w, ey = d.y + 3 - Math.sin(th) * d.w;
         ctx.strokeStyle = '#2a1a0c'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(d.x, d.y + 3); ctx.lineTo(ex, ey); ctx.stroke();
-        ctx.strokeStyle = '#7a5430'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(d.x, d.y + 3); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.strokeStyle = d.glass ? '#a9c2cc' : '#7a5430'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(d.x, d.y + 3); ctx.lineTo(ex, ey); ctx.stroke();
         ctx.fillStyle = '#c8a040'; ctx.fillRect(Math.round(ex - Math.cos(th) * 3) - 1, Math.round(ey + Math.sin(th) * 3) - 1, 2, 2);
       }
     }
@@ -4706,31 +4954,38 @@
   }
 
   // ---------- luces del cuarto de la madre: entra el día por la puerta del balcón, abierta, y las cortinas se mueven ----------
-  function drawCurtains(t) {                                         // cortinas a los dos lados de la puerta del balcón, que el aire mete hacia dentro
+  function drawCurtains(t) {                                         // cortinas de tela a los dos lados de la puerta del balcón
     const BA = MOM_DEF.BALC;
-    for (const [y0, dir] of [[BA.y - 7, 1], [BA.y + BA.h + 1, -1]]) {
-      for (let k = 0; k < 6; k++) {                                  // cada cortina: unos pliegues que se hinchan hacia la habitación
-        const y = y0 + k, wv = Math.sin(t * 1.8 + k * 0.7 + dir) * 2.2 + Math.sin(t * 3.3 + k) * 0.8, len = 5 + Math.round(Math.max(0, wv) + (k === 2 || k === 3 ? 2 : 0));
-        ctx.fillStyle = '#e8dcc8'; ctx.fillRect(30, y, len, 1);
-        ctx.fillStyle = 'rgba(150,130,105,0.6)'; ctx.fillRect(30 + len - 1, y, 1, 1); if (k % 2) ctx.fillRect(31, y, 1, 1);
+    for (const [y0, dir] of [[BA.y - 9, 1], [BA.y + BA.h, -1]]) {     // dir: hacia dónde queda el hueco de la puerta
+      for (let k = 0; k < 10; k++) {
+        const y = y0 + k, edge = dir > 0 ? k / 9 : 1 - k / 9;         // 1 = el borde libre, junto al hueco: es el que más se mueve
+        const sw = Math.sin(t * 1.7 + k * 0.55 + dir) * 2.4 * edge + Math.sin(t * 3.1 + k * 1.3) * 0.7 * edge;
+        const len = Math.max(3, Math.round(4 + edge * 3 + sw));
+        ctx.fillStyle = k % 2 ? '#e2d4bc' : '#f0e6d4'; ctx.fillRect(MOM_DEF.WX + 6, y, len, 1);              // tela con sus pliegues
+        ctx.fillStyle = 'rgba(120,98,72,0.5)'; ctx.fillRect(MOM_DEF.WX + 5 + len, y, 1, 1);               // el borde, en sombra
+        ctx.fillStyle = 'rgba(255,248,230,0.5)'; ctx.fillRect(MOM_DEF.WX + 6, y, 1, 1);
       }
+      ctx.fillStyle = '#b89a6a'; ctx.fillRect(MOM_DEF.WX + 6, dir > 0 ? y0 + 3 : y0 + 6, 3, 1);              // la abrazadera
     }
-    ctx.fillStyle = '#8a7a60'; ctx.fillRect(30, BA.y - 8, 1, BA.h + 16);                                    // la barra de la cortina
+    ctx.fillStyle = '#8a7a60'; ctx.fillRect(MOM_DEF.WX + 6, BA.y - 10, 1, BA.h + 20);                          // la barra de la cortina
   }
   function momReveal(t, lvl) {                                       // la luz del día del balcón (pared izquierda) recorta la penumbra
-    const BA = MOM_DEF.BALC, sway = Math.sin(t * 0.6) * 3;
+    const BA = MOM_DEF.BALC, sway = Math.sin(t * 0.6) * 3, X = MOM_DEF.WX + 6;   // X: el hueco de la puerta, por dentro
     dctx.save(); dctx.setTransform(RES, 0, 0, RES, 0, 0);
-    const g = dctx.createLinearGradient(14, 0, 150, 0);
+    const g = dctx.createLinearGradient(X - 16, 0, X + 120, 0);
     g.addColorStop(0, `rgba(0,0,0,${0.85 * lvl})`); g.addColorStop(0.3, `rgba(0,0,0,${0.5 * lvl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
     dctx.fillStyle = g; dctx.beginPath();
-    [[14, BA.y - 4], [30, BA.y], [150 + sway, BA.y - 22], [150 + sway, BA.y + BA.h + 24], [30, BA.y + BA.h], [14, BA.y + BA.h + 4]].forEach(([x, y], i) => i ? dctx.lineTo(x, y) : dctx.moveTo(x, y));
-    dctx.closePath(); dctx.fill(); dctx.restore();
+    [[X - 16, BA.y - 4], [X, BA.y], [X + 120 + sway, BA.y - 22], [X + 120 + sway, BA.y + BA.h + 24], [X, BA.y + BA.h], [X - 16, BA.y + BA.h + 4]].forEach(([x, y], i) => i ? dctx.lineTo(x, y) : dctx.moveTo(x, y));
+    dctx.closePath(); dctx.fill();
+    dctx.fillStyle = `rgba(0,0,0,${0.9 * lvl})`; dctx.fillRect(0, 36, X, 106);                    // el balcón, fuera (y el hueco de la puerta), está a pleno día
+    dctx.fillStyle = `rgba(0,0,0,${0.6 * lvl})`; dctx.fillRect(X, BA.y - 11, 10, BA.h + 22);          // las cortinas, al lado de la puerta, también reciben la luz
+    dctx.restore();
   }
   function momLights(t, power, lvl) {
-    const BA = MOM_DEF.BALC, sway = Math.sin(t * 0.6) * 3, g = ctx.createLinearGradient(30, 0, 150, 0);
+    const BA = MOM_DEF.BALC, sway = Math.sin(t * 0.6) * 3, X = MOM_DEF.WX + 6, g = ctx.createLinearGradient(X, 0, X + 120, 0);
     g.addColorStop(0, `rgba(255,236,196,${0.18 * lvl})`); g.addColorStop(1, 'rgba(255,236,196,0)');
-    ctx.fillStyle = g; poly([[30, BA.y], [150 + sway, BA.y - 22], [150 + sway, BA.y + BA.h + 24], [30, BA.y + BA.h]]);
-    ctx.fillStyle = `rgba(255,244,220,${0.25 * lvl})`; ctx.fillRect(14, BA.y - 4, 16, BA.h + 8);              // fuera es de día
+    ctx.fillStyle = g; poly([[X, BA.y], [X + 120 + sway, BA.y - 22], [X + 120 + sway, BA.y + BA.h + 24], [X, BA.y + BA.h]]);
+    ctx.fillStyle = `rgba(255,244,220,${0.08 * lvl})`; ctx.fillRect(0, 36, X - 6, 106);                     // fuera es de día (un toque cálido, sin deslumbrar)
   }
   // ---------- luces del baño: solo la claridad del ventanuco ----------
   function bathReveal(t, lvl) {
@@ -4738,6 +4993,10 @@
     const g = dctx.createRadialGradient(186, 58, 2, 186, 70, 46);
     g.addColorStop(0, `rgba(0,0,0,${0.6 * lvl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
     dctx.fillStyle = g; dctx.fillRect(128, 42, 68, 78); dctx.restore();
+  }
+  function balcLights(t, power, lvl) {                              // el balcón, al sol de la tarde (luz cálida que entra en diagonal)
+    const g = ctx.createLinearGradient(150, 26, 200, 120); g.addColorStop(0, `rgba(255,232,190,${0.16 * lvl})`); g.addColorStop(1, `rgba(255,232,190,${0.04 * lvl})`);
+    ctx.fillStyle = g; ctx.fillRect(150, 26, 50, 94);
   }
   function bathLights(t, power, lvl) { ctx.fillStyle = `rgba(220,232,240,${0.25 * lvl})`; ctx.fillRect(181, 45, 10, 4); }
 
@@ -4838,9 +5097,10 @@
     ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;   // a partir de aquí, en px lógicos
 
     const inSala = room === SALA;
-    ctx.drawImage(inSala ? bg : room === HALL ? hallBg : room === MOM ? momBg : bathBg, 0, 0);
+    ctx.drawImage(inSala ? bg : room === HALL ? hallBg : room === MOM ? momBg : room === BALC ? balcBg : bathBg, 0, 0);
     drawDoorSwing(t);                                                // la puerta abriéndose o cerrándose al cruzarla
     if (room === MOM) drawCurtains(t);                               // las cortinas de la puerta del balcón, movidas por el aire
+    if (room === BALC) { trafficTick(t, dt); drawStreet(t); }        // la calle: el coche azul con las cuatro intermitentes y el tráfico
     if (inSala) {                                                    // reflejo del espejo: la luz no deja ver nada dentro
       ctx.save(); ctx.beginPath(); ctx.rect(148, 14, 44, 8); ctx.clip(); ctx.globalCompositeOperation = 'screen';
       const sh = Math.sin(t * 0.35) * 4;
@@ -4873,7 +5133,7 @@
     dctx.globalCompositeOperation = 'source-over'; dctx.clearRect(0, 0, darkCv.width, darkCv.height);
     // cuarto de la madre: entra el día por el balcón abierto (penumbra); baño: sin ventana grande, casi a oscuras
     dctx.fillStyle = inSala ? `rgba(10,5,4,${0.22 + 0.26 * (1 - power)})` : room === MOM ? `rgba(8,4,4,${0.24 + 0.34 * (1 - power)})`
-      : room === BATH ? `rgba(3,2,2,${0.3 + 0.6 * (1 - power)})` : `rgba(3,2,2,${0.3 + 0.66 * (1 - power)})`;
+      : room === BATH ? `rgba(3,2,2,${0.3 + 0.6 * (1 - power)})` : room === BALC ? 'rgba(8,4,4,0.06)' : `rgba(3,2,2,${0.3 + 0.66 * (1 - power)})`;   // el balcón es fuera: de día
     dctx.fillRect(0, 0, darkCv.width, darkCv.height);
     dctx.globalCompositeOperation = 'destination-out';
     if (beam) { dctx.drawImage(beam, 0, 0); dctx.drawImage(beam, 0, 0); }          // dos veces: cerca del móvil se ve casi como de día
@@ -4897,7 +5157,7 @@
     }
     ctx.save(); ctx.globalCompositeOperation = 'screen';
     const showLights = !(cst && cst.bars > 0.3);                     // con el foco de circo encendido, nada más brilla
-    if (!inSala) { if (showLights) (room === HALL ? hallLights : room === MOM ? momLights : bathLights)(t, power, lvl); }
+    if (!inSala) { if (showLights) (room === HALL ? hallLights : room === MOM ? momLights : room === BALC ? balcLights : bathLights)(t, power, lvl); }
     else {
     // luz del día de fuera: claridad desde el ventanal que se apaga hacia el centro de la sala
     const fill = ctx.createLinearGradient(26, 0, 190, 0);
