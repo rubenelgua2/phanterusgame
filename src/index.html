@@ -1330,13 +1330,15 @@
     }
     function loop(buf, fadeIn, level) {
       init();
-      const src = ctx.createBufferSource(), g = ctx.createGain(), t = ctx.currentTime;
+      const src = ctx.createBufferSource(), g = ctx.createGain(), lp = ctx.createBiquadFilter(), t = ctx.currentTime;
       src.buffer = buf; src.loop = true;
+      lp.type = 'lowpass'; lp.frequency.value = 20000; lp.Q.value = 0.5;     // filtro para "amortiguar" (oírlo a través de una pared)
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(level == null ? 1 : level, t + (fadeIn || 1));
-      src.connect(g); g.connect(master); src.start();
+      src.connect(lp); lp.connect(g); g.connect(master); src.start();
       const to = (v, f) => { const n = ctx.currentTime; g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(g.gain.value, n); g.gain.linearRampToValueAtTime(v, n + f); };
       return {
         fade(level, dur) { to(level, dur || 0.5); },
+        muffle(hz, dur) { const n = ctx.currentTime, f = lp.frequency; f.cancelScheduledValues(n); f.setValueAtTime(f.value, n); f.exponentialRampToValueAtTime(hz, n + Math.max(0.01, dur || 0)); },
         stop(fadeOut) { const f = fadeOut || 0.5; to(0, f); try { src.stop(ctx.currentTime + f + 0.05); } catch (e) {} }
       };
     }
@@ -3082,6 +3084,7 @@
   // CUES = segundo del audio en que suena cada letra (null = espacio). El reloj lo marca el audio oído.
   const FADE = 3.5, FIRST_AT = 4.4, VOICE_WAIT = 2.5, LEAD = 0.05, LFADE = 0.15, OUT_DUR = 1.2, GAP = 0.9;
   const WIND = 0.9, WIND_DUCK = 0.45;
+  const WIND_IN = 0.28, WIND_MUFFLE = 650;                 // dentro de casa (salón y entrada): más bajo y sin agudos
   const canWebm = !!document.createElement('audio').canPlayType('audio/webm; codecs="opus"');
   const LINES = [
     {
@@ -3200,7 +3203,7 @@
   function enterRoom() {
     inRoom = true; cancelAnimationFrame(raf);
     clearSub(); if (voice) { voice.stop(); voice = null; }
-    windTo(0.55, 2.5);                                     // dentro de casa el viento suena más lejos
+    windTo(WIND_IN, 2.5); if (wind) wind.muffle(WIND_MUFFLE, 2.5);   // dentro de casa el viento se oye flojo y apagado, a través de las paredes
     PhoneApp.enableHome(); setHud(true);                   // el móvil vuelve a estar activo: abre en la pantalla de inicio
     if (window.PDRoom) window.PDRoom.start();
   }
@@ -3418,14 +3421,14 @@
     PhoneApp.reset(); PhoneApp.bind(); PhoneApp.restore(save.phone);
     running = true; ended = true; phoneTaken = true; phoneHover = false; phoneReady = false;
     vibeT0 = null; vibeDone = true; vibeNotified = true;
-    roomAt = null; inRoom = true; voice = null; voiceOff = true; windLvl = 0.55;
+    roomAt = null; inRoom = true; voice = null; voiceOff = true; windLvl = WIND_IN;
     t0 = performance.now() / 1000; lastT = 0;
     clearSub(); setHud(true);
     const ui = document.getElementById('phoneUI'); if (ui) ui.classList.remove('open');
     cancelAnimationFrame(raf);                             // la escena lateral no se dibuja
     if (window.PDRoom) window.PDRoom.start({ from: save.at, player: save.player });
     const GA = A(); if (!GA) return;
-    GA.loadURL('wind', 'assets/wind.mp3').then(buf => { if (running && !wind) wind = GA.loop(buf, 3, windLvl); }).catch(() => {});
+    GA.loadURL('wind', 'assets/wind.mp3').then(buf => { if (running && !wind) { wind = GA.loop(buf, 3, windLvl); wind.muffle(WIND_MUFFLE, 0); } }).catch(() => {});
   }
   window.PDIntro = { start, stop, skipLine, resume };
 })();
@@ -3610,14 +3613,12 @@
     R(F.x0, FY0 - 1, F.x1 - F.x0, 1, '#957a33'); R(F.x0 - 1, F.y0, 1, F.y1 - F.y0, '#5c4a20');           // bordes de dentro
     R(F.x1, F.y0, 1, F.y1 - F.y0, '#5c4a20'); R(F.x0, F.y1, F.x1 - F.x0, 1, '#5c4a20');
 
-    // PUERTA GRANDE CON VENTANA (pared derecha, se ve de canto desde arriba): madera arriba y abajo, cristal en medio
-    const DE = DOOR_E, ex = WL.x1 - WL.t, gy0 = DE.y + 9, gy1 = DE.y + DE.h - 9;
+    // PUERTA GRANDE (pared derecha): aquí solo el hueco con el umbral de piedra y el marco. Las dos hojas (finas, de
+    // madera con su cristal) se pintan encima en cada fotograma, igual de cerradas que cuando se abren (drawDoorSwing)
+    const DE = DOOR_E, ex = WL.x1 - WL.t;
     R(ex - 1, DE.y - 2, WL.t + 2, 2, '#7c6244'); R(ex - 1, DE.y + DE.h, WL.t + 2, 2, '#7c6244');      // marco
-    R(ex, DE.y, WL.t, DE.h, '#5a3a1e'); R(ex + 1, DE.y + 1, WL.t - 2, DE.h - 2, '#6e4a26');
-    R(ex + 1, gy0, WL.t - 2, gy1 - gy0, '#a9c2cc'); R(ex + 1, gy0, WL.t - 2, 1, '#5a3a1e'); R(ex + 1, gy1 - 1, WL.t - 2, 1, '#5a3a1e');
-    R(ex + 1, (gy0 + gy1) / 2, WL.t - 2, 1, '#6e4a26');
-    for (let i = 0; i < 5; i++) Pt(ex + 1 + Math.floor(hash(i * 2.3) * (WL.t - 2)), gy0 + 2 + Math.floor(hash(i * 6.1) * (gy1 - gy0 - 4)), '#e2eef2');
-    R(ex - 1, DE.y + DE.h - 12, 1, 3, '#b8943a'); R(F.x1 - 3, DE.y, 3, DE.h, '#8a8478', 0.55);
+    R(ex, DE.y, WL.t, DE.h, '#6b6458'); R(ex + WL.t - 1, DE.y, 1, DE.h, '#4a443a');                     // umbral
+    for (let i = 0; i < 18; i++) Pt(ex + 1 + Math.floor(hash(i * 2.9) * (WL.t - 2)), DE.y + Math.floor(hash(i * 5.3) * DE.h), hash(i) > 0.5 ? '#7d766a' : '#5c564b');
 
     // VENTANAL en la pared izquierda, a lo largo de la mesa (entra la luz de la tarde por cada hoja)
     const wx = WL.x0, PANE = WIN.h / 4;
@@ -3790,21 +3791,33 @@
     // CUADRO QUITADO en la pared del medio: la pintura que tapaba está menos gastada, con polvo en el borde y el clavo
     R(168, 102, 17, 8, '#c4a258'); R(168, 102, 17, 1, '#9c7d3c', 0.8); R(168, 109, 17, 1, '#9c7d3c', 0.6);
     R(168, 102, 1, 8, '#9c7d3c', 0.7); R(184, 102, 1, 8, '#9c7d3c', 0.7); Pt(176, 101, '#2a2016'); Pt(176, 100, '#6b5a40', 0.6);
-    // puerta de la pared derecha (de canto, como la grande de la sala pero sin cristal)
-    R(265, 59, 8, 2, '#7c6244'); R(265, 81, 8, 2, '#7c6244'); R(266, 61, 6, 20, '#5a3a1e'); R(267, 62, 4, 18, '#6e4a26'); R(265, 75, 1, 3, '#b8943a');
-    // puerta doble a la SALA (pared izquierda): madera con cristal, como la de la sala vista desde el otro lado
-    const DW = D.DOOR_W, wx = 48, gy0 = DW.y + 7, gy1 = DW.y + DW.h - 7;
-    R(wx - 1, DW.y - 2, 8, 2, '#7c6244'); R(wx - 1, DW.y + DW.h, 8, 2, '#7c6244');
-    R(wx, DW.y, 6, DW.h, '#5a3a1e'); R(wx + 1, DW.y + 1, 4, DW.h - 2, '#6e4a26');
-    R(wx + 1, gy0, 4, gy1 - gy0, '#a9c2cc'); R(wx + 1, DW.y + Math.floor(DW.h / 2), 4, 1, '#5a3a1e');      // dos hojas con cristal
-    for (let i = 0; i < 4; i++) Pt(wx + 1 + Math.floor(hash(i * 2.3) * 4), gy0 + 2 + Math.floor(hash(i * 6.1) * (gy1 - gy0 - 4)), '#e2eef2');
-    R(wx + 6, DW.y + Math.floor(DW.h / 2) - 4, 1, 3, '#b8943a'); R(wx + 6, DW.y + Math.floor(DW.h / 2) + 2, 1, 3, '#b8943a');
-    // puertas en las paredes de abajo (vistas desde arriba): la de la derecha y la de la CALLE (sin decorar)
-    const capDoor = (x, w, y) => {
-      R(x - 2, y - 1, 2, 8, '#7c6244'); R(x + w, y - 1, 2, 8, '#7c6244');
-      R(x, y, w, 6, '#4a2f17'); R(x, y + 1, w, 4, '#6e4a26'); R(x, y + 1, w, 1, '#8a5c34');
+    // puertas vistas desde arriba (en las paredes de los lados y en las de abajo): la hoja FINA en el centro del grosor
+    // de la pared, umbral de piedra a los dos lados, jambas de madera, bisagras y pomo de latón por las dos caras.
+    // horiz = en una pared de abajo (la hoja va a lo ancho). street = la de la calle: madera más oscura y cerradura
+    const sill = (x, y, w, h) => { R(x, y, w, h, '#6b6458'); for (let i = 0; i < Math.floor(w * h / 6); i++) Pt(x + Math.floor(hash(i * 2.9 + x + y) * w), y + Math.floor(hash(i * 5.3 + y) * h), hash(i + x + y) > 0.5 ? '#7d766a' : '#5c564b'); };
+    const topDoor = (x, y, len, horiz, street) => {
+      const dark = street ? '#1e1108' : '#2a1a0c', wood = street ? '#5a3418' : '#7a5430', hi = street ? '#7a4a24' : '#9a6c40';
+      if (horiz) {
+        R(x - 2, y - 1, 2, 8, '#7c6244'); R(x + len, y - 1, 2, 8, '#7c6244'); R(x - 2, y - 1, 2, 1, '#98794f'); R(x + len, y - 1, 2, 1, '#98794f');   // jambas
+        sill(x, y, len, 6);
+        R(x, y + 2, len, 2, dark); R(x + 1, y + 2, len - 2, 1, wood); R(x + 2, y + 2, len - 6, 1, hi);                             // la hoja
+        R(x + 1, y + 1, 2, 1, '#8f949a'); R(x + 1, y + 4, 2, 1, '#8f949a');                                                           // bisagras
+        R(x + len - 5, y, 2, 2, '#c8a040'); R(x + len - 5, y + 4, 2, 2, '#c8a040'); Pt(x + len - 5, y, '#f0d890'); Pt(x + len - 5, y + 4, '#f0d890');   // pomos
+        if (street) { R(x + len - 8, y + 4, 1, 2, '#c8a040'); Pt(x + len - 8, y + 5, '#1a120a'); R(x + Math.floor(len / 2) - 4, y, 8, 1, '#3a2a1a', 0.5); }   // cerradura y felpudo asomando
+      } else {
+        R(x - 1, y - 2, 8, 2, '#7c6244'); R(x - 1, y + len, 8, 2, '#7c6244'); R(x - 1, y - 2, 8, 1, '#98794f');
+        sill(x, y, 6, len);
+        R(x + 2, y, 2, len, dark); R(x + 2, y + 1, 1, len - 2, wood); R(x + 2, y + 2, 1, len - 6, hi);
+        R(x + 1, y + 1, 1, 2, '#8f949a'); R(x + 4, y + 1, 1, 2, '#8f949a');
+        R(x, y + len - 6, 2, 2, '#c8a040'); R(x + 4, y + len - 6, 2, 2, '#c8a040'); Pt(x, y + len - 6, '#f0d890'); Pt(x + 4, y + len - 6, '#f0d890');
+      }
     };
-    capDoor(221, 24, 142); capDoor(D.EXIT.x, D.EXIT.w, 170);
+    topDoor(266, 61, 20, false);                                                                       // la de la pared derecha
+    // puerta doble a la SALA (pared izquierda): hueco y marco; las hojas, en cada fotograma (drawDoorSwing)
+    const DW = D.DOOR_W, wx = 48;
+    R(wx - 1, DW.y - 2, 8, 2, '#7c6244'); R(wx - 1, DW.y + DW.h, 8, 2, '#7c6244'); sill(wx, DW.y, 6, DW.h); R(wx, DW.y, 1, DW.h, '#4a443a');
+    // puertas en las paredes de abajo: la de la derecha y la de la CALLE
+    topDoor(221, 142, 24, true); topDoor(D.EXIT.x, 170, D.EXIT.w, true, true);
     // CUADRO DE LUZ en la pared izquierda del entrante (gris, metálico, con su tapa); la caja 1 lo tapa
     const FU = D.FUSE;
     R(FU.x - 1, FU.y - 1, FU.w + 2, FU.h + 2, '#141416'); R(FU.x, FU.y, FU.w, FU.h, '#8c9198'); R(FU.x, FU.y, FU.w, 1, '#b8bdc4');
@@ -3820,7 +3833,7 @@
   const P = { x: 170, y: 74, dir: 'down', ang: Math.PI / 2, moving: false, phase: 0, tx: null, ty: null, stuck: 0 };
   let flashOn = false;                                               // linterna del móvil (se enciende desde la app Linterna)
   document.addEventListener('pd:flashlight', e => { flashOn = !!e.detail.on; });
-  const SPEED = 50, FOOT_W = 8, FOOT_H = 4;
+  const SPEED = 50, FOOT_W = 8, FOOT_H = 4, STEP_RATE = 8.5;          // 8,5 fotogramas/s: unos 4 pasos por segundo
   function blocked(x, y, rm) {                                       // la "huella" de los pies choca con paredes o muebles
     rm = rm || room;
     const l = x - FOOT_W / 2, r = x + FOOT_W / 2, t = y - FOOT_H, b = y;
@@ -3829,7 +3842,8 @@
   }
   const keys = new Set();
   function update(dt) {
-    if (swap || cut || panel) { P.moving = false; P.phase = 0; return; }   // cruzando una puerta (fundido), en una mini escena o con el cuadro abierto: quieto
+    // cruzando una puerta (lo mueve la animación de la puerta), en una mini escena o con el cuadro abierto: no se controla
+    if ((swap && tNow - swap.at < DOOR_T.inside) || cut || panel) { P.moving = false; if (!swap) P.phase = 0; return; }
     let dx =(keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), dy = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0), k = 1;
     const jm = Math.hypot(joy.x, joy.y);
     if (dx || dy) P.tx = null;                                      // el teclado manda sobre el joystick y el ratón
@@ -3849,7 +3863,7 @@
     P.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
     const da = Math.atan2(dy, dx) - P.ang;                          // la linterna gira suave hacia donde camina
     P.ang += Math.atan2(Math.sin(da), Math.cos(da)) * Math.min(1, dt * 10);
-    P.phase += dt * 7;
+    P.phase += dt * STEP_RATE * k;                                   // fotogramas del ciclo de andar (más lento si anda despacio)
   }
   // ---------- JUAN JOSÉ (Phanterus), a partir de su foto: pelo corto castaño oscuro algo peinado hacia un lado, gafas
   // rectangulares, sonrisa grande, cara redonda con mofletes, corpulento, camiseta ROJA de "DELAWARE" (letras gris
@@ -3857,7 +3871,8 @@
   // 12×20 px por fotograma (+1 px de contorno oscuro para verlo a oscuras).
   const JJ_PAL = {
     H: '#3b2719', h: '#5c3d26', S: '#e9b997', s: '#c98f6e', c: '#e39c88', G: '#1d1d24', g: '#cfe3ee', W: '#f6f1e6', M: '#5a1e22',
-    T: '#cf2f2f', t: '#9c2222', D: '#9fb0c4', R: '#b0789c', B: '#8a5a86', X: '#4c5d70', P: '#25304d', K: '#1a1515'
+    T: '#cf2f2f', t: '#9c2222', D: '#9fb0c4', R: '#b0789c', B: '#8a5a86', X: '#4c5d70', P: '#25304d', K: '#1a1515',
+    F: '#1b1d24', L: '#fffbe0'                                       // el móvil en la mano y el led de la linterna
   };
   const JJ_TOP = {                                                   // cabeza (filas 0..9: las gafas en 4 y 5) y torso (10..15)
     down: ['....HHHH....', '...HhhhHH...', '..HHHHHHHH..', '..HSSSSSSH..', '..SGGSSGGS..', '..GgWGGWgG..', '..cSSSSSSc..', '..SsWWWWsS..',
@@ -3867,15 +3882,23 @@
     left: ['....HHHH....', '...HHhhHH...', '..HHHHHHHH..', '..SSSHHHHH..', '.SGGSSHHHH..', '.GgWGGGsHH..', '..cSSSSSH...', '.SWWWSSSS...',
       '..SMMSSS....', '...SSSS.....', '...TTTTTT...', '..TTTTTTTT..', '.TTTTTSSTT..', '.TTTTTSSTT..', '.TTTTTTSTT..', '..tttttttt..']
   };
-  const JJ_LEGS = {                                                  // piernas (filas 16..19): quieto y pasos
+  const JJ_LEGS = {                                                  // piernas (filas 16..19): quieto, paso con un pie y paso con el otro / piernas abiertas
     front: [['..PPPPPPPP..', '..PPP..PPP..', '..PPP..PPP..', '..KKK..KKK..'],
-      ['..PPPPPPPP..', '..PPP..PPP..', '..KKK..PPP..', '.......KKK..'],
-      ['..PPPPPPPP..', '..PPP..PPP..', '..PPP..KKK..', '..KKK.......']],
+      ['..PPPPPPPP..', '..PPP..PPP..', '..PPP..KKK..', '..KKK.......'],
+      ['..PPPPPPPP..', '..PPP..PPP..', '..KKK..PPP..', '.......KKK..']],
     side: [['...PPPPPP...', '....PPPP....', '....PPPP....', '...KKKK.....'],
-      ['...PPPPPP...', '...PP..PP...', '..PP....PP..', '.KKK....KKK.'],
-      ['...PPPPPP...', '....PPPP....', '....PPPP....', '...KKKK.....']]
+      ['...PPPPPP...', '...PP..PP...', '..PP....PP..', '.KKK....KKK.']]
   };
-  const JJ = {};                                                     // fotogramas ya pintados: JJ[dir][0 quieto | 1 | 2]
+  // con el móvil en la mano (linterna encendida): filas 12..15 del torso cambiadas. De frente lo lleva delante de la tripa
+  // con la mano derecha; de espaldas ese brazo va hacia delante (no se ve); de lado, el brazo estirado y el móvil delante
+  const JJ_HOLD = {
+    down: ['.TTTDDDDTTTS', '.SSFFFRTTTTS', '.TSFLFBTTTTS', '.ttttttttttS'],
+    up: ['STTTTTTTTTT.', 'STTTTTTTTTT.', 'STTTTTTTTTT.', 'Stttttttttt.'],
+    left: ['.TTTTTTTTT..', 'LSSSSSSTTT..', 'FTTTTTTTTT..', '..tttttttt..']
+  };
+  // JJ[dir] = { idle, walk: [4] } y lo mismo con el móvil (holdIdle, holdWalk). Ciclo de andar: pie A delante, pasar
+  // (el cuerpo sube 1 px), pie B delante, pasar. Los brazos se balancean al revés que las piernas.
+  const JJ = {};
   (function buildJJ() {
     const mk = rows => {
       const c = document.createElement('canvas'); c.width = 14; c.height = rows.length + 2;
@@ -3888,20 +3911,49 @@
       return c;
     };
     const flip = rows => rows.map(r => [...r].reverse().join(''));
-    ['down', 'up'].forEach(d => { JJ[d] = JJ_LEGS.front.map(l => mk(JJ_TOP[d].concat(l))); });
-    JJ.left = JJ_LEGS.side.map(l => mk(JJ_TOP.left.concat(l)));
-    JJ.right = JJ_LEGS.side.map(l => mk(flip(JJ_TOP.left.concat(l))));
+    const set = (rows, x, y, ch) => { rows[y] = rows[y].slice(0, x) + ch + rows[y].slice(x + 1); };
+    // brazos: 0 = colgando, 1 = el de la izquierda de la pantalla adelante (más corto) y el otro atrás, 2 = al revés
+    const armsFront = (rows, pose) => {
+      if (!pose) return;
+      const [up, dn] = pose === 1 ? [0, 11] : [11, 0];
+      set(rows, dn, 16, rows[15][dn]); set(rows, up, 15, '.');
+    };
+    const armsSide = (rows, pose) => {                                   // de lado (mirando a la izquierda): adelante = hacia x menores
+      if (!pose) return;
+      const d = pose === 1 ? -1 : 1;
+      for (const y of [12, 13]) { set(rows, 6, y, 'T'); set(rows, 7, y, 'T'); set(rows, 6 + d, y, 'S'); set(rows, 7 + d, y, 'S'); }
+      set(rows, 7, 14, 'T'); set(rows, 7 + d * 2, 14, 'S');
+    };
+    const frames = (dir, hold) => {
+      const side = dir === 'left', top = JJ_TOP[dir].slice();
+      if (hold) JJ_HOLD[dir].forEach((r, i) => { top[12 + i] = r; });
+      const L = side ? JJ_LEGS.side : JJ_LEGS.front;
+      const make = (legs, arm) => { const rows = top.concat(legs); if (!hold) (side ? armsSide : armsFront)(rows, arm); return rows; };
+      const idle = make(L[0], 0);
+      const walk = side ? [make(L[1], 1), make(L[0], 0), make(L[1], 2), make(L[0], 0)]
+        : [make(L[1], 1), make(L[0], 0), make(L[2], 2), make(L[0], 0)];
+      return { idle, walk };
+    };
+    for (const dir of ['down', 'up', 'left']) {
+      const n = frames(dir, false), h = frames(dir, true);
+      JJ[dir] = { idle: mk(n.idle), walk: n.walk.map(mk), holdIdle: mk(h.idle), holdWalk: h.walk.map(mk) };
+      if (dir === 'left') JJ.right = { idle: mk(flip(n.idle)), walk: n.walk.map(r => mk(flip(r))), holdIdle: mk(flip(h.idle)), holdWalk: h.walk.map(r => mk(flip(r))) };
+    }
   })();
   // pose (mini escenas): rot = inclinación desde los pies (π/2 = tumbado de bruces hacia la derecha); arms = brazos en alto
   function drawPlayer(pose) {
-    const x = Math.round(P.x), y = Math.round(P.y);
-    const st = P.moving ? Math.sin(P.phase * Math.PI) : 0, f = st > 0.3 ? 1 : st < -0.3 ? 2 : 0;
-    const side = P.dir === 'left' || P.dir === 'right', img = JJ[P.dir][side ? (f ? 1 : 2) * (P.moving ? 1 : 0) : f];
+    const x = Math.round(P.x), y = Math.round(P.y), set = JJ[P.dir], hold = flashOn && !pose;   // con la linterna, el móvil en la mano
+    const fi = Math.floor(P.phase) % 4, img = P.moving ? (hold ? set.holdWalk : set.walk)[fi] : (hold ? set.holdIdle : set.idle);
+    const bob = P.moving && fi % 2 === 1 ? -1 : 0;                                            // al pasar una pierna por delante de la otra, sube
     const rot = pose ? pose.rot : 0;
     ctx.fillStyle = 'rgba(0,0,0,0.35)';                                                         // sombra en el suelo (más larga si está tumbado)
     const sw = 10 + Math.round(Math.sin(rot) * 16); ctx.fillRect(x - 5, y - 1, sw, 2); ctx.fillRect(x - 4, y - 2, sw - 2, 1);
     if (rot) { ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.drawImage(img, -7, -21); ctx.restore(); return; }
-    ctx.drawImage(img, x - 7, y - 21 + (P.moving && f === 0 ? -1 : 0));
+    ctx.drawImage(img, x - 7, y - 21 + bob);
+    if (hold) {                                                                                 // el led del móvil brilla un poco
+      const lx = P.dir === 'down' ? x - 2 : P.dir === 'left' ? x - 6 : P.dir === 'right' ? x + 5 : null, ly = y - 21 + bob + (P.dir === 'down' ? 15 : 14);
+      if (lx != null) { ctx.fillStyle = 'rgba(255,250,220,0.35)'; ctx.fillRect(lx - 1, ly - 1, 3, 3); }
+    }
     if (pose && pose.arms) {                                                                    // brazos estirados hacia arriba, sujetando la caja
       ctx.fillStyle = '#140c0a'; ctx.fillRect(x - 3, y - 21, 4, 10); ctx.fillRect(x + 1, y - 21, 4, 10);
       ctx.fillStyle = JJ_PAL.S; ctx.fillRect(x - 2, y - 20, 2, 8); ctx.fillRect(x + 2, y - 20, 2, 8);
@@ -4004,15 +4056,44 @@
   }
 
   // ---------- pasar de una habitación a otra: la puerta grande de la sala ↔ la puerta doble de la entrada ----------
-  // Al empujar contra la puerta se funde a negro, se cambia de habitación y se vuelve a ver (SWAP_DUR cada mitad).
-  const SWAP_DUR = 0.3;
-  let swap = null;                                                   // { at, to }
+  // Al empujar contra la puerta: se para, la puerta (las dos hojas) se abre hacia dentro, cruza mientras funde a negro,
+  // aparece al otro lado con la puerta abierta, da unos pasos hacia dentro y la puerta se cierra detrás de él.
+  const DOOR_T = { open: 0.32, out: 0.62, inside: 0.98, close: 1.32 };   // abierta, cruzando (negro), dentro (ya se mueve), cerrada
+  // dónde está cada puerta: bisagra en el centro del grosor de la pared, hueco, hacia dónde abre (+1 derecha / -1 izquierda)
+  const DOORS = { sala: { x: 297, hole: 294, y0: DOOR_E.y, y1: DOOR_E.y + DOOR_E.h, dir: -1, edge: 291, enter: [296, 282] },
+    entrada: { x: 51, hole: 48, y0: HALL_DEF.DOOR_W.y, y1: HALL_DEF.DOOR_W.y + HALL_DEF.DOOR_W.h, dir: 1, edge: 57, enter: [52, 66] } };   // x = bisagra, en el centro del grosor de la pared
+  let swap = null;                                                   // { at, from, to, sx, fx }
   function doorCheck(t) {
     if (swap || !P.moving) return;
     const DW = HALL_DEF.DOOR_W;
-    if (room === SALA && P.dir === 'right' && P.x >= FLOOR.x1 - 7 && P.y > DOOR_E.y + 6 && P.y < DOOR_E.y + DOOR_E.h - 1) swap = { at: t, to: HALL };
-    else if (room === HALL && P.dir === 'left' && P.x <= 60 && P.y > DW.y + 4 && P.y < DW.y + DW.h) swap = { at: t, to: SALA };
-    if (swap) { const GA = window.GameAudio; if (GA) { GA.blip(180, 0.08, 'square', 0.05, 90); setTimeout(() => GA.blip(120, 0.1, 'square', 0.05, 70), 90); } }   // la puerta: picaporte y abrir
+    if (room === SALA && P.dir === 'right' && P.x >= FLOOR.x1 - 7 && P.y > DOOR_E.y + 6 && P.y < DOOR_E.y + DOOR_E.h - 1) swap = { at: t, from: SALA, to: HALL };
+    else if (room === HALL && P.dir === 'left' && P.x <= 60 && P.y > DW.y + 4 && P.y < DW.y + DW.h) swap = { at: t, from: HALL, to: SALA };
+    if (!swap) return;
+    swap.sx = P.x; swap.fx = {}; P.tx = null; mark = null;
+    const GA = window.GameAudio; if (GA) { GA.blip(180, 0.08, 'square', 0.05, 90); setTimeout(() => GA.blip(230, 0.32, 'sawtooth', 0.02, 150), 90); }   // picaporte y la puerta que chirría
+  }
+  function doorOpenness(t, rm) {                                     // 0 cerrada .. 1 abierta, de la puerta de la habitación rm
+    if (!swap) return 0;
+    const s = t - swap.at, D = DOOR_T;
+    if (rm === swap.from && room === swap.from) return ease(clamp(s / D.open, 0, 1));
+    if (rm === swap.to && room === swap.to) return s < D.inside ? 1 : 1 - ease(clamp((s - D.inside) / (D.close - D.inside), 0, 1));
+    return 0;
+  }
+  function drawDoorSwing(t) {                                        // la puerta abriéndose (vista desde arriba): hueco oscuro/claro y las dos hojas girando
+    const a = doorOpenness(t, room); if (!DOORS[room.name]) return;   // cerrada (a = 0) se pinta igual: las hojas a lo largo de la pared
+    const d = DOORS[room.name], th = a * Math.PI / 2 * 0.92, half = (d.y1 - d.y0) / 2;
+    ctx.fillStyle = room === SALA ? '#0a0604' : '#b9a57a';           // al otro lado: la entrada a oscuras / la sala de día
+    if (a > 0) { ctx.globalAlpha = Math.min(1, a * 1.5); ctx.fillRect(d.hole, d.y0, 6, d.y1 - d.y0); ctx.globalAlpha = 1; }
+    for (const [hy, sy] of [[d.y0, 1], [d.y1, -1]]) {
+      const ex = d.x + d.dir * Math.sin(th) * half, ey = hy + sy * Math.cos(th) * half;
+      ctx.lineCap = 'butt';
+      ctx.strokeStyle = '#2a1a0c'; ctx.lineWidth = 3.2; ctx.beginPath(); ctx.moveTo(d.x, hy); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.strokeStyle = '#7a5430'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(d.x, hy); ctx.lineTo(ex, ey); ctx.stroke();
+      const gx0 = d.x + (ex - d.x) * 0.22, gy0 = hy + (ey - hy) * 0.22, gx1 = d.x + (ex - d.x) * 0.8, gy1 = hy + (ey - hy) * 0.8;   // el cristal de la hoja, que gira con ella
+      ctx.strokeStyle = '#a9c2cc'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(gx0, gy0); ctx.lineTo(gx1, gy1); ctx.stroke();
+      ctx.strokeStyle = 'rgba(235,245,250,0.9)'; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(gx0 + (gx1 - gx0) * 0.25, gy0 + (gy1 - gy0) * 0.25); ctx.lineTo(gx0 + (gx1 - gx0) * 0.45, gy0 + (gy1 - gy0) * 0.45); ctx.stroke();   // brillo
+      ctx.fillStyle = '#b8943a'; ctx.fillRect(Math.round(ex - d.dir * Math.sin(th) * 2) - 1, Math.round(ey - sy * Math.cos(th) * 2) - 1, 2, 2);   // pomo
+    }
   }
   // ---------- caja 1 de la entrada: tapa el cuadro de luz. Estando al lado, con F (o tocándola / clic) empieza una
   // MINI ESCENA: la cámara se acerca (con bandas de cine), Phanterus levanta la caja por encima de la cabeza, se
@@ -4130,11 +4211,11 @@
     const t = tNow;
     if (fuse === 'idle') {                                           // vuelve la luz... un rato
       fuse = 'on'; back = { on: t + 0.7, off: Infinity, fx: {} }; panelCloseAt = t + 0.5;
-      say('Uff, menos mal', UFF_HOLD, t + 1.3, tt => {               // nada más decirlo: otra vez sin luz y el DIF salta
-        back.off = tt; difUp = false; fuse = 'done';
+      say('Uff, menos mal', UFF_HOLD, t + 1.3, tt => {               // nada más decirlo: otra vez sin luz. El DIF sigue SUBIDO:
+        back.off = tt; fuse = 'done';                                //   esta vez la luz la ha cortado alguien desde fuera
         say('Me cago en dios', 2.6, tt + 0.7);
       });
-    } else difTripAt = t + 0.2;                                      // ya no aguanta: salta solo
+    }                                                                // después ya da igual subirlo o bajarlo: no hay luz
   }
   function fuseTick(t) {
     if (panelCloseAt && t >= panelCloseAt) closeFuse();
@@ -4142,7 +4223,7 @@
     if (!back) return;
     const GA = window.GameAudio, fx = back.fx; if (!GA) return;
     if (!fx.on && t >= back.on) { fx.on = 1; GA.blip(60, 0.5, 'sine', 0.06, 120); GA.blip(1800, 0.3, 'sine', 0.02, 1500); }   // zumbido: vuelve la luz y la tele
-    if (!fx.off && t >= back.off) { fx.off = 1; GA.blip(70, 0.18, 'square', 0.12, 40); setTimeout(() => GA.blip(1400, 0.45, 'sine', 0.05, 80), 120); }   // salta otra vez
+    if (!fx.off && t >= back.off) { fx.off = 1; GA.blip(120, 0.6, 'sine', 0.07, 30); setTimeout(() => GA.blip(1400, 0.45, 'sine', 0.05, 80), 80); }   // se va de golpe (el zumbido muere y la tele se apaga)
   }
   function panelTap(p) {
     if (inBox(p, DIF, 2)) { setDif(!difUp); return; }
@@ -4193,9 +4274,11 @@
     const D = DIF, up = difUp;                                                                   // el DIFERENCIAL: más oscuro y con DIF escrito
     R(D.x - 1, D.y - 1, D.w + 2, D.h + 2, '#141210'); R(D.x, D.y, D.w, D.h, '#77716a'); R(D.x, D.y, D.w, 1, '#948d84');
     if (window.PD) window.PD.drawText(ctx, 'DIF', D.x + 3, D.y + 2, '#efe8d8');
-    R(D.x + 6, D.y + 10, 12, 19, '#2a2622'); R(D.x + 7, D.y + 11, 10, 17, '#b9b2a2');                // ranura clara
-    const dy = up ? D.y + 11 : D.y + 20; R(D.x + 7, dy, 10, 8, '#0e0c0a'); R(D.x + 7, dy, 10, 1, '#5a544a');
-    R(D.x + 19, D.y + 11, 3, 3, up ? '#4caf50' : '#4a463e'); R(D.x + 19, D.y + 24, 3, 3, up ? '#4a463e' : '#c0392b');   // I arriba / O abajo
+    R(D.x + 7, D.y + 11, 10, 17, '#0c0a08');                                                     // ranura oscura
+    const dy = up ? D.y + 11 : D.y + 20;                                                         // la palanca: clara, se ve de un vistazo si está arriba o abajo
+    R(D.x + 7, dy, 10, 8, '#e9e1cc'); R(D.x + 7, dy, 10, 1, '#fffaf0'); R(D.x + 7, dy + 7, 10, 1, '#8f8670'); R(D.x + 9, dy + 3, 6, 2, '#bdb39a');
+    R(D.x + 19, D.y + 11, 3, 3, up ? '#4caf50' : '#4a463e'); R(D.x + 19, D.y + 24, 3, 3, up ? '#4a463e' : '#c0392b');   // luz verde arriba / roja abajo
+    R(D.x + 3, D.y + 12, 1, 4, '#efe8d8'); R(D.x + 2, D.y + 23, 3, 1, '#efe8d8'); R(D.x + 2, D.y + 26, 3, 1, '#efe8d8'); R(D.x + 2, D.y + 24, 1, 2, '#efe8d8'); R(D.x + 4, D.y + 24, 1, 2, '#efe8d8');   // "I" arriba, "O" abajo
     R(D.x + 2, D.y + D.h - 5, 4, 3, '#c9b23a');                                                  // botón de prueba
     // ayuda (letra fina, debajo del cuadro)
     const PD = window.PD; if (!PD) return;
@@ -4218,16 +4301,23 @@
     if (bars > 0) { ctx.fillStyle = '#000'; const bh = Math.round(H * 0.11 * bars); ctx.fillRect(0, 0, W, bh); ctx.fillRect(0, H - bh, W, bh); }   // bandas de cine
   }
 
-  function swapTick(t) {                                             // devuelve lo negro que está la pantalla (0..1)
+  function swapTick(t, dt) {                                         // mueve al personaje por la puerta; devuelve lo negro que está la pantalla (0..1)
     if (!swap) return 0;
-    const u = (t - swap.at) / SWAP_DUR;
-    if (u >= 1 && room !== swap.to) {                                // a oscuras: se cambia de habitación junto a la otra cara de la puerta
-      room = swap.to; P.tx = null; mark = null;
-      if (room === HALL) Object.assign(P, { x: 64, y: clamp(P.y - DOOR_E.y + HALL_DEF.DOOR_W.y, 110, 134), dir: 'right', ang: 0 });
-      else Object.assign(P, { x: 282, y: clamp(P.y - HALL_DEF.DOOR_W.y + DOOR_E.y, 112, 150), dir: 'left', ang: Math.PI });
+    const s = t - swap.at, D = DOOR_T, walk = () => { P.moving = true; P.phase += dt * STEP_RATE; };
+    if (s >= D.open && s < D.out) {                                  // cruza la puerta abierta
+      const u = (s - D.open) / (D.out - D.open), ex = DOORS[swap.from.name].edge; P.x = swap.sx + (ex - swap.sx) * u; walk();
     }
-    if (u >= 2) { swap = null; return 0; }
-    return u < 1 ? ease(u) : 1 - ease(u - 1);
+    if (s >= D.out && room !== swap.to) {                            // a oscuras: al otro lado de la puerta, que sigue abierta
+      room = swap.to;
+      if (room === HALL) Object.assign(P, { y: clamp(P.y - DOOR_E.y + HALL_DEF.DOOR_W.y, 108, 136), dir: 'right', ang: 0 });
+      else Object.assign(P, { y: clamp(P.y - HALL_DEF.DOOR_W.y + DOOR_E.y, 110, 150), dir: 'left', ang: Math.PI });
+    }
+    if (room === swap.to && s < D.inside) {                          // entra unos pasos
+      const [a, b] = DOORS[room.name].enter, u = clamp((s - D.out) / (D.inside - D.out), 0, 1); P.x = a + (b - a) * u; walk();
+    }
+    if (!swap.fx.shut && s >= D.close - 0.06) { swap.fx.shut = true; const GA = window.GameAudio; if (GA) { GA.blip(80, 0.16, 'square', 0.09, 45); GA.blip(160, 0.05, 'square', 0.04, 120); } }   // ¡pum!, se cierra
+    if (s >= D.close) { swap = null; return 0; }
+    return s < D.open + 0.04 ? 0 : s < D.out ? ease((s - D.open - 0.04) / (D.out - D.open - 0.04)) : s < D.out + 0.26 ? 1 - ease((s - D.out) / 0.26) : 0;
   }
 
   // ---------- bocadillos de cómic del protagonista (uno detrás de otro) ----------
@@ -4346,7 +4436,18 @@
     g.addColorStop(0, `rgba(0,0,0,${0.72 * lvl})`); g.addColorStop(0.45, `rgba(0,0,0,${0.32 * lvl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
     dctx.fillStyle = g; dctx.beginPath();
     [[54, DW.y + 7], [54, DW.y + DW.h - 7], [132 + sway, DW.y + DW.h + 5], [132 + sway, DW.y]].forEach(([x, y], i) => i ? dctx.lineTo(x, y) : dctx.moveTo(x, y));
-    dctx.closePath(); dctx.fill(); dctx.fillStyle = 'rgba(0,0,0,0.9)'; dctx.fillRect(48, DW.y + 7, 6, DW.h - 14);   // los cristales
+    dctx.closePath(); dctx.fill(); dctx.fillStyle = 'rgba(0,0,0,0.9)'; if (doorOpenness(t, HALL) > 0) dctx.fillRect(48, DW.y, 6, DW.h); else dctx.fillRect(49, DW.y + 5, 4, DW.h - 10);   // los cristales de las hojas (o el hueco, si está abierta)
+    // a oscuras las puertas se siguen adivinando: un poco de su silueta (jambas, hoja y pomos) asoma de la negrura
+    dctx.fillStyle = 'rgba(0,0,0,0.3)';
+    dctx.fillRect(265, 59, 8, 24);                                   // pared derecha
+    dctx.fillRect(219, 141, 28, 8); dctx.fillRect(HALL_DEF.EXIT.x - 2, 169, HALL_DEF.EXIT.w + 4, 8);   // las de abajo
+    dctx.fillRect(47, DW.y - 2, 8, DW.h + 4);                       // la doble, a la sala
+    // la de la CALLE: por debajo se cuela una rendija de luz del día
+    const E = HALL_DEF.EXIT, ecx = E.x + E.w / 2;
+    dctx.translate(ecx, 171); dctx.scale(1, 0.4);                    // charco de luz ovalado, que se apaga hacia dentro
+    const sg = dctx.createRadialGradient(0, 0, 2, 0, 0, E.w * 0.75);
+    sg.addColorStop(0, `rgba(0,0,0,${0.55 * lvl})`); sg.addColorStop(1, 'rgba(0,0,0,0)');
+    dctx.fillStyle = sg; dctx.fillRect(-E.w, -E.w * 1.2, E.w * 2, E.w * 1.2);
     dctx.restore();
   }
   // luces de la entrada (sin ventanas): lámpara de techo hasta el apagón; después, a oscuras, solo la claridad del
@@ -4361,7 +4462,7 @@
     const dl = ctx.createLinearGradient(54, 0, 130, 0);                // se va apagando hacia dentro, sin borde
     dl.addColorStop(0, `rgba(255,236,200,${0.12 * lvl})`); dl.addColorStop(0.45, `rgba(255,236,200,${0.05 * lvl})`); dl.addColorStop(1, 'rgba(255,236,200,0)');   // solo tinte cálido: la luz ya recorta la oscuridad
     ctx.fillStyle = dl; poly([[54, DW.y + 7], [54, DW.y + DW.h - 7], [130 + sway, DW.y + DW.h + 4], [130 + sway, DW.y + 1]]);
-    ctx.fillStyle = 'rgba(225,238,245,0.55)'; ctx.fillRect(49, DW.y + 7, 4, DW.h - 14);   // los cristales, iluminados desde la sala
+    const E = HALL_DEF.EXIT; ctx.fillStyle = `rgba(255,236,200,${0.3 * lvl})`; ctx.fillRect(E.x + 1, 171, E.w - 2, 1);   // rendija bajo la puerta de la calle
   }
 
   const FADE_IN = 1.6, TOUCH = matchMedia('(pointer: coarse)').matches;
@@ -4371,7 +4472,7 @@
     if (!running) return;
     const t = now / 1000 - t0, dt = Math.min(0.05, (now - last) / 1000); last = now;
     tNow = t; update(dt); doorCheck(t);
-    const swapBlack = swapTick(t);
+    const swapBlack = swapTick(t, dt);
     const lvl = 0.94 + 0.06 * Math.sin(t * 1.6) - (hash(Math.floor(t * 18)) > 0.97 ? 0.25 : 0);
     const power = powerAt(t);                                            // luz eléctrica (1 = encendida); la del día no depende de ella
     outageSounds(t); autosave(t); fuseTick(t);
@@ -4379,6 +4480,7 @@
 
     const inSala = room === SALA;
     ctx.drawImage(inSala ? bg : hallBg, 0, 0);
+    drawDoorSwing(t);                                                // la puerta abriéndose o cerrándose al cruzarla
     if (inSala) {                                                    // reflejo del espejo: la luz no deja ver nada dentro
       ctx.save(); ctx.beginPath(); ctx.rect(148, 14, 44, 8); ctx.clip(); ctx.globalCompositeOperation = 'screen';
       const sh = Math.sin(t * 0.35) * 4;
@@ -4451,7 +4553,6 @@
     ctx.fillStyle = 'rgba(225,238,245,0.5)';                                                   // los cristales brillan: fuera es de día
     for (let k = 0; k < 4; k++) ctx.fillRect(WALL.x0 + 1, WIN.y + k * PANE + 1, WALL.t - 2, PANE - 2);
     ctx.fillStyle = 'rgba(255,244,220,0.3)'; ctx.fillRect(DN.x, WALL.y0 + WALL.t + 2, DN.w, F.y0 - WALL.y0 - WALL.t - 3);
-    ctx.fillStyle = 'rgba(225,238,245,0.4)'; ctx.fillRect(WALL.x1 - WALL.t + 1, DE.y + 9, WALL.t - 2, DE.h - 18);
     if (power > 0) {                                                                           // lámpara de techo
       const lamp = ctx.createRadialGradient(CEIL_LIGHT.x, CEIL_LIGHT.y, 4, CEIL_LIGHT.x, CEIL_LIGHT.y, 70);
       lamp.addColorStop(0, `rgba(255,214,140,${0.3 * lvl * power})`); lamp.addColorStop(0.5, `rgba(255,200,120,${0.12 * lvl * power})`); lamp.addColorStop(1, 'rgba(255,200,120,0)');
