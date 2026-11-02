@@ -90,7 +90,26 @@ Plano del usuario (entrada en forma de L, ~16 m²). Se llega desde la sala por s
 - Avisos de interacción: etiqueta PEQUEÑA (letra fina) con un pico que sale del objeto (caja o cuadro), debajo de él (arriba van los bocadillos). En PC lleva la tecla [F]; en móvil "Toca para...". <!-- HECHO -->
 - MINIJUEGO DEL CUADRO DE LUZ: con la caja ya apartada, junto al cuadro sale "[F] Abrir cuadro" (F o tocarlo). Se abre a pantalla un cuadro antiguo de chapa esmaltada (puerta abierta, pegatina de peligro, tiras de papel escritas a boli, cables) con 14 interruptores viejos y el DIFERENCIAL más oscuro con "DIF" escrito y luces verde/roja de arriba/abajo. Todos se pueden subir y bajar (clic/toque; el DIF también con W/S o flechas). F, Escape o tocar fuera: cerrar. <!-- HECHO -->
 - El DIF empieza BAJADO (palanca clara abajo, luz roja, marcas I arriba / O abajo). Al subirlo la primera vez: clac, se cierra el cuadro, vuelve la luz (con un parpadeo, zumbido y la tele) unos 5 s; Juanjo dice "Uff, menos mal" y, en cuanto acaba de decirlo, la luz se va otra vez PERO el DIF se queda SUBIDO (la han cortado desde fuera); luego "Me cago en dios". Después subirlo o bajarlo no hace nada. (No se guarda todavía.) <!-- HECHO -->
-- Siguiente paso de la historia tras "Me cago en dios". <!-- PENDIENTE -->
+- Tras "Me cago en dios": se oye un grito pequeño, amortiguado (PROVISIONAL, sintetizado; cambiar por uno real) y Juanjo: "¿Qué cojones, eso ha sonado en el cuarto de mi madre?". Hasta entonces la puerta del cuarto de la madre no se abre. <!-- HECHO -->
+- Voz de Juanjo para estas frases (ahora solo bocadillos). <!-- PENDIENTE -->
+
+## 2º Parte: el CUARTO DE LA MADRE y su BAÑO
+
+Se entra por la puerta de arriba a la izquierda de la entrada (en la pared del fondo: la hoja se estrecha al abrirse hacia dentro). <!-- HECHO -->
+
+- Cuarto: suelo de tarima, pared rosa palo, cama de matrimonio con cabecero tapizado, almohadas y colcha, dos mesitas (lámpara; despertador y foto), cómoda a la izquierda con perfumes y joyero, armario a la derecha y la puerta del baño al fondo a la derecha. <!-- HECHO -->
+- La puerta-ventana al BALCÓN está ABIERTA: se ve el balcón al sol (cielo, barandilla, suelo de barro, maceta), las cortinas ondean con el aire y entra la luz del día en penumbra. <!-- HECHO -->
+- Al entrar por primera vez (tras el grito): "Qué olor tan raro, ¿se ha estropeado el baño?" <!-- HECHO -->
+- Baño (pequeño, ~2 m²), español: azulejo blanco con cenefa de mosaico azul/verde, suelo de baldosa clara, váter con cisterna, lavabo sobre su mueble con espejo, plato de ducha con mampara, toalla, alfombrilla y un ventanuco translúcido (poca luz). Todo limpio. <!-- HECHO -->
+- Al entrar en el baño: "Qué extraño... creo que la luz no va a volver en un rato, iré a prepararme para ir a la casa de apuestas entonces." Al terminar: misión 2 y guardado. <!-- HECHO -->
+- Habitaciones y puertas genéricas: cada habitación tiene sus puertas (doble de lado, en la pared del fondo o en la de abajo) y sus salidas; todas se abren, se cruzan y se cierran igual. <!-- HECHO -->
+
+## Misiones
+
+- Lista pequeña arriba a la izquierda (letra del juego, casilla). Al tocar/clicar una misión sale debajo una ayuda; al completarla se marca (verde, tachada) y se desvanece. <!-- HECHO -->
+- Misión 1 "Sube el diferencial" (ayuda: ve a la entrada, aparta la caja que tapa el cuadro de luz y sube el DIF): aparece cuando mamá manda a la cajita (al acabar su chat) y se GUARDA la partida; se completa al subir el DIF. <!-- HECHO -->
+- Misión 2 "Prepárate para apostar" (ayuda: ve a tu cuarto, cámbiate de ropa y coge la cartera y la tarjeta de crédito de tu madre): aparece tras la frase del baño y se GUARDA la partida. <!-- HECHO -->
+- Hacer la misión 2: el cuarto de Juanjo, cambiarse de ropa, la cartera y la tarjeta. <!-- PENDIENTE -->
 - Puertas cerradas (no se abren todavía): arriba a la derecha, arriba a la izquierda, la del medio, la de la pared derecha y la de abajo a la derecha. La puerta de la CALLE es la de abajo del entrante (sin decorar). <!-- HECHO -->
 - Luz: sin ventanas. Lámpara de techo hasta el apagón; después, oscuridad casi total, rota solo por la luz del ventanal de la sala que entra por los cristales de la puerta doble. La linterna funciona igual (no atraviesa paredes). <!-- HECHO -->
 - Linterna de MÓVIL (en todo el juego): luz blanca fría, abierta y floja; alumbra un charco cerca del personaje y llega poco lejos (~58 px). <!-- HECHO -->
@@ -122,6 +141,7 @@ Plano del usuario (entrada en forma de L, ~16 m²). Se llega desde la sala por s
 - Una sola partida, guardada en el navegador (`localStorage`, clave `pd_save`, con número de versión: si el formato cambia, la vieja se descarta). <!-- HECHO -->
 - Guardado automático al irse la luz en el salón, antes de los bocadillos: posición del personaje, linterna y cómo quedó WhatsApp. <!-- HECHO -->
 - Menú: botón CONTINUAR (solo si hay partida) → salón con la luz ya ida; vuelven los bocadillos y la vibración del móvil. El chat con Daniel queda terminado. <!-- HECHO -->
+- Más puntos de guardado: "dif" (al aparecer la misión del diferencial: caja en su sitio, DIF bajado, chat con mamá hecho) y "apostar" (tras el baño: caja apartada, DIF subido, sin luz). Se guarda también en qué habitación estabas (sala, entrada, cuarto de la madre o baño). CONTINUAR arranca desde cada uno. <!-- HECHO -->
 - NUEVO JUEGO con partida guardada: aviso "Si empiezas una partida nueva, perderás la anterior. ¿Estás seguro?" (SÍ / NO). SÍ borra la guardada y empieza de cero. <!-- HECHO -->
 - Al añadir nuevos puntos de guardado: cada escena tiene que saber arrancar desde ese punto (como `PDIntro.resume` y `PDRoom.start({ from })`). <!-- NORMA -->
 

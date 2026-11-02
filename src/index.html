@@ -230,6 +230,21 @@
   }
   @keyframes rotatephone { 0%, 25% { transform: rotate(0); } 55%, 85% { transform: rotate(-90deg); } 100% { transform: rotate(0); } }
   @media (prefers-reduced-motion: reduce) { .rotate-phone { animation: none; transform: rotate(-90deg); } }
+  /* lista de misiones (arriba a la izquierda): al tocar una sale su ayuda debajo; las completadas se tachan y se desvanecen */
+  .todo {
+    position: absolute; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: calc(var(--px) * 2);
+    top: calc(var(--px) * 3 + env(safe-area-inset-top)); left: calc(var(--px) * 3 + env(safe-area-inset-left));
+  }
+  .todo-item {
+    display: flex; flex-direction: column; gap: calc(var(--px) * 2); line-height: 0; font-size: 0; cursor: pointer; text-align: left;
+    background: rgba(0, 0, 0, .45); border: calc(var(--px) * 0.5) solid rgba(232, 224, 208, .25); padding: calc(var(--px) * 2);
+    transition: opacity 1s ease, transform 1s ease; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  }
+  .todo-item:focus { outline: none; } .todo-item:focus-visible { border-color: rgba(255, 90, 74, .7); }
+  .todo-item.done { border-color: rgba(127, 208, 127, .5); cursor: default; }
+  .todo-item.gone { opacity: 0; transform: translateX(calc(var(--px) * -6)); }
+  .todo-item canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+  .todo-help { padding-left: calc(var(--px) * 11); }
   /* joystick del móvil (sala): abajo a la izquierda, el pulgar arrastra la bola */
   .joystick {
     position: absolute; z-index: 3; touch-action: none;
@@ -370,6 +385,7 @@
       <button type="button" class="intro-icon-btn" id="introMenu" aria-label="Menú principal"></button>
     </div>
     <button class="btn intro-hud-phone" id="hudPhone" type="button" aria-label="Abrir teléfono" hidden></button>
+    <div class="todo" id="todo" aria-label="Misiones" hidden></div>
     <div class="joystick" id="joystick" role="application" aria-label="Joystick para mover al personaje" hidden><div class="joy-knob"></div></div>
     <div id="phoneUI" role="dialog" aria-modal="true" aria-label="Teléfono">
       <div class="phone-device">
@@ -3067,12 +3083,13 @@
     }
     function enableHome() { homeMode = true; screen = 'home'; ensureAssets(() => {}); }
     // partida guardada: qué se recuerda del móvil y cómo queda al continuar (chat con Daniel ya terminado)
-    function snapshot() { return { flash, waScreen, chatWith }; }
+    function snapshot() { return { flash, waScreen, chatWith, mom: momSeq === 'done' }; }   // mom: ya se habló con mamá (y se le mandó el sticker)
     function restore(s) {
       unlocked = true; chatSeq = 'done'; sentReply = true; sentOk = true; chatReveal = 1;
       typeTarget = REPLY_OK; chatTyped = REPLY_OK.length;
       waScreen = s && s.waScreen === 'list' ? 'list' : 'chat'; chatWith = s && s.chatWith === 'mama' ? 'mama' : 'daniel';
       setFlash(!!(s && s.flash));
+      if (s && s.mom) { momOk = true; momSeq = 'done'; momGot = MOM_REPLIES.length; }       // la conversación con mamá, terminada
       enableHome();
     }
     function allowMom() { if (momOk) return; momOk = true; if (uiOpen() && !anim && screen === 'chat' && chatWith === 'mama') frame(); }
@@ -3520,6 +3537,36 @@
     if (!open) { R(x + Math.floor(w / 2) - 1, top + 1, 3, d - 1, '#e0d2a8'); R(x + Math.floor(w / 2) - 1, top + d, 3, Math.min(4, h - 1), '#e0d2a8', 0.8); }
     return top;
   }
+  // ---------- CUARTO DE LA MADRE (puerta de arriba a la izquierda de la entrada) y su BAÑO (puerta en la pared del fondo) ----------
+  // El cuarto: cama de matrimonio contra la pared del fondo con sus mesitas, la puerta-ventana al balcón ABIERTA (cortinas
+  // movidas por el aire), cómoda a la izquierda, armario a la derecha y la puerta del baño al fondo a la derecha.
+  const MOM_DEF = {
+    caps: [{ x: 64, y: 14, w: 192, h: 6 }, { x: 64, y: 14, w: 6, h: 148 }, { x: 250, y: 14, w: 6, h: 148 }, { x: 64, y: 156, w: 192, h: 6 }],
+    faces: [{ x: 70, y: 20, w: 180, h: 20 }],
+    floor: [{ x: 70, y: 40, w: 180, h: 116 }],
+    walk: [{ x: 71, y: 41, w: 178, h: 114 }],
+    WIN: { x: 84, w: 38 }, BED: { x: 138, y: 40, w: 46, h: 56 }, NIGHT: [{ x: 124, y: 40, w: 13, h: 12 }, { x: 185, y: 40, w: 13, h: 12 }],
+    WARD: { x: 232, y: 60, w: 18, h: 68 }, DRESSER: { x: 70, y: 74, w: 16, h: 42 }, DOOR_S: { x: 148, w: 24 }, DOOR_BATH: { x: 212, w: 22 }
+  };
+  const MOM = {
+    name: 'madre', walk: MOM_DEF.walk, floor: MOM_DEF.floor,
+    lit: MOM_DEF.floor.concat(MOM_DEF.faces, [{ x: 146, y: 156, w: 28, h: 3 }]),
+    solid: [{ x: 124, y: 40, w: 74, h: 58 }, { x: 230, y: 58, w: 20, h: 72 }, { x: 70, y: 72, w: 18, h: 46 }]   // cama y mesitas, armario, cómoda
+  };
+  // El baño, pequeño (unos 2 m²): azulejo blanco con una cenefa de mosaico, váter, lavabo con mueble y espejo, plato de ducha
+  const BATH_DEF = {
+    caps: [{ x: 122, y: 36, w: 80, h: 6 }, { x: 122, y: 36, w: 6, h: 90 }, { x: 196, y: 36, w: 6, h: 90 }, { x: 122, y: 120, w: 80, h: 6 }],
+    faces: [{ x: 128, y: 42, w: 68, h: 20 }],
+    floor: [{ x: 128, y: 62, w: 68, h: 58 }],
+    walk: [{ x: 129, y: 63, w: 66, h: 56 }],
+    DOOR_S: { x: 150, w: 22 }
+  };
+  const BATH = {
+    name: 'bano', walk: BATH_DEF.walk, floor: BATH_DEF.floor,
+    lit: BATH_DEF.floor.concat(BATH_DEF.faces, [{ x: 148, y: 120, w: 26, h: 3 }]),
+    solid: [{ x: 130, y: 62, w: 16, h: 22 }, { x: 150, y: 62, w: 26, h: 14 }, { x: 176, y: 62, w: 20, h: 32 }]   // váter, lavabo, ducha
+  };
+  const ROOMS = { sala: SALA, entrada: HALL, madre: MOM, bano: BATH };
   let room = SALA;
   const inRects = (rs, x, y) => rs.some(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
   const boxOf = rs => ({ x0: Math.min(...rs.map(r => r.x)), y0: Math.min(...rs.map(r => r.y)), x1: Math.max(...rs.map(r => r.x + r.w)), y1: Math.max(...rs.map(r => r.y + r.h)) });
@@ -3733,7 +3780,7 @@
     const v = vig.getContext('2d'), g = v.createRadialGradient(W / 2, H / 2 + 6, 70, W / 2, H / 2 + 6, 200);
     g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.6, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0.85)');
     v.fillStyle = g; v.fillRect(0, 0, W, H);
-    buildHall();
+    buildHall(); buildMom(); buildBath();
   }
 
   // ---------- fondo de la ENTRADA: paredes, suelo y puertas (sin muebles todavía) ----------
@@ -3831,6 +3878,152 @@
     drawCrate(b, 160, 160, 15, 10, 8, 0); drawCrate(b, 175, 161, 13, 9, 7, 0);
     const ot = drawCrate(b, 164, 161, 11, 7, 6, 8, true); R(166, ot + 2, 3, 3, '#d9d2bf'); R(170, ot + 2, 3, 4, '#6d1f22');
     b.globalCompositeOperation = 'multiply'; b.fillStyle = 'rgb(240,228,208)'; b.fillRect(0, 0, W, H); b.globalCompositeOperation = 'source-over';
+  }
+
+  // ---------- ayudas para pintar habitaciones vistas desde arriba (cuarto de la madre y baño) ----------
+  function roomPainter(b) {
+    const R = (x, y, w, h, c, a) => { b.globalAlpha = a == null ? 1 : a; b.fillStyle = c; b.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); b.globalAlpha = 1; };
+    const Pt = (x, y, c, a) => R(x, y, 1, 1, c, a);
+    const disc = (cx, cy, r, c, a) => { for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (x * x + y * y <= r * r + r * 0.6) Pt(cx + x, cy + y, c, a); };
+    const caps = list => {                                          // tapas amarillas de las paredes con su contorno
+      list.forEach(c => R(c.x - 1, c.y - 1, c.w + 2, c.h + 2, '#1c1408'));
+      list.forEach(c => { R(c.x, c.y, c.w, c.h, '#c4a24c'); for (let i = 0; i < c.w * c.h / 9; i++) Pt(c.x + hash(i * 1.3 + c.x) * c.w, c.y + hash(i * 2.7 + c.y) * c.h, '#b3923f', 0.7); });
+    };
+    const paint = (x, y, w, h, base, lo, hi) => {                    // pared del fondo pintada, con moteado y sombra arriba
+      R(x, y, w, h, base);
+      for (let i = 0; i < w * h / 7; i++) Pt(x + hash(i * 2.91 + x) * w, y + hash(i * 4.13 + y) * h, hash(i * 1.37 + x) > 0.5 ? lo : hi, 0.6);
+      R(x, y, w, 2, '#000', 0.35); R(x, y + 2, w, 1, '#000', 0.15);
+    };
+    const skirting = f => { R(f.x, f.y + f.h - 3, f.w, 1, '#6e5233'); R(f.x, f.y + f.h - 2, f.w, 1, '#4a3520'); R(f.x, f.y + f.h - 1, f.w, 1, '#21170d'); };
+    const floorShade = f => {                                        // sombras del suelo junto a las paredes
+      for (let k = 0; k < 6; k++) R(f.x, f.y + k, f.w, 1, '#000', 0.3 - k * 0.05);
+      for (let k = 0; k < 3; k++) { R(f.x + k, f.y, 1, f.h, '#000', 0.18 - k * 0.06); R(f.x + f.w - 1 - k, f.y, 1, f.h, '#000', 0.18 - k * 0.06); R(f.x, f.y + f.h - 1 - k, f.w, 1, '#000', 0.14 - k * 0.045); }
+    };
+    const sill = (x, y, w, h) => { R(x, y, w, h, '#6b6458'); for (let i = 0; i < Math.floor(w * h / 6); i++) Pt(x + Math.floor(hash(i * 2.9 + x + y) * w), y + Math.floor(hash(i * 5.3 + y) * h), hash(i + x + y) > 0.5 ? '#7d766a' : '#5c564b'); };
+    const bottomDoor = (x, y, len) => {                              // puerta en la pared de abajo: solo la mitad de dentro (como en la entrada)
+      R(x - 2, y - 1, 2, 5, '#7c6244'); R(x + len, y - 1, 2, 5, '#7c6244'); R(x - 2, y - 1, 2, 1, '#98794f'); R(x + len, y - 1, 2, 1, '#98794f');
+      sill(x, y, len, 2); R(x, y + 2, len, 2, '#2a1a0c'); R(x + 1, y + 2, len - 2, 1, '#7a5430'); R(x + 2, y + 2, len - 6, 1, '#9a6c40');
+      R(x + 1, y + 1, 2, 1, '#8f949a'); R(x + len - 5, y, 2, 2, '#c8a040'); Pt(x + len - 5, y, '#e0c070');
+    };
+    const frontDoor = (x, w, f, light) => {                          // puerta en la pared del fondo (vista de frente)
+      R(x - 1, f.y + 1, w + 2, f.h - 1, '#3a2410'); R(x, f.y + 2, w, f.h - 2, light ? '#e2ddd2' : '#6e4a26'); R(x, f.y + 2, w, 1, light ? '#f4f0e8' : '#8a5c34');
+      R(x + 2, f.y + 4, Math.floor(w / 2) - 3, f.h - 7, light ? '#d2cdc2' : '#5f3f20'); R(x + Math.ceil(w / 2) + 1, f.y + 4, Math.floor(w / 2) - 3, f.h - 7, light ? '#d2cdc2' : '#5f3f20');
+      R(x + w - 4, f.y + Math.floor(f.h / 2) + 1, 2, 1, '#b8943a');
+    };
+    const sepia = () => { b.globalCompositeOperation = 'multiply'; b.fillStyle = 'rgb(240,228,208)'; b.fillRect(0, 0, W, H); b.globalCompositeOperation = 'source-over'; };
+    return { R, Pt, disc, caps, paint, skirting, floorShade, sill, bottomDoor, frontDoor, sepia };
+  }
+
+  // ---------- fondo del CUARTO DE LA MADRE ----------
+  let momBg = null;
+  function buildMom() {
+    momBg = document.createElement('canvas'); momBg.width = W; momBg.height = H;
+    const b = momBg.getContext('2d'), D = MOM_DEF, F = D.floor[0], FC = D.faces[0];
+    const { R, Pt, disc, caps, paint, skirting, floorShade, bottomDoor, frontDoor, sepia } = roomPainter(b);
+    R(0, 0, W, H, '#070304'); caps(D.caps);
+    // suelo de tarima (tablas a lo ancho)
+    for (let y = F.y, r = 0; y < F.y + F.h; y += 6, r++) {
+      let x = F.x - Math.floor(hash(r * 3.3) * 30);
+      while (x < F.x + F.w) {
+        const len = 26 + Math.floor(hash(r * 7 + x) * 30), c = ['#8a6a48', '#7e6040', '#94734e', '#856545'][Math.floor(hash(x * 0.7 + r * 13) * 4)];
+        const x0 = Math.max(x, F.x), x1 = Math.min(x + len, F.x + F.w), h = Math.min(6, F.y + F.h - y);
+        R(x0, y, x1 - x0, h, c); R(x0, y, x1 - x0, 1, '#5e4630', 0.8); if (x + len < F.x + F.w) R(x1 - 1, y, 1, h, '#5e4630', 0.9);
+        for (let g = 0; g < 2; g++) R(x0 + Math.floor(hash(g + x + r) * (x1 - x0 - 6)), y + 2 + g, 4 + Math.floor(hash(x + g * 3) * 10), 1, '#6e5236', 0.4);
+        x += len;
+      }
+    }
+    floorShade(F);
+    // pared del fondo: pintura rosa palo, con rodapié
+    paint(FC.x, FC.y, FC.w, FC.h, '#b48c82', '#a77f75', '#c09a90'); skirting(FC);
+    // PUERTA-VENTANA AL BALCÓN, ABIERTA: se ve el balcón (cielo, barandilla y suelo de barro al sol) y la hoja abierta hacia dentro
+    const WX = D.WIN.x, WW = D.WIN.w, wy0 = FC.y + 1, wy1 = FC.y + FC.h;
+    R(WX - 2, wy0 - 1, WW + 4, wy1 - wy0 + 1, '#e8e4dc'); R(WX - 2, wy0 - 1, WW + 4, 1, '#ffffff');               // marco blanco
+    for (let y = 0; y < 5; y++) R(WX, wy0 + 1 + y, WW, 1, `rgb(${210 - y * 4},${224 - y * 3},${236 - y * 2})`);  // cielo
+    R(WX, wy0 + 6, WW, 1, '#3a3a3e'); R(WX, wy0 + 10, WW, 1, '#3a3a3e'); for (let x = WX + 1; x < WX + WW; x += 3) R(x, wy0 + 7, 1, 3, '#4a4a50');   // barandilla
+    for (let y = wy0 + 11; y < wy1; y++) R(WX, y, WW, 1, (y - wy0) % 4 === 0 ? '#a35f43' : '#c97f5c');            // suelo del balcón
+    for (let x = WX + 3; x < WX + WW; x += 7) R(x, wy0 + 11, 1, wy1 - wy0 - 11, '#a35f43');
+    R(WX + WW - 8, wy0 + 12, 5, 4, '#7a3f26'); R(WX + WW - 9, wy0 + 9, 7, 4, '#3d7a45'); Pt(WX + WW - 7, wy0 + 9, '#5fa060');   // maceta
+    R(WX, wy0, WW, wy1 - wy0, '#fff3d6', 0.22);                                                                   // a pleno sol
+    R(WX + WW - 2, wy0, 2, wy1 - wy0, '#e8e4dc');                                                                 // la hoja de la derecha, cerrada
+    R(F.x + WX - F.x - 1, F.y, WW + 2, 2, '#8a8478');                                                             // umbral
+    // CAMA de matrimonio: cabecero tapizado contra la pared, sábana doblada, dos almohadas y la colcha
+    const BD = D.BED;
+    R(BD.x - 4, FC.y + 5, BD.w + 8, FC.h - 5, '#3a2618'); R(BD.x - 3, FC.y + 6, BD.w + 6, FC.h - 7, '#a08670'); R(BD.x - 3, FC.y + 6, BD.w + 6, 1, '#b8a088');   // cabecero
+    for (let x = BD.x + 2; x < BD.x + BD.w - 2; x += 6) R(x, FC.y + 10, 2, 2, '#7e6656');                                                 // botones del cabecero
+    R(BD.x + 1, BD.y + BD.h, BD.w, 3, '#000', 0.3);                                                                                 // sombra
+    R(BD.x - 1, BD.y, BD.w + 2, BD.h, '#3a2618'); R(BD.x, BD.y, BD.w, BD.h - 2, '#d6c2ae');                                     // marco y colcha
+    for (let i = 0; i < 90; i++) Pt(BD.x + 1 + Math.floor(hash(i * 3.1) * (BD.w - 2)), BD.y + 14 + Math.floor(hash(i * 5.7) * (BD.h - 17)), hash(i) > 0.5 ? '#c9b29c' : '#e0cfbc', 0.8);   // estampado de la colcha
+    for (let y = BD.y + 18; y < BD.y + BD.h - 4; y += 9) R(BD.x + 1, y, BD.w - 2, 1, '#bba48e', 0.7);                                // pespuntes
+    R(BD.x, BD.y + 11, BD.w, 4, '#f0ece4'); R(BD.x, BD.y + 14, BD.w, 1, '#c8c2b6');                                          // sábana doblada
+    [[BD.x + 3, 18], [BD.x + 25, 18]].forEach(([x, w]) => { R(x, BD.y + 1, w, 9, '#f4f2ec'); R(x, BD.y + 1, w, 1, '#ffffff'); R(x, BD.y + 9, w, 1, '#c9c4b8'); R(x + 1, BD.y + 3, w - 2, 1, '#e2ded4'); });   // almohadas
+    R(BD.x, BD.y + BD.h - 3, BD.w, 1, '#a8927c'); R(BD.x - 1, BD.y + BD.h - 2, BD.w + 2, 2, '#4a3220');                       // pie de la cama
+    // MESITAS de noche: una con lámpara, la otra con un despertador y un marco de foto
+    D.NIGHT.forEach((n, i) => {
+      R(n.x + 1, n.y + n.h, n.w, 2, '#000', 0.3); R(n.x, n.y, n.w, n.h, '#4a2f17'); R(n.x + 1, n.y + 1, n.w - 2, n.h - 3, '#7a5430'); R(n.x + 1, n.y + n.h - 2, n.w - 2, 1, '#5a3a1e');
+      if (i === 0) { disc(n.x + 6, n.y + 5, 3, '#d8c8a0'); disc(n.x + 6, n.y + 5, 1, '#8a7a50'); }
+      else { R(n.x + 2, n.y + 3, 4, 3, '#2a2a2e'); Pt(n.x + 3, n.y + 4, '#c04040'); R(n.x + 8, n.y + 2, 3, 4, '#c9b78a'); Pt(n.x + 9, n.y + 3, '#4a3d2a'); }
+    });
+    // CÓMODA contra la pared izquierda (cajones hacia la habitación) con perfumes y un joyero
+    const DR = D.DRESSER;
+    R(DR.x, DR.y, DR.w, DR.h, '#3a2410'); R(DR.x, DR.y + 1, DR.w - 2, DR.h - 2, '#7a5430'); R(DR.x + DR.w - 2, DR.y, 2, DR.h, '#5a3a1e');
+    for (let y = DR.y + 6; y < DR.y + DR.h - 2; y += 12) R(DR.x + DR.w - 1, y, 1, 3, '#c8a040');                              // tiradores
+    R(DR.x + 3, DR.y + 4, 3, 4, '#d8b8c8'); R(DR.x + 4, DR.y + 3, 1, 1, '#e8e0d0'); R(DR.x + 8, DR.y + 5, 2, 3, '#a8c8d8'); R(DR.x + 4, DR.y + 16, 7, 5, '#6d1f22'); R(DR.x + 4, DR.y + 16, 7, 1, '#9a3434');
+    R(DR.x + DR.w, DR.y + 2, 3, DR.h - 2, '#000', 0.25);
+    // ARMARIO contra la pared derecha (puertas hacia la habitación)
+    const WD = D.WARD;
+    R(WD.x - 3, WD.y + 2, 3, WD.h - 2, '#000', 0.25);
+    R(WD.x, WD.y, WD.w, WD.h, '#3a2410'); R(WD.x + 2, WD.y + 1, WD.w - 3, WD.h - 2, '#6e4a26'); R(WD.x, WD.y, 2, WD.h, '#4a2f17');
+    R(WD.x, WD.y + Math.floor(WD.h / 2), 2, 1, '#2a1a0c'); R(WD.x - 1, WD.y + Math.floor(WD.h / 2) - 4, 1, 3, '#c8a040'); R(WD.x - 1, WD.y + Math.floor(WD.h / 2) + 2, 1, 3, '#c8a040');
+    for (let i = 0; i < 16; i++) R(WD.x + 3 + Math.floor(hash(i * 1.9) * (WD.w - 6)), WD.y + 2 + Math.floor(hash(i * 3.3) * (WD.h - 6)), 1, 4, '#5e3e20', 0.7);
+    // la puerta del BAÑO al fondo a la derecha y la del pasillo (abajo, por donde se entra)
+    frontDoor(D.DOOR_BATH.x, D.DOOR_BATH.w, FC, true);
+    bottomDoor(D.DOOR_S.x, 156, D.DOOR_S.w);
+    sepia();
+  }
+
+  // ---------- fondo del BAÑO (español, azulejo blanco con cenefa de mosaico; todo limpio y compacto) ----------
+  let bathBg = null;
+  function buildBath() {
+    bathBg = document.createElement('canvas'); bathBg.width = W; bathBg.height = H;
+    const b = bathBg.getContext('2d'), D = BATH_DEF, F = D.floor[0], FC = D.faces[0];
+    const { R, Pt, disc, caps, floorShade, bottomDoor, sepia } = roomPainter(b);
+    R(0, 0, W, H, '#070304'); caps(D.caps);
+    // suelo de baldosa clara pequeña
+    for (let y = F.y; y < F.y + F.h; y += 6) for (let x = F.x; x < F.x + F.w; x += 6) {
+      R(x, y, Math.min(6, F.x + F.w - x), Math.min(6, F.y + F.h - y), ((x - F.x) / 6 + (y - F.y) / 6) & 1 ? '#e2e0da' : '#d8d6cf');
+      R(x, y, 6, 1, '#b8b5ad'); R(x, y, 1, 6, '#b8b5ad');
+    }
+    floorShade(F);
+    // pared: azulejo blanco (rejilla) y una cenefa de mosaico azul y verde
+    R(FC.x, FC.y, FC.w, FC.h, '#eceae4');
+    for (let y = FC.y; y < FC.y + FC.h; y += 5) R(FC.x, y, FC.w, 1, '#c9c6be');
+    for (let x = FC.x; x < FC.x + FC.w; x += 5) R(x, FC.y, 1, FC.h, '#c9c6be');
+    for (let x = FC.x; x < FC.x + FC.w; x += 2) R(x, FC.y + 9, 2, 3, ['#3d6e9a', '#5aa0b8', '#2f8a7a', '#9ac8d8', '#4a7aa8'][Math.floor(hash(x * 1.7) * 5)]);
+    R(FC.x, FC.y + 8, FC.w, 1, '#a8a49a'); R(FC.x, FC.y + 12, FC.w, 1, '#a8a49a');
+    R(FC.x, FC.y, FC.w, 2, '#000', 0.3); R(FC.x, FC.y + FC.h - 1, FC.w, 1, '#8a867c');
+    // ventanuco alto de cristal translúcido
+    R(180, FC.y + 2, 12, 6, '#8a8a84'); R(181, FC.y + 3, 10, 4, '#cfd8dc'); R(186, FC.y + 3, 1, 4, '#8a8a84');
+    // ESPEJO sobre el lavabo y la alcachofa de la ducha
+    R(154, FC.y + 3, 18, 11, '#9a9c9e'); R(155, FC.y + 4, 16, 9, '#5a6670'); R(156, FC.y + 5, 3, 7, '#8a9aa6'); R(160, FC.y + 5, 1, 7, '#7a8a96');
+    R(185, FC.y + 6, 2, 8, '#9aa0a6'); R(183, FC.y + 6, 6, 2, '#c0c6cc'); for (let i = 0; i < 3; i++) Pt(184 + i * 2, FC.y + 8, '#5a6670');
+    // VÁTER (cisterna contra la pared, taza con tapa)
+    R(133, 62, 12, 5, '#c9c6be'); R(134, 62, 10, 4, '#f6f5f1'); R(138, 62, 2, 1, '#c0c6cc');
+    for (let y = 0; y < 15; y++) { const hw = Math.round(6 * Math.sqrt(1 - Math.pow((y - 7) / 8, 2))); R(139 - hw, 67 + y, hw * 2, 1, '#f6f5f1'); }
+    for (let y = 2; y < 13; y++) { const hw = Math.round(4 * Math.sqrt(1 - Math.pow((y - 7) / 6, 2))); R(139 - hw, 67 + y, hw * 2, 1, '#e4e2dc'); }
+    R(135, 67, 8, 1, '#d8d6d0'); R(140, 82, 2, 1, '#000', 0.25);
+    // LAVABO sobre su mueble, con el grifo
+    R(151, 62, 24, 12, '#bdbab2'); R(152, 62, 22, 11, '#f4f3ef'); disc(163, 67, 4, '#dedcd6'); disc(163, 67, 3, '#ecebe7'); Pt(163, 68, '#8a8a84');
+    R(162, 62, 2, 3, '#c0c6cc'); Pt(162, 63, '#ffffff');
+    R(152, 73, 22, 3, '#d6d0c4'); R(158, 74, 3, 1, '#9aa0a6'); R(166, 74, 3, 1, '#9aa0a6'); R(152, 76, 22, 1, '#000', 0.25);
+    // PLATO DE DUCHA con su desagüe y la mampara de cristal
+    R(177, 62, 19, 31, '#d6d4ce'); R(178, 62, 17, 30, '#f2f1ed'); disc(186, 80, 1, '#8a8a84');
+    for (let k = 0; k < 4; k++) R(179, 64 + k * 7, 15, 1, '#e4e3df');
+    R(176, 62, 1, 32, '#9ac0cc'); R(176, 93, 12, 1, '#9ac0cc'); R(176, 62, 1, 32, '#ffffff', 0.25);
+    // toalla colgada y alfombrilla de baño
+    R(147, 62, 3, 9, '#7a9ab8'); R(147, 62, 3, 1, '#9ab8d0');
+    R(152, 96, 16, 8, '#8ab0c8'); R(152, 96, 16, 1, '#a8c8dc'); for (let x = 153; x < 168; x += 2) Pt(x, 103, '#6a90a8');
+    bottomDoor(D.DOOR_S.x, 120, D.DOOR_S.w);
+    sepia();
   }
 
   // ---------- protagonista PROVISIONAL (se cambiará por el definitivo) ----------
@@ -4059,44 +4252,86 @@
     });
   }
 
-  // ---------- pasar de una habitación a otra: la puerta grande de la sala ↔ la puerta doble de la entrada ----------
-  // Al empujar contra la puerta: se para, la puerta (las dos hojas) se abre hacia dentro, cruza mientras funde a negro,
-  // aparece al otro lado con la puerta abierta, da unos pasos hacia dentro y la puerta se cierra detrás de él.
+  // ---------- pasar de una habitación a otra ----------
+  // Al empujar contra una puerta: se para, la puerta se abre hacia dentro, cruza mientras funde a negro, aparece al otro
+  // lado con la puerta abierta, da unos pasos hacia dentro y la puerta se cierra detrás de él.
+  // Tipos de puerta: 'v2' doble en una pared de los lados (hojas finas con cristal, siempre se pintan), 'front' en la pared
+  // del fondo (vista de frente: la hoja se estrecha al girar hacia dentro), 'h1' sencilla en una pared de abajo (hoja que gira).
   const DOOR_T = { open: 0.32, out: 0.62, inside: 0.98, close: 1.32 };   // abierta, cruzando (negro), dentro (ya se mueve), cerrada
-  // dónde está cada puerta: bisagra en el centro del grosor de la pared, hueco, hacia dónde abre (+1 derecha / -1 izquierda)
-  const DOORS = { sala: { x: 297, hole: 294, y0: DOOR_E.y, y1: DOOR_E.y + DOOR_E.h, dir: -1, edge: 291, enter: [296, 282] },
-    entrada: { x: 51, hole: 48, y0: HALL_DEF.DOOR_W.y, y1: HALL_DEF.DOOR_W.y + HALL_DEF.DOOR_W.h, dir: 1, edge: 57, enter: [52, 66] } };   // x = bisagra, en el centro del grosor de la pared
-  let swap = null;                                                   // { at, from, to, sx, fx }
+  const DOORS = {
+    salaE: { kind: 'v2', x: 297, hole: 294, y0: DOOR_E.y, y1: DOOR_E.y + DOOR_E.h, dir: -1, beyond: '#0a0604' },
+    hallW: { kind: 'v2', x: 51, hole: 48, y0: HALL_DEF.DOOR_W.y, y1: HALL_DEF.DOOR_W.y + HALL_DEF.DOOR_W.h, dir: 1, beyond: '#b9a57a' },
+    hallMom: { kind: 'front', x: 63, y: 71, w: 26, h: 13, beyond: '#4a3a30' },
+    momS: { kind: 'h1', x: 148, y: 156, w: 24, beyond: '#0a0604' },
+    momBath: { kind: 'front', x: 211, y: 21, w: 24, h: 19, beyond: '#3a3836' },
+    bathS: { kind: 'h1', x: 150, y: 120, w: 22, beyond: '#4a3a30' }
+  };
+  SALA.doors = [DOORS.salaE]; HALL.doors = [DOORS.hallW, DOORS.hallMom]; MOM.doors = [DOORS.momS, DOORS.momBath]; BATH.doors = [DOORS.bathS];
+  // salidas: test (empujando contra la puerta), out (hasta dónde cruza), place (cómo aparece al otro lado) y path (los pasos que da dentro)
+  const DWD = HALL_DEF.DOOR_W;
+  SALA.exits = [{ door: DOORS.salaE, to: HALL, arrive: DOORS.hallW, out: { x: 291 }, path: { x: [52, 66] },
+    test: () => P.dir === 'right' && P.x >= FLOOR.x1 - 7 && P.y > DOOR_E.y + 6 && P.y < DOOR_E.y + DOOR_E.h - 1,
+    place: () => ({ y: clamp(P.y - DOOR_E.y + DWD.y, 108, 136), dir: 'right', ang: 0 }) }];
+  HALL.exits = [
+    { door: DOORS.hallW, to: SALA, arrive: DOORS.salaE, out: { x: 57 }, path: { x: [296, 282] },
+      test: () => P.dir === 'left' && P.x <= 60 && P.y > DWD.y + 4 && P.y < DWD.y + DWD.h,
+      place: () => ({ y: clamp(P.y - DWD.y + DOOR_E.y, 110, 150), dir: 'left', ang: Math.PI }) },
+    { door: DOORS.hallMom, to: MOM, arrive: DOORS.momS, out: { y: 84 }, path: { y: [161, 146] },   // el cuarto de la madre: solo tras oír el grito
+      test: () => story.scream && P.dir === 'up' && P.y <= 90 && P.x > 66 && P.x < 86,
+      place: () => ({ x: 160, dir: 'up', ang: -Math.PI / 2 }) }];
+  MOM.exits = [
+    { door: DOORS.momS, to: HALL, arrive: DOORS.hallMom, out: { y: 159 }, path: { y: [86, 98] },
+      test: () => P.dir === 'down' && P.y >= 152 && P.x > 150 && P.x < 170,
+      place: () => ({ x: 76, dir: 'down', ang: Math.PI / 2 }) },
+    { door: DOORS.momBath, to: BATH, arrive: DOORS.bathS, out: { y: 40 }, path: { y: [125, 112] },
+      test: () => P.dir === 'up' && P.y <= 46 && P.x > 214 && P.x < 232,
+      place: () => ({ x: 161, dir: 'up', ang: -Math.PI / 2 }) }];
+  BATH.exits = [{ door: DOORS.bathS, to: MOM, arrive: DOORS.momBath, out: { y: 123 }, path: { y: [42, 54] },
+    test: () => P.dir === 'down' && P.y >= 116 && P.x > 152 && P.x < 170,
+    place: () => ({ x: 223, dir: 'down', ang: Math.PI / 2 }) }];
+  let swap = null;                                                   // { at, from, to, exit, sx, sy, fx }
   function doorCheck(t) {
     if (swap || !P.moving) return;
-    const DW = HALL_DEF.DOOR_W;
-    if (room === SALA && P.dir === 'right' && P.x >= FLOOR.x1 - 7 && P.y > DOOR_E.y + 6 && P.y < DOOR_E.y + DOOR_E.h - 1) swap = { at: t, from: SALA, to: HALL };
-    else if (room === HALL && P.dir === 'left' && P.x <= 60 && P.y > DW.y + 4 && P.y < DW.y + DW.h) swap = { at: t, from: HALL, to: SALA };
-    if (!swap) return;
-    swap.sx = P.x; swap.fx = {}; P.tx = null; mark = null;
+    const ex = (room.exits || []).find(e => e.test()); if (!ex) return;
+    swap = { at: t, from: room, to: ex.to, exit: ex, sx: P.x, sy: P.y, fx: {} }; P.tx = null; mark = null;
     const GA = window.GameAudio; if (GA) { GA.blip(180, 0.08, 'square', 0.05, 90); setTimeout(() => GA.blip(230, 0.32, 'sawtooth', 0.02, 150), 90); }   // picaporte y la puerta que chirría
   }
-  function doorOpenness(t, rm) {                                     // 0 cerrada .. 1 abierta, de la puerta de la habitación rm
+  function doorAmount(t, door) {                                     // 0 cerrada .. 1 abierta
     if (!swap) return 0;
     const s = t - swap.at, D = DOOR_T;
-    if (rm === swap.from && room === swap.from) return ease(clamp(s / D.open, 0, 1));
-    if (rm === swap.to && room === swap.to) return s < D.inside ? 1 : 1 - ease(clamp((s - D.inside) / (D.close - D.inside), 0, 1));
+    if (door === swap.exit.door && room === swap.from) return ease(clamp(s / D.open, 0, 1));
+    if (door === swap.exit.arrive && room === swap.to) return s < D.inside ? 1 : 1 - ease(clamp((s - D.inside) / (D.close - D.inside), 0, 1));
     return 0;
   }
-  function drawDoorSwing(t) {                                        // la puerta abriéndose (vista desde arriba): hueco oscuro/claro y las dos hojas girando
-    const a = doorOpenness(t, room); if (!DOORS[room.name]) return;   // cerrada (a = 0) se pinta igual: las hojas a lo largo de la pared
-    const d = DOORS[room.name], th = a * Math.PI / 2 * 0.92, half = (d.y1 - d.y0) / 2;
-    ctx.fillStyle = room === SALA ? '#0a0604' : '#b9a57a';           // al otro lado: la entrada a oscuras / la sala de día
-    if (a > 0) { ctx.globalAlpha = Math.min(1, a * 1.5); ctx.fillRect(d.hole, d.y0, 6, d.y1 - d.y0); ctx.globalAlpha = 1; }
-    for (const [hy, sy] of [[d.y0, 1], [d.y1, -1]]) {
-      const ex = d.x + d.dir * Math.sin(th) * half, ey = hy + sy * Math.cos(th) * half;
-      ctx.lineCap = 'butt';
-      ctx.strokeStyle = '#2a1a0c'; ctx.lineWidth = 3.2; ctx.beginPath(); ctx.moveTo(d.x, hy); ctx.lineTo(ex, ey); ctx.stroke();
-      ctx.strokeStyle = '#7a5430'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(d.x, hy); ctx.lineTo(ex, ey); ctx.stroke();
-      const gx0 = d.x + (ex - d.x) * 0.22, gy0 = hy + (ey - hy) * 0.22, gx1 = d.x + (ex - d.x) * 0.8, gy1 = hy + (ey - hy) * 0.8;   // el cristal de la hoja, que gira con ella
-      ctx.strokeStyle = '#a9c2cc'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(gx0, gy0); ctx.lineTo(gx1, gy1); ctx.stroke();
-      ctx.strokeStyle = 'rgba(235,245,250,0.9)'; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(gx0 + (gx1 - gx0) * 0.25, gy0 + (gy1 - gy0) * 0.25); ctx.lineTo(gx0 + (gx1 - gx0) * 0.45, gy0 + (gy1 - gy0) * 0.45); ctx.stroke();   // brillo
-      ctx.fillStyle = '#b8943a'; ctx.fillRect(Math.round(ex - d.dir * Math.sin(th) * 2) - 1, Math.round(ey - sy * Math.cos(th) * 2) - 1, 2, 2);   // pomo
+  function drawDoorSwing(t) {                                        // las puertas de la habitación: abriéndose, cerrándose (y las dobles, siempre)
+    for (const d of room.doors || []) {
+      const a = doorAmount(t, d), th = a * Math.PI / 2 * 0.92;
+      ctx.fillStyle = d.beyond; ctx.lineCap = 'butt';
+      if (d.kind === 'v2') {                                         // doble en una pared de los lados (vista desde arriba)
+        const half = (d.y1 - d.y0) / 2;
+        if (a > 0) { ctx.globalAlpha = Math.min(1, a * 1.5); ctx.fillRect(d.hole, d.y0, 6, d.y1 - d.y0); ctx.globalAlpha = 1; }
+        for (const [hy, sy] of [[d.y0, 1], [d.y1, -1]]) {
+          const ex = d.x + d.dir * Math.sin(th) * half, ey = hy + sy * Math.cos(th) * half;
+          ctx.strokeStyle = '#2a1a0c'; ctx.lineWidth = 3.2; ctx.beginPath(); ctx.moveTo(d.x, hy); ctx.lineTo(ex, ey); ctx.stroke();
+          ctx.strokeStyle = '#7a5430'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(d.x, hy); ctx.lineTo(ex, ey); ctx.stroke();
+          const gx0 = d.x + (ex - d.x) * 0.22, gy0 = hy + (ey - hy) * 0.22, gx1 = d.x + (ex - d.x) * 0.8, gy1 = hy + (ey - hy) * 0.8;   // el cristal de la hoja, que gira con ella
+          ctx.strokeStyle = '#a9c2cc'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(gx0, gy0); ctx.lineTo(gx1, gy1); ctx.stroke();
+          ctx.strokeStyle = 'rgba(235,245,250,0.9)'; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(gx0 + (gx1 - gx0) * 0.25, gy0 + (gy1 - gy0) * 0.25); ctx.lineTo(gx0 + (gx1 - gx0) * 0.45, gy0 + (gy1 - gy0) * 0.45); ctx.stroke();   // brillo
+          ctx.fillStyle = '#b8943a'; ctx.fillRect(Math.round(ex - d.dir * Math.sin(th) * 2) - 1, Math.round(ey - sy * Math.cos(th) * 2) - 1, 2, 2);   // pomo
+        }
+      } else if (a > 0 && d.kind === 'front') {                     // en la pared del fondo: el hueco y la hoja estrechándose hacia la bisagra
+        ctx.fillRect(d.x, d.y, d.w, d.h);
+        const pw = Math.max(1, Math.round(d.w * Math.cos(th)));
+        ctx.fillStyle = '#2a1a0c'; ctx.fillRect(d.x, d.y, pw + 1, d.h);
+        ctx.fillStyle = '#6e4a26'; ctx.fillRect(d.x, d.y + 1, pw, d.h - 1); ctx.fillStyle = '#8a5c34'; ctx.fillRect(d.x, d.y + 1, pw, 1);
+        if (pw > 5) { ctx.fillStyle = '#b8943a'; ctx.fillRect(d.x + pw - 3, d.y + Math.floor(d.h / 2), 2, 1); }
+      } else if (a > 0 && d.kind === 'h1') {                        // en una pared de abajo: el hueco y la hoja girando hacia dentro (arriba)
+        ctx.fillRect(d.x, d.y, d.w, 6);
+        const ex = d.x + Math.cos(th) * d.w, ey = d.y + 3 - Math.sin(th) * d.w;
+        ctx.strokeStyle = '#2a1a0c'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(d.x, d.y + 3); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.strokeStyle = '#7a5430'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(d.x, d.y + 3); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.fillStyle = '#c8a040'; ctx.fillRect(Math.round(ex - Math.cos(th) * 3) - 1, Math.round(ey + Math.sin(th) * 3) - 1, 2, 2);
+      }
     }
   }
   // ---------- caja 1 de la entrada: tapa el cuadro de luz. Estando al lado, con F (o tocándola / clic) empieza una
@@ -4214,10 +4449,13 @@
     if (!up) return;
     const t = tNow;
     if (fuse === 'idle') {                                           // vuelve la luz... un rato
-      fuse = 'on'; back = { on: t + 0.7, off: Infinity, fx: {} }; panelCloseAt = t + 0.5;
+      fuse = 'on'; back = { on: t + 0.7, off: Infinity, fx: {} }; panelCloseAt = t + 0.5; completeMission('dif');
       say('Uff, menos mal', UFF_HOLD, t + 1.3, tt => {               // nada más decirlo: otra vez sin luz. El DIF sigue SUBIDO:
         back.off = tt; fuse = 'done';                                //   esta vez la luz la ha cortado alguien desde fuera
-        say('Me cago en dios', 2.6, tt + 0.7);
+        say('Me cago en dios', 2.6, tt + 0.7, t2 => {                  // y se oye un grito pequeño... en el cuarto de su madre
+          atTime(t2 + 0.4, scream);
+          say('¿Qué cojones, eso ha sonado en el cuarto de mi madre?', 3.2, t2 + 1.9, () => { story.scream = true; });
+        });
       });
     }                                                                // después ya da igual subirlo o bajarlo: no hay luz
   }
@@ -4308,17 +4546,23 @@
   function swapTick(t, dt) {                                         // mueve al personaje por la puerta; devuelve lo negro que está la pantalla (0..1)
     if (!swap) return 0;
     const s = t - swap.at, D = DOOR_T, walk = () => { P.moving = true; P.phase += dt * STEP_RATE; };
+    const X = swap.exit;
     if (s >= D.open && s < D.out) {                                  // cruza la puerta abierta
-      const u = (s - D.open) / (D.out - D.open), ex = DOORS[swap.from.name].edge; P.x = swap.sx + (ex - swap.sx) * u; walk();
+      const u = (s - D.open) / (D.out - D.open);
+      if (X.out.x != null) P.x = swap.sx + (X.out.x - swap.sx) * u;
+      if (X.out.y != null) P.y = swap.sy + (X.out.y - swap.sy) * u;
+      walk();
     }
     if (s >= D.out && room !== swap.to) {                            // a oscuras: al otro lado de la puerta, que sigue abierta
-      room = swap.to;
-      if (room === HALL) Object.assign(P, { y: clamp(P.y - DOOR_E.y + HALL_DEF.DOOR_W.y, 108, 136), dir: 'right', ang: 0 });
-      else Object.assign(P, { y: clamp(P.y - HALL_DEF.DOOR_W.y + DOOR_E.y, 110, 150), dir: 'left', ang: Math.PI });
+      Object.assign(P, X.place()); room = swap.to;
     }
     if (room === swap.to && s < D.inside) {                          // entra unos pasos
-      const [a, b] = DOORS[room.name].enter, u = clamp((s - D.out) / (D.inside - D.out), 0, 1); P.x = a + (b - a) * u; walk();
+      const u = clamp((s - D.out) / (D.inside - D.out), 0, 1);
+      if (X.path.x) P.x = X.path.x[0] + (X.path.x[1] - X.path.x[0]) * u;
+      if (X.path.y) P.y = X.path.y[0] + (X.path.y[1] - X.path.y[0]) * u;
+      walk();
     }
+    if (!swap.fx.in && s >= D.inside) { swap.fx.in = true; onArrive(room, t); }   // ya dentro: lo que pase al entrar (historia)
     if (!swap.fx.shut && s >= D.close - 0.06) { swap.fx.shut = true; const GA = window.GameAudio; if (GA) { GA.blip(80, 0.16, 'square', 0.09, 45); GA.blip(160, 0.05, 'square', 0.04, 120); } }   // ¡pum!, se cierra
     if (s >= D.close) { swap = null; return 0; }
     return s < D.open + 0.04 ? 0 : s < D.out ? ease((s - D.open - 0.04) / (D.out - D.open - 0.04)) : s < D.out + 0.26 ? 1 - ease((s - D.out) / 0.26) : 0;
@@ -4440,7 +4684,7 @@
     g.addColorStop(0, `rgba(0,0,0,${0.72 * lvl})`); g.addColorStop(0.45, `rgba(0,0,0,${0.32 * lvl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
     dctx.fillStyle = g; dctx.beginPath();
     [[54, DW.y + 7], [54, DW.y + DW.h - 7], [132 + sway, DW.y + DW.h + 5], [132 + sway, DW.y]].forEach(([x, y], i) => i ? dctx.lineTo(x, y) : dctx.moveTo(x, y));
-    dctx.closePath(); dctx.fill(); dctx.fillStyle = 'rgba(0,0,0,0.9)'; if (doorOpenness(t, HALL) > 0) dctx.fillRect(48, DW.y, 6, DW.h); else dctx.fillRect(49, DW.y + 5, 4, DW.h - 10);   // los cristales de las hojas (o el hueco, si está abierta)
+    dctx.closePath(); dctx.fill(); dctx.fillStyle = 'rgba(0,0,0,0.9)'; if (doorAmount(t, DOORS.hallW) > 0) dctx.fillRect(48, DW.y, 6, DW.h); else dctx.fillRect(49, DW.y + 5, 4, DW.h - 10);   // los cristales de las hojas (o el hueco, si está abierta)
     dctx.restore();
   }
   // luces de la entrada (sin ventanas): lámpara de techo hasta el apagón; después, a oscuras, solo la claridad del
@@ -4457,6 +4701,128 @@
     ctx.fillStyle = dl; poly([[54, DW.y + 7], [54, DW.y + DW.h - 7], [130 + sway, DW.y + DW.h + 4], [130 + sway, DW.y + 1]]);
   }
 
+  // ---------- luces del cuarto de la madre: entra el día por la puerta del balcón, abierta, y las cortinas se mueven ----------
+  function drawCurtains(t) {                                         // dos cortinas a los lados de la puerta del balcón, ondeando
+    const FC = MOM_DEF.faces[0], X = MOM_DEF.WIN.x, Wd = MOM_DEF.WIN.w;
+    for (const [side, x0] of [[-1, X - 6], [1, X + Wd - 3]]) {
+      for (let y = FC.y; y < FC.y + FC.h + 3; y++) {
+        const k = (y - FC.y) / (FC.h + 3), wave = Math.sin(t * 1.9 + y * 0.32 + side) * 1.6 * k + Math.sin(t * 3.1 + y * 0.6) * 0.6 * k;
+        const w = 9 + Math.round(wave + (side < 0 ? 1 : 0) * 2 * k), x = side < 0 ? x0 : x0 + 9 - w;
+        ctx.fillStyle = '#e8dcc8'; ctx.fillRect(x, y, w, 1);
+        for (let f = 2; f < w; f += 3) { ctx.fillStyle = 'rgba(160,140,115,0.55)'; ctx.fillRect(x + f, y, 1, 1); }   // pliegues
+        ctx.fillStyle = 'rgba(120,100,80,0.6)'; ctx.fillRect(side < 0 ? x + w - 1 : x, y, 1, 1);
+      }
+    }
+    ctx.fillStyle = '#8a7a60'; ctx.fillRect(X - 8, FC.y, Wd + 16, 1);                                   // la barra de la cortina
+  }
+  function momReveal(t, lvl) {                                       // la luz del día del balcón recorta la penumbra
+    const X = MOM_DEF.WIN.x, Wd = MOM_DEF.WIN.w, y0 = MOM_DEF.floor[0].y, sway = Math.sin(t * 0.6) * 3;
+    dctx.save(); dctx.setTransform(RES, 0, 0, RES, 0, 0);
+    const g = dctx.createLinearGradient(0, y0 - 18, 0, y0 + 80);
+    g.addColorStop(0, `rgba(0,0,0,${0.8 * lvl})`); g.addColorStop(0.35, `rgba(0,0,0,${0.5 * lvl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    dctx.fillStyle = g; dctx.beginPath();
+    [[X, y0 - 18], [X + Wd, y0 - 18], [X + Wd + 34 + sway, y0 + 80], [X - 6 + sway, y0 + 80]].forEach(([x, y], i) => i ? dctx.lineTo(x, y) : dctx.moveTo(x, y));
+    dctx.closePath(); dctx.fill(); dctx.restore();
+  }
+  function momLights(t, power, lvl) {
+    const X = MOM_DEF.WIN.x, Wd = MOM_DEF.WIN.w, y0 = MOM_DEF.floor[0].y, sway = Math.sin(t * 0.6) * 3;
+    const g = ctx.createLinearGradient(0, y0, 0, y0 + 80);
+    g.addColorStop(0, `rgba(255,236,196,${0.16 * lvl})`); g.addColorStop(1, 'rgba(255,236,196,0)');
+    ctx.fillStyle = g; poly([[X, y0], [X + Wd, y0], [X + Wd + 34 + sway, y0 + 80], [X - 6 + sway, y0 + 80]]);
+    ctx.fillStyle = `rgba(255,244,220,${0.22 * lvl})`; ctx.fillRect(X, MOM_DEF.faces[0].y + 1, Wd, MOM_DEF.faces[0].h - 1);   // fuera es de día
+  }
+  // ---------- luces del baño: solo la claridad del ventanuco ----------
+  function bathReveal(t, lvl) {
+    dctx.save(); dctx.setTransform(RES, 0, 0, RES, 0, 0);
+    const g = dctx.createRadialGradient(186, 58, 2, 186, 70, 46);
+    g.addColorStop(0, `rgba(0,0,0,${0.6 * lvl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    dctx.fillStyle = g; dctx.fillRect(128, 42, 68, 78); dctx.restore();
+  }
+  function bathLights(t, power, lvl) { ctx.fillStyle = `rgba(220,232,240,${0.25 * lvl})`; ctx.fillRect(181, 45, 10, 4); }
+
+  // ---------- HISTORIA tras el diferencial: grito, el cuarto de la madre y el baño ----------
+  const story = { scream: false, smell: false, bath: false };
+  let later = [];                                                    // cosas que pasan en un momento concreto
+  const atTime = (time, fn) => later.push({ time, fn });
+  function runLater(t) { later = later.filter(e => { if (t < e.time) return true; e.fn(t); return false; }); }
+  function scream() {                                                // GRITO (provisional): una voz aguda que sube y cae, amortiguada por las paredes
+    const GA = window.GameAudio, c = GA && GA.context; if (!c || !GA.master) return;
+    const t = c.currentTime + 0.02, o = c.createOscillator(), o2 = c.createOscillator(), lfo = c.createOscillator(), lg = c.createGain();
+    const bp = c.createBiquadFilter(), lp = c.createBiquadFilter(), g = c.createGain();
+    o.type = 'sawtooth'; o2.type = 'triangle';
+    [[o, 1], [o2, 2]].forEach(([osc, m]) => { const f = osc.frequency; f.setValueAtTime(760 * m, t); f.linearRampToValueAtTime(1150 * m, t + 0.18); f.linearRampToValueAtTime(980 * m, t + 0.6); f.exponentialRampToValueAtTime(480 * m, t + 1.05); });
+    lfo.frequency.value = 7; lg.gain.value = 28; lfo.connect(lg); lg.connect(o.frequency); lg.connect(o2.frequency);
+    bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 1.1; lp.type = 'lowpass'; lp.frequency.value = 1700;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.1, t + 0.06); g.gain.setValueAtTime(0.1, t + 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+    o.connect(bp); o2.connect(bp); bp.connect(lp); lp.connect(g); g.connect(GA.master);
+    [o, o2, lfo].forEach(n => { n.start(t); n.stop(t + 1.15); });
+  }
+  function onArrive(rm, t) {                                         // al entrar en una habitación
+    if (rm === MOM && story.scream && !story.smell) { story.smell = true; say('Qué olor tan raro, ¿se ha estropeado el baño?', 3.0, t + 0.5); }
+    if (rm === BATH && story.smell && !story.bath) {
+      story.bath = true;
+      say('Qué extraño... creo que la luz no va a volver en un rato, iré a prepararme para ir a la casa de apuestas entonces.', 4.2, t + 0.8,
+        () => { addMission('apostar'); saveAt('apostar'); });
+    }
+  }
+
+  // ---------- MISIONES: lista arriba a la izquierda. Al tocar una, sale debajo una pequeña ayuda ----------
+  const MISSIONS = {
+    dif: { title: 'Sube el diferencial', help: 'Ve a la entrada, aparta la caja que tapa el cuadro de luz y sube el DIF.' },
+    apostar: { title: 'Prepárate para apostar', help: 'Ve a tu cuarto, cámbiate de ropa y coge la cartera y la tarjeta de crédito de tu madre.' }
+  };
+  let missions = [];                                                 // [{ id, done, open }]
+  const todoEl = document.getElementById('todo');
+  function addMission(id) {
+    if (missions.some(m => m.id === id)) return;
+    missions.push({ id, done: false, open: false }); renderTodo();
+    const GA = window.GameAudio; if (GA) { GA.blip(660, 0.08, 'square', 0.04, 880); setTimeout(() => GA.blip(990, 0.12, 'square', 0.04, 990), 90); }   // nueva misión
+  }
+  function completeMission(id) {
+    const m = missions.find(x => x.id === id); if (!m || m.done) return;
+    m.done = true; m.open = false; renderTodo();
+    const GA = window.GameAudio; if (GA) { [523, 659, 784].forEach((f, i) => setTimeout(() => GA.blip(f, 0.1, 'square', 0.04, f), i * 90)); }   // ¡hecho!
+    setTimeout(() => { const el = todoEl.querySelector(`[data-id="${id}"]`); if (el) el.classList.add('gone'); }, 2200);           // se desvanece
+    setTimeout(() => { missions = missions.filter(x => x !== m); renderTodo(); }, 3300);
+  }
+  function textCanvas(lines, color, check) {                         // texto con la letra del juego, para la lista (se escala con --px)
+    const PD = window.PD, PX = check != null ? 11 : 0, c = document.createElement('canvas');
+    c.width = Math.max(...lines.map(l => PD.measure(l))) + PX + 1; c.height = lines.length * 9 - 2;
+    const g = c.getContext('2d');
+    if (check != null) {                                             // casilla (con la marca si está hecha)
+      g.fillStyle = '#e8e0d0'; g.fillRect(0, 0, 7, 7); g.fillStyle = '#140c0a'; g.fillRect(1, 1, 5, 5);
+      if (check) { g.fillStyle = '#7fd07f'; [[1, 3], [2, 4], [3, 5], [4, 4], [5, 3], [6, 2], [7, 1]].forEach(([x, y]) => g.fillRect(x, y, 1, 1)); }
+    }
+    lines.forEach((l, i) => PD.drawText(g, l, PX, i * 9, color));
+    if (check) { g.fillStyle = color; g.fillRect(PX, 3, c.width - PX, 1); }   // tachada
+    c.style.width = `calc(${c.width} * var(--px))`; c.style.height = `calc(${c.height} * var(--px))`;
+    return c;
+  }
+  function wrapText(text, maxW) {
+    const PD = window.PD, out = []; let cur = '';
+    for (const w of PD.norm(text).split(' ')) { const tst = cur ? cur + ' ' + w : w; if (cur && PD.measure(tst) > maxW) { out.push(cur); cur = w; } else cur = tst; }
+    if (cur) out.push(cur); return out;
+  }
+  function renderTodo() {
+    if (!todoEl || !window.PD) return;
+    todoEl.textContent = '';
+    todoEl.hidden = !running || !missions.length;
+    for (const m of missions) {
+      const M = MISSIONS[m.id], btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'todo-item' + (m.done ? ' done' : ''); btn.dataset.id = m.id;
+      btn.setAttribute('aria-expanded', String(m.open)); btn.setAttribute('aria-label', 'Misión: ' + M.title + (m.done ? ' (completada)' : '. Toca para ver la ayuda'));
+      btn.append(textCanvas([window.PD.norm(M.title)], m.done ? '#7fd07f' : '#e8e0d0', m.done));
+      if (m.open && !m.done) { const h = textCanvas(wrapText(M.help, 118), '#b8ac98'); h.className = 'todo-help'; btn.append(h); }
+      btn.addEventListener('click', () => { if (m.done) return; m.open = !m.open; const GA = window.GameAudio; if (GA) GA.click(); renderTodo(); });
+      todoEl.append(btn);
+    }
+  }
+  // la misión del diferencial aparece cuando mamá dice que vaya a la cajita (al acabar su chat), y se guarda la partida
+  document.addEventListener('pd:mom-chat-done', () => { if (!running) return; addMission('dif'); saveAt('dif'); });
+  function saveAt(atName) {
+    if (window.PDSave) window.PDSave.save({ at: atName, player: { x: P.x, y: P.y, dir: P.dir, ang: P.ang, room: room.name }, phone: window.PDPhone ? window.PDPhone.snapshot() : null });
+  }
+
   const FADE_IN = 1.6, TOUCH = matchMedia('(pointer: coarse)').matches;
   let running = false, raf = 0, t0 = 0, last = 0, moved = false, movedAt = null;
   const poly = pts => { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.fill(); };
@@ -4467,12 +4833,13 @@
     const swapBlack = swapTick(t, dt);
     const lvl = 0.94 + 0.06 * Math.sin(t * 1.6) - (hash(Math.floor(t * 18)) > 0.97 ? 0.25 : 0);
     const power = powerAt(t);                                            // luz eléctrica (1 = encendida); la del día no depende de ella
-    outageSounds(t); autosave(t); fuseTick(t);
+    outageSounds(t); autosave(t); fuseTick(t); runLater(t);
     ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;   // a partir de aquí, en px lógicos
 
     const inSala = room === SALA;
-    ctx.drawImage(inSala ? bg : hallBg, 0, 0);
+    ctx.drawImage(inSala ? bg : room === HALL ? hallBg : room === MOM ? momBg : bathBg, 0, 0);
     drawDoorSwing(t);                                                // la puerta abriéndose o cerrándose al cruzarla
+    if (room === MOM) drawCurtains(t);                               // las cortinas de la puerta del balcón, movidas por el aire
     if (inSala) {                                                    // reflejo del espejo: la luz no deja ver nada dentro
       ctx.save(); ctx.beginPath(); ctx.rect(148, 14, 44, 8); ctx.clip(); ctx.globalCompositeOperation = 'screen';
       const sh = Math.sin(t * 0.35) * 4;
@@ -4488,7 +4855,7 @@
       else mark = null;
     }
     const cst = cutTick(t);
-    if (!inSala) {                                                   // la caja 1 delante o detrás del personaje según dónde esté cada uno
+    if (room === HALL) {                                             // la caja 1 delante o detrás del personaje según dónde esté cada uno
       const front = !!cst || (box1 === 'here' && P.y < HALL_BOX1.y + HALL_BOX1.h + 2);
       if (front) { drawPlayer(cst); drawBox1(t, cst); } else { drawBox1(t, cst); drawPlayer(cst); }
       if (cst) {                                                     // polvo: al caer él al suelo y al caer la caja en el montón
@@ -4503,10 +4870,13 @@
     // Sin luz eléctrica: penumbra en la sala (son las 4 de la tarde); en la entrada, sin ventanas, oscuridad casi total
     const beam = flashOn ? beamLayer(P.x + Math.cos(P.ang) * 5, P.y - 8 + Math.sin(P.ang) * 3, P.ang, 0.96 + 0.04 * Math.sin(t * 23)) : null;
     dctx.globalCompositeOperation = 'source-over'; dctx.clearRect(0, 0, darkCv.width, darkCv.height);
-    dctx.fillStyle = inSala ? `rgba(10,5,4,${0.22 + 0.26 * (1 - power)})` : `rgba(3,2,2,${0.3 + 0.66 * (1 - power)})`; dctx.fillRect(0, 0, darkCv.width, darkCv.height);
+    // cuarto de la madre: entra el día por el balcón abierto (penumbra); baño: sin ventana grande, casi a oscuras
+    dctx.fillStyle = inSala ? `rgba(10,5,4,${0.22 + 0.26 * (1 - power)})` : room === MOM ? `rgba(8,4,4,${0.24 + 0.34 * (1 - power)})`
+      : room === BATH ? `rgba(3,2,2,${0.3 + 0.6 * (1 - power)})` : `rgba(3,2,2,${0.3 + 0.66 * (1 - power)})`;
+    dctx.fillRect(0, 0, darkCv.width, darkCv.height);
     dctx.globalCompositeOperation = 'destination-out';
     if (beam) { dctx.drawImage(beam, 0, 0); dctx.drawImage(beam, 0, 0); }          // dos veces: cerca del móvil se ve casi como de día
-    if (!inSala) hallReveal(t, lvl);
+    if (room === HALL) hallReveal(t, lvl); else if (room === MOM) momReveal(t, lvl); else if (room === BATH) bathReveal(t, lvl);
     if (cst && cst.bars > 0) {                                       // mini escena: FOCO DE CIRCO. Todo lo demás a negro y un círculo de luz
       const sp = spotAt(cst), X = sp.x * RES, Y = sp.y * RES, R = SPOT_R * RES;   // de borde marcado que sigue la acción
       dctx.globalCompositeOperation = 'source-over'; dctx.fillStyle = `rgba(0,0,0,${0.97 * cst.bars})`; dctx.fillRect(0, 0, darkCv.width, darkCv.height);
@@ -4526,7 +4896,7 @@
     }
     ctx.save(); ctx.globalCompositeOperation = 'screen';
     const showLights = !(cst && cst.bars > 0.3);                     // con el foco de circo encendido, nada más brilla
-    if (!inSala) { if (showLights) hallLights(t, power, lvl); }
+    if (!inSala) { if (showLights) (room === HALL ? hallLights : room === MOM ? momLights : bathLights)(t, power, lvl); }
     else {
     // luz del día de fuera: claridad desde el ventanal que se apaga hacia el centro de la sala
     const fill = ctx.createLinearGradient(26, 0, 190, 0);
@@ -4599,15 +4969,23 @@
     raf = requestAnimationFrame(frame);
   }
 
-  // opts.from === 'apagon': se continúa una partida guardada en el apagón (la luz ya se fue; vuelven los bocadillos)
+  // Continuar una partida guardada (opts.from = punto de guardado):
+  //  'apagon'  → la luz ya se fue; vuelven los bocadillos y la vibración del móvil
+  //  'dif'     → tras el chat con mamá: misión "Sube el diferencial" (caja en su sitio, DIF bajado)
+  //  'apostar' → tras el baño: misión "Prepárate para apostar" (caja apartada, DIF subido, sin luz)
   function start(opts) {
     if (!bg) build();
-    const resumed = !!opts && opts.from === 'apagon', sp = resumed && opts.player;
+    const from = opts && ['apagon', 'dif', 'apostar'].includes(opts.from) ? opts.from : null, resumed = !!from, sp = resumed && opts.player;
     Object.assign(P, { x: 170, y: 74, dir: 'down', ang: Math.PI / 2, moving: false, phase: 0, tx: null, ty: null, stuck: 0 });   // junto al sofá, donde estaba el móvil
-    room = SALA; swap = null;
-    box1 = 'here'; cut = null; if (!HALL.solid.includes(HALL_BOX1)) HALL.solid.push(HALL_BOX1);
-    panel = false; panelCloseAt = null; difUp = false; difTripAt = null; fuse = 'idle'; back = null; brkUp.forEach((_, i) => { brkUp[i] = i !== 9; });   // cuadro de luz como al principio         // la caja vuelve delante del cuadro de luz
-    const spRoom = sp && sp.room === HALL.name ? HALL : SALA;                                   // la habitación en la que estaba (sala o entrada)
+    room = SALA; swap = null; later = [];
+    box1 = 'here'; cut = null; if (!HALL.solid.includes(HALL_BOX1)) HALL.solid.push(HALL_BOX1);         // la caja vuelve delante del cuadro de luz
+    panel = false; panelCloseAt = null; difUp = false; difTripAt = null; fuse = 'idle'; back = null; brkUp.forEach((_, i) => { brkUp[i] = i !== 9; });   // cuadro de luz como al principio
+    Object.assign(story, { scream: false, smell: false, bath: false }); missions = [];
+    if (from === 'apostar') {                                        // ya se apartó la caja, se subió el DIF y se vio el cuarto de mamá y el baño
+      box1 = 'moved'; HALL.solid = HALL.solid.filter(s => s !== HALL_BOX1); fuse = 'done'; difUp = true;
+      Object.assign(story, { scream: true, smell: true, bath: true });
+    }
+    const spRoom = (sp && ROOMS[sp.room]) || SALA;                                               // la habitación en la que estaba
     if (sp && isFinite(sp.x) && isFinite(sp.y) && !blocked(sp.x, sp.y, spRoom)) {              // donde estaba al guardarse (si sigue siendo un sitio válido)
       room = spRoom;
       Object.assign(P, { x: sp.x, y: sp.y, dir: ['up', 'down', 'left', 'right'].includes(sp.dir) ? sp.dir : 'down', ang: isFinite(sp.ang) ? sp.ang : Math.PI / 2 });
@@ -4615,12 +4993,14 @@
     flashOn = !!(window.PDPhone && window.PDPhone.flashlight);
     keys.clear(); mark = null; moved = false; movedAt = null; dragging = false;
     outAt = resumed ? -10 : OUT_AT; outFx = resumed ? 2 : 0; saved = resumed;
-    SAYS.length = SAYS_INTRO; sayI = 0; sayNext = resumed ? FADE_IN + 1 : OUT_AT + SAY_AFTER; sayAt = null; stopBuzz();
+    SAYS.length = SAYS_INTRO; sayI = from === 'dif' || from === 'apostar' ? SAYS_INTRO : 0;    // tras el chat con mamá ya no se repiten los primeros bocadillos
+    sayNext = resumed ? FADE_IN + 1 : OUT_AT + SAY_AFTER; sayAt = null; stopBuzz();
     cv.hidden = false; running = true; joyEnd(); joyEl.hidden = !TOUCH;
+    if (from === 'dif') addMission('dif'); else if (from === 'apostar') addMission('apostar'); else renderTodo();
     t0 = performance.now() / 1000; last = performance.now();
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   }
-  function stop() { running = false; cancelAnimationFrame(raf); cv.hidden = true; keys.clear(); dragging = false; stopBuzz(); joyEnd(); joyEl.hidden = true; }
+  function stop() { running = false; cancelAnimationFrame(raf); cv.hidden = true; keys.clear(); dragging = false; stopBuzz(); joyEnd(); joyEl.hidden = true; if (todoEl) todoEl.hidden = true; }
   window.PDRoom = { start, stop, get running() { return running; }, get player() { return { x: P.x, y: P.y, dir: P.dir, room: room.name }; } };
 })();
 </script>
