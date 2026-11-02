@@ -3537,21 +3537,25 @@
     if (!open) { R(x + Math.floor(w / 2) - 1, top + 1, 3, d - 1, '#e0d2a8'); R(x + Math.floor(w / 2) - 1, top + d, 3, Math.min(4, h - 1), '#e0d2a8', 0.8); }
     return top;
   }
-  // ---------- CUARTO DE LA MADRE (puerta de arriba a la izquierda de la entrada) y su BAÑO (puerta en la pared del fondo) ----------
-  // El cuarto: cama de matrimonio contra la pared del fondo con sus mesitas, la puerta-ventana al balcón ABIERTA (cortinas
-  // movidas por el aire), cómoda a la izquierda, armario a la derecha y la puerta del baño al fondo a la derecha.
+  // ---------- CUARTO DE LA MADRE (H1 en el plano del usuario) y su BAÑO ----------
+  // H1 es ancho: se entra desde la entrada por la puerta de abajo a la derecha; la del baño está en la pared del fondo, a la
+  // derecha; en la pared izquierda, la puerta doble al BALCÓN, ABIERTA (todavía no se sale: será otra salida al salón).
+  // Muebles según el dibujo: la cama con el cabecero contra la pared de abajo y una mesita a cada lado, una caja grande
+  // llena de ropa arriba a la izquierda y marcas de suciedad de los muebles que ya no están (mudanza).
   const MOM_DEF = {
-    caps: [{ x: 64, y: 14, w: 192, h: 6 }, { x: 64, y: 14, w: 6, h: 148 }, { x: 250, y: 14, w: 6, h: 148 }, { x: 64, y: 156, w: 192, h: 6 }],
-    faces: [{ x: 70, y: 20, w: 180, h: 20 }],
-    floor: [{ x: 70, y: 40, w: 180, h: 116 }],
-    walk: [{ x: 71, y: 41, w: 178, h: 114 }],
-    WIN: { x: 84, w: 38 }, BED: { x: 138, y: 40, w: 46, h: 56 }, NIGHT: [{ x: 124, y: 40, w: 13, h: 12 }, { x: 185, y: 40, w: 13, h: 12 }],
-    WARD: { x: 232, y: 60, w: 18, h: 68 }, DRESSER: { x: 70, y: 74, w: 16, h: 42 }, DOOR_S: { x: 148, w: 24 }, DOOR_BATH: { x: 212, w: 22 }
+    caps: [{ x: 24, y: 24, w: 272, h: 6 }, { x: 24, y: 24, w: 6, h: 132 }, { x: 290, y: 24, w: 6, h: 132 }, { x: 24, y: 150, w: 272, h: 6 }],
+    faces: [{ x: 30, y: 30, w: 260, h: 20 }],
+    floor: [{ x: 30, y: 50, w: 260, h: 100 }],
+    walk: [{ x: 31, y: 51, w: 258, h: 98 }],
+    BALC: { y: 76, h: 40 },                                          // puerta doble al balcón (pared izquierda)
+    BED: { x: 120, y: 92, w: 46, h: 58 }, NIGHT: [{ x: 104, y: 136, w: 14, h: 13 }, { x: 168, y: 136, w: 14, h: 13 }],
+    BOX: { x: 44, fy: 52, w: 22, d: 12, h: 10 },                     // caja grande con ropa
+    DOOR_S: { x: 236, w: 24 }, DOOR_BATH: { x: 236, w: 22 }
   };
   const MOM = {
     name: 'madre', walk: MOM_DEF.walk, floor: MOM_DEF.floor,
-    lit: MOM_DEF.floor.concat(MOM_DEF.faces, [{ x: 146, y: 156, w: 28, h: 3 }]),
-    solid: [{ x: 124, y: 40, w: 74, h: 58 }, { x: 230, y: 58, w: 20, h: 72 }, { x: 70, y: 72, w: 18, h: 46 }]   // cama y mesitas, armario, cómoda
+    lit: MOM_DEF.floor.concat(MOM_DEF.faces, [{ x: 234, y: 150, w: 28, h: 3 }, { x: 27, y: 74, w: 4, h: 44 }]),
+    solid: [{ x: 102, y: 92, w: 82, h: 58 }, { x: 43, y: 40, w: 24, h: 26 }]   // cama con sus mesitas; la caja de ropa
   };
   // El baño, pequeño (unos 2 m²): azulejo blanco con una cenefa de mosaico, váter, lavabo con mueble y espejo, plato de ducha
   const BATH_DEF = {
@@ -3935,49 +3939,48 @@
     floorShade(F);
     // pared del fondo: pintura rosa palo, con rodapié
     paint(FC.x, FC.y, FC.w, FC.h, '#b48c82', '#a77f75', '#c09a90'); skirting(FC);
-    // PUERTA-VENTANA AL BALCÓN, ABIERTA: se ve el balcón (cielo, barandilla y suelo de barro al sol) y la hoja abierta hacia dentro
-    const WX = D.WIN.x, WW = D.WIN.w, wy0 = FC.y + 1, wy1 = FC.y + FC.h;
-    R(WX - 2, wy0 - 1, WW + 4, wy1 - wy0 + 1, '#e8e4dc'); R(WX - 2, wy0 - 1, WW + 4, 1, '#ffffff');               // marco blanco
-    for (let y = 0; y < 5; y++) R(WX, wy0 + 1 + y, WW, 1, `rgb(${210 - y * 4},${224 - y * 3},${236 - y * 2})`);  // cielo
-    R(WX, wy0 + 6, WW, 1, '#3a3a3e'); R(WX, wy0 + 10, WW, 1, '#3a3a3e'); for (let x = WX + 1; x < WX + WW; x += 3) R(x, wy0 + 7, 1, 3, '#4a4a50');   // barandilla
-    for (let y = wy0 + 11; y < wy1; y++) R(WX, y, WW, 1, (y - wy0) % 4 === 0 ? '#a35f43' : '#c97f5c');            // suelo del balcón
-    for (let x = WX + 3; x < WX + WW; x += 7) R(x, wy0 + 11, 1, wy1 - wy0 - 11, '#a35f43');
-    R(WX + WW - 8, wy0 + 12, 5, 4, '#7a3f26'); R(WX + WW - 9, wy0 + 9, 7, 4, '#3d7a45'); Pt(WX + WW - 7, wy0 + 9, '#5fa060');   // maceta
-    R(WX, wy0, WW, wy1 - wy0, '#fff3d6', 0.22);                                                                   // a pleno sol
-    R(WX + WW - 2, wy0, 2, wy1 - wy0, '#e8e4dc');                                                                 // la hoja de la derecha, cerrada
-    R(F.x + WX - F.x - 1, F.y, WW + 2, 2, '#8a8478');                                                             // umbral
-    // CAMA de matrimonio: cabecero tapizado contra la pared, sábana doblada, dos almohadas y la colcha
+    // MARCAS DE SUCIEDAD de los muebles que ya no están: a lo largo de la pared del fondo, junto a la cama y en la pared derecha
+    const dust = (x, y, w, h, seed) => {
+      R(x, y, w, h, '#a8946e', 0.18);
+      for (let i = 0; i < (w + h) * 3; i++) {
+        const side = i % 4, k = hash(i * 3.7 + seed);
+        const px = side < 2 ? x + k * w : (side === 2 ? x - hash(i + seed) * 2 : x + w + hash(i + seed) * 2), py = side < 2 ? (side === 0 ? y : y + h - 1 + hash(i * 1.3 + seed) * 2) : y + k * h;
+        Pt(px, py, hash(i * 5.1 + seed) > 0.5 ? '#5a4a36' : '#6e5c44', 0.6);
+      }
+      [[1, 1], [w - 3, 1], [1, h - 3], [w - 3, h - 3]].forEach(([dx, dy]) => R(x + dx, y + dy, 2, 2, '#4a3a28', 0.5));   // patas
+    };
+    dust(80, 51, 44, 8, 1); dust(86, 139, 15, 10, 2); dust(275, 62, 13, 56, 3);
+    // la puerta doble del BALCÓN (pared izquierda): abierta; por el hueco se ve el suelo de barro del balcón al sol
+    const BA = D.BALC;
+    R(23, BA.y - 2, 8, 2, '#7c6244'); R(23, BA.y + BA.h, 8, 2, '#7c6244');
+    for (let y = BA.y; y < BA.y + BA.h; y++) R(24, y, 6, 1, (y - BA.y) % 4 === 0 ? '#a35f43' : '#c97f5c');
+    R(24, BA.y, 6, BA.h, '#fff3d6', 0.25); R(14, BA.y - 4, 10, BA.h + 8, '#c97f5c', 0.85); R(14, BA.y - 4, 10, BA.h + 8, '#fff3d6', 0.25);   // el balcón, fuera
+    R(14, BA.y - 4, 1, BA.h + 8, '#3a3a3e'); for (let y = BA.y - 3; y < BA.y + BA.h + 4; y += 3) R(15, y, 2, 1, '#4a4a50');                   // su barandilla
+    // CAMA de matrimonio con el cabecero contra la pared de abajo: pie arriba, colcha, sábana doblada y dos almohadas abajo
     const BD = D.BED;
-    R(BD.x - 4, FC.y + 5, BD.w + 8, FC.h - 5, '#3a2618'); R(BD.x - 3, FC.y + 6, BD.w + 6, FC.h - 7, '#a08670'); R(BD.x - 3, FC.y + 6, BD.w + 6, 1, '#b8a088');   // cabecero
-    for (let x = BD.x + 2; x < BD.x + BD.w - 2; x += 6) R(x, FC.y + 10, 2, 2, '#7e6656');                                                 // botones del cabecero
-    R(BD.x + 1, BD.y + BD.h, BD.w, 3, '#000', 0.3);                                                                                 // sombra
-    R(BD.x - 1, BD.y, BD.w + 2, BD.h, '#3a2618'); R(BD.x, BD.y, BD.w, BD.h - 2, '#d6c2ae');                                     // marco y colcha
-    for (let i = 0; i < 90; i++) Pt(BD.x + 1 + Math.floor(hash(i * 3.1) * (BD.w - 2)), BD.y + 14 + Math.floor(hash(i * 5.7) * (BD.h - 17)), hash(i) > 0.5 ? '#c9b29c' : '#e0cfbc', 0.8);   // estampado de la colcha
-    for (let y = BD.y + 18; y < BD.y + BD.h - 4; y += 9) R(BD.x + 1, y, BD.w - 2, 1, '#bba48e', 0.7);                                // pespuntes
-    R(BD.x, BD.y + 11, BD.w, 4, '#f0ece4'); R(BD.x, BD.y + 14, BD.w, 1, '#c8c2b6');                                          // sábana doblada
-    [[BD.x + 3, 18], [BD.x + 25, 18]].forEach(([x, w]) => { R(x, BD.y + 1, w, 9, '#f4f2ec'); R(x, BD.y + 1, w, 1, '#ffffff'); R(x, BD.y + 9, w, 1, '#c9c4b8'); R(x + 1, BD.y + 3, w - 2, 1, '#e2ded4'); });   // almohadas
-    R(BD.x, BD.y + BD.h - 3, BD.w, 1, '#a8927c'); R(BD.x - 1, BD.y + BD.h - 2, BD.w + 2, 2, '#4a3220');                       // pie de la cama
-    // MESITAS de noche: una con lámpara, la otra con un despertador y un marco de foto
+    R(BD.x - 1, BD.y - 1, BD.w + 2, BD.h + 1, '#3a2618'); R(BD.x - 1, BD.y - 1, BD.w + 2, 2, '#5a3a20');                       // marco y pie
+    R(BD.x, BD.y + 1, BD.w, BD.h - 7, '#d6c2ae');                                                                                // colcha
+    for (let i = 0; i < 90; i++) Pt(BD.x + 1 + Math.floor(hash(i * 3.1) * (BD.w - 2)), BD.y + 2 + Math.floor(hash(i * 5.7) * (BD.h - 30)), hash(i) > 0.5 ? '#c9b29c' : '#e0cfbc', 0.8);   // estampado
+    for (let y = BD.y + 6; y < BD.y + BD.h - 28; y += 9) R(BD.x + 1, y, BD.w - 2, 1, '#bba48e', 0.7);                                // pespuntes
+    R(BD.x, BD.y + BD.h - 28, BD.w, 4, '#f0ece4'); R(BD.x, BD.y + BD.h - 28, BD.w, 1, '#c8c2b6');                              // sábana doblada
+    R(BD.x, BD.y + BD.h - 24, BD.w, 18, '#e8e2d6');                                                                              // sábana bajo las almohadas
+    [[BD.x + 3, 18], [BD.x + 25, 18]].forEach(([x, w]) => { R(x, BD.y + BD.h - 18, w, 10, '#f4f2ec'); R(x, BD.y + BD.h - 18, w, 1, '#ffffff'); R(x, BD.y + BD.h - 9, w, 1, '#c9c4b8'); R(x + 1, BD.y + BD.h - 15, w - 2, 1, '#e2ded4'); });   // almohadas
+    R(BD.x - 3, BD.y + BD.h - 6, BD.w + 6, 6, '#3a2618'); R(BD.x - 2, BD.y + BD.h - 6, BD.w + 4, 4, '#a08670'); R(BD.x - 2, BD.y + BD.h - 6, BD.w + 4, 1, '#b8a088');   // cabecero tapizado
+    for (let x = BD.x + 2; x < BD.x + BD.w - 2; x += 6) R(x, BD.y + BD.h - 4, 2, 1, '#7e6656');
+    R(BD.x + BD.w + 1, BD.y + 2, 2, BD.h - 8, '#000', 0.25);                                                                     // sombra
+    // MESITAS de noche junto al cabecero: una con lámpara, la otra con despertador y una foto
     D.NIGHT.forEach((n, i) => {
-      R(n.x + 1, n.y + n.h, n.w, 2, '#000', 0.3); R(n.x, n.y, n.w, n.h, '#4a2f17'); R(n.x + 1, n.y + 1, n.w - 2, n.h - 3, '#7a5430'); R(n.x + 1, n.y + n.h - 2, n.w - 2, 1, '#5a3a1e');
-      if (i === 0) { disc(n.x + 6, n.y + 5, 3, '#d8c8a0'); disc(n.x + 6, n.y + 5, 1, '#8a7a50'); }
-      else { R(n.x + 2, n.y + 3, 4, 3, '#2a2a2e'); Pt(n.x + 3, n.y + 4, '#c04040'); R(n.x + 8, n.y + 2, 3, 4, '#c9b78a'); Pt(n.x + 9, n.y + 3, '#4a3d2a'); }
+      R(n.x, n.y, n.w, n.h, '#4a2f17'); R(n.x + 1, n.y + 1, n.w - 2, n.h - 3, '#7a5430'); R(n.x + 1, n.y + 1, n.w - 2, 1, '#98703f');
+      if (i === 0) { disc(n.x + 7, n.y + 6, 3, '#d8c8a0'); disc(n.x + 7, n.y + 6, 1, '#8a7a50'); }
+      else { R(n.x + 2, n.y + 4, 4, 3, '#2a2a2e'); Pt(n.x + 3, n.y + 5, '#c04040'); R(n.x + 8, n.y + 3, 3, 4, '#c9b78a'); Pt(n.x + 9, n.y + 4, '#4a3d2a'); }
     });
-    // CÓMODA contra la pared izquierda (cajones hacia la habitación) con perfumes y un joyero
-    const DR = D.DRESSER;
-    R(DR.x, DR.y, DR.w, DR.h, '#3a2410'); R(DR.x, DR.y + 1, DR.w - 2, DR.h - 2, '#7a5430'); R(DR.x + DR.w - 2, DR.y, 2, DR.h, '#5a3a1e');
-    for (let y = DR.y + 6; y < DR.y + DR.h - 2; y += 12) R(DR.x + DR.w - 1, y, 1, 3, '#c8a040');                              // tiradores
-    R(DR.x + 3, DR.y + 4, 3, 4, '#d8b8c8'); R(DR.x + 4, DR.y + 3, 1, 1, '#e8e0d0'); R(DR.x + 8, DR.y + 5, 2, 3, '#a8c8d8'); R(DR.x + 4, DR.y + 16, 7, 5, '#6d1f22'); R(DR.x + 4, DR.y + 16, 7, 1, '#9a3434');
-    R(DR.x + DR.w, DR.y + 2, 3, DR.h - 2, '#000', 0.25);
-    // ARMARIO contra la pared derecha (puertas hacia la habitación)
-    const WD = D.WARD;
-    R(WD.x - 3, WD.y + 2, 3, WD.h - 2, '#000', 0.25);
-    R(WD.x, WD.y, WD.w, WD.h, '#3a2410'); R(WD.x + 2, WD.y + 1, WD.w - 3, WD.h - 2, '#6e4a26'); R(WD.x, WD.y, 2, WD.h, '#4a2f17');
-    R(WD.x, WD.y + Math.floor(WD.h / 2), 2, 1, '#2a1a0c'); R(WD.x - 1, WD.y + Math.floor(WD.h / 2) - 4, 1, 3, '#c8a040'); R(WD.x - 1, WD.y + Math.floor(WD.h / 2) + 2, 1, 3, '#c8a040');
-    for (let i = 0; i < 16; i++) R(WD.x + 3 + Math.floor(hash(i * 1.9) * (WD.w - 6)), WD.y + 2 + Math.floor(hash(i * 3.3) * (WD.h - 6)), 1, 4, '#5e3e20', 0.7);
-    // la puerta del BAÑO al fondo a la derecha y la del pasillo (abajo, por donde se entra)
+    // CAJA GRANDE LLENA DE ROPA arriba a la izquierda (mudanza): abierta, con ropa asomando y una manga colgando
+    const BX = D.BOX, bt = drawCrate(b, BX.x, BX.fy, BX.w, BX.d, BX.h, 0, true);
+    [['#6d1f22', 2, 2, 8, 5], ['#2b4a6a', 9, 3, 9, 4], ['#c9b78a', 4, 6, 7, 4], ['#5a6a2a', 12, 6, 7, 4], ['#d9d2bf', 7, 1, 5, 3]].forEach(([c, x, y, w, h]) => R(BX.x + x, bt + y, w, h, c));
+    R(BX.x + BX.w - 2, bt + BX.d - 1, 3, 9, '#2b4a6a'); R(BX.x + BX.w - 2, bt + BX.d + 7, 3, 1, '#1d3450');                     // manga colgando
+    // la puerta del BAÑO al fondo a la derecha y la de la entrada (abajo a la derecha, por donde se llega)
     frontDoor(D.DOOR_BATH.x, D.DOOR_BATH.w, FC, true);
-    bottomDoor(D.DOOR_S.x, 156, D.DOOR_S.w);
+    bottomDoor(D.DOOR_S.x, 150, D.DOOR_S.w);
     sepia();
   }
 
@@ -4262,11 +4265,12 @@
     salaE: { kind: 'v2', x: 297, hole: 294, y0: DOOR_E.y, y1: DOOR_E.y + DOOR_E.h, dir: -1, beyond: '#0a0604' },
     hallW: { kind: 'v2', x: 51, hole: 48, y0: HALL_DEF.DOOR_W.y, y1: HALL_DEF.DOOR_W.y + HALL_DEF.DOOR_W.h, dir: 1, beyond: '#b9a57a' },
     hallMom: { kind: 'front', x: 63, y: 71, w: 26, h: 13, beyond: '#4a3a30' },
-    momS: { kind: 'h1', x: 148, y: 156, w: 24, beyond: '#0a0604' },
-    momBath: { kind: 'front', x: 211, y: 21, w: 24, h: 19, beyond: '#3a3836' },
+    momS: { kind: 'h1', x: 236, y: 150, w: 24, beyond: '#0a0604' },
+    momBath: { kind: 'front', x: 235, y: 31, w: 24, h: 19, beyond: '#3a3836' },
+    momBalc: { kind: 'v2', x: 27, hole: 24, y0: MOM_DEF.BALC.y, y1: MOM_DEF.BALC.y + MOM_DEF.BALC.h, dir: 1, beyond: '#c97f5c', fixed: 0.9 },   // el balcón: abierta siempre (de momento no se sale)
     bathS: { kind: 'h1', x: 150, y: 120, w: 22, beyond: '#4a3a30' }
   };
-  SALA.doors = [DOORS.salaE]; HALL.doors = [DOORS.hallW, DOORS.hallMom]; MOM.doors = [DOORS.momS, DOORS.momBath]; BATH.doors = [DOORS.bathS];
+  SALA.doors = [DOORS.salaE]; HALL.doors = [DOORS.hallW, DOORS.hallMom]; MOM.doors = [DOORS.momS, DOORS.momBath, DOORS.momBalc]; BATH.doors = [DOORS.bathS];
   // salidas: test (empujando contra la puerta), out (hasta dónde cruza), place (cómo aparece al otro lado) y path (los pasos que da dentro)
   const DWD = HALL_DEF.DOOR_W;
   SALA.exits = [{ door: DOORS.salaE, to: HALL, arrive: DOORS.hallW, out: { x: 291 }, path: { x: [52, 66] },
@@ -4276,19 +4280,19 @@
     { door: DOORS.hallW, to: SALA, arrive: DOORS.salaE, out: { x: 57 }, path: { x: [296, 282] },
       test: () => P.dir === 'left' && P.x <= 60 && P.y > DWD.y + 4 && P.y < DWD.y + DWD.h,
       place: () => ({ y: clamp(P.y - DWD.y + DOOR_E.y, 110, 150), dir: 'left', ang: Math.PI }) },
-    { door: DOORS.hallMom, to: MOM, arrive: DOORS.momS, out: { y: 84 }, path: { y: [161, 146] },   // el cuarto de la madre: solo tras oír el grito
+    { door: DOORS.hallMom, to: MOM, arrive: DOORS.momS, out: { y: 84 }, path: { y: [157, 142] },   // el cuarto de la madre: solo tras oír el grito
       test: () => story.scream && P.dir === 'up' && P.y <= 90 && P.x > 66 && P.x < 86,
-      place: () => ({ x: 160, dir: 'up', ang: -Math.PI / 2 }) }];
+      place: () => ({ x: 248, dir: 'up', ang: -Math.PI / 2 }) }];
   MOM.exits = [
-    { door: DOORS.momS, to: HALL, arrive: DOORS.hallMom, out: { y: 159 }, path: { y: [86, 98] },
-      test: () => P.dir === 'down' && P.y >= 152 && P.x > 150 && P.x < 170,
+    { door: DOORS.momS, to: HALL, arrive: DOORS.hallMom, out: { y: 153 }, path: { y: [86, 98] },
+      test: () => P.dir === 'down' && P.y >= 146 && P.x > 238 && P.x < 258,
       place: () => ({ x: 76, dir: 'down', ang: Math.PI / 2 }) },
-    { door: DOORS.momBath, to: BATH, arrive: DOORS.bathS, out: { y: 40 }, path: { y: [125, 112] },
-      test: () => P.dir === 'up' && P.y <= 46 && P.x > 214 && P.x < 232,
+    { door: DOORS.momBath, to: BATH, arrive: DOORS.bathS, out: { y: 49 }, path: { y: [125, 112] },
+      test: () => P.dir === 'up' && P.y <= 56 && P.x > 238 && P.x < 256,
       place: () => ({ x: 161, dir: 'up', ang: -Math.PI / 2 }) }];
-  BATH.exits = [{ door: DOORS.bathS, to: MOM, arrive: DOORS.momBath, out: { y: 123 }, path: { y: [42, 54] },
+  BATH.exits = [{ door: DOORS.bathS, to: MOM, arrive: DOORS.momBath, out: { y: 123 }, path: { y: [52, 64] },
     test: () => P.dir === 'down' && P.y >= 116 && P.x > 152 && P.x < 170,
-    place: () => ({ x: 223, dir: 'down', ang: Math.PI / 2 }) }];
+    place: () => ({ x: 247, dir: 'down', ang: Math.PI / 2 }) }];
   let swap = null;                                                   // { at, from, to, exit, sx, sy, fx }
   function doorCheck(t) {
     if (swap || !P.moving) return;
@@ -4305,7 +4309,7 @@
   }
   function drawDoorSwing(t) {                                        // las puertas de la habitación: abriéndose, cerrándose (y las dobles, siempre)
     for (const d of room.doors || []) {
-      const a = doorAmount(t, d), th = a * Math.PI / 2 * 0.92;
+      const a = d.fixed != null ? d.fixed : doorAmount(t, d), th = a * Math.PI / 2 * 0.92;
       ctx.fillStyle = d.beyond; ctx.lineCap = 'butt';
       if (d.kind === 'v2') {                                         // doble en una pared de los lados (vista desde arriba)
         const half = (d.y1 - d.y0) / 2;
@@ -4702,34 +4706,31 @@
   }
 
   // ---------- luces del cuarto de la madre: entra el día por la puerta del balcón, abierta, y las cortinas se mueven ----------
-  function drawCurtains(t) {                                         // dos cortinas a los lados de la puerta del balcón, ondeando
-    const FC = MOM_DEF.faces[0], X = MOM_DEF.WIN.x, Wd = MOM_DEF.WIN.w;
-    for (const [side, x0] of [[-1, X - 6], [1, X + Wd - 3]]) {
-      for (let y = FC.y; y < FC.y + FC.h + 3; y++) {
-        const k = (y - FC.y) / (FC.h + 3), wave = Math.sin(t * 1.9 + y * 0.32 + side) * 1.6 * k + Math.sin(t * 3.1 + y * 0.6) * 0.6 * k;
-        const w = 9 + Math.round(wave + (side < 0 ? 1 : 0) * 2 * k), x = side < 0 ? x0 : x0 + 9 - w;
-        ctx.fillStyle = '#e8dcc8'; ctx.fillRect(x, y, w, 1);
-        for (let f = 2; f < w; f += 3) { ctx.fillStyle = 'rgba(160,140,115,0.55)'; ctx.fillRect(x + f, y, 1, 1); }   // pliegues
-        ctx.fillStyle = 'rgba(120,100,80,0.6)'; ctx.fillRect(side < 0 ? x + w - 1 : x, y, 1, 1);
+  function drawCurtains(t) {                                         // cortinas a los dos lados de la puerta del balcón, que el aire mete hacia dentro
+    const BA = MOM_DEF.BALC;
+    for (const [y0, dir] of [[BA.y - 7, 1], [BA.y + BA.h + 1, -1]]) {
+      for (let k = 0; k < 6; k++) {                                  // cada cortina: unos pliegues que se hinchan hacia la habitación
+        const y = y0 + k, wv = Math.sin(t * 1.8 + k * 0.7 + dir) * 2.2 + Math.sin(t * 3.3 + k) * 0.8, len = 5 + Math.round(Math.max(0, wv) + (k === 2 || k === 3 ? 2 : 0));
+        ctx.fillStyle = '#e8dcc8'; ctx.fillRect(30, y, len, 1);
+        ctx.fillStyle = 'rgba(150,130,105,0.6)'; ctx.fillRect(30 + len - 1, y, 1, 1); if (k % 2) ctx.fillRect(31, y, 1, 1);
       }
     }
-    ctx.fillStyle = '#8a7a60'; ctx.fillRect(X - 8, FC.y, Wd + 16, 1);                                   // la barra de la cortina
+    ctx.fillStyle = '#8a7a60'; ctx.fillRect(30, BA.y - 8, 1, BA.h + 16);                                    // la barra de la cortina
   }
-  function momReveal(t, lvl) {                                       // la luz del día del balcón recorta la penumbra
-    const X = MOM_DEF.WIN.x, Wd = MOM_DEF.WIN.w, y0 = MOM_DEF.floor[0].y, sway = Math.sin(t * 0.6) * 3;
+  function momReveal(t, lvl) {                                       // la luz del día del balcón (pared izquierda) recorta la penumbra
+    const BA = MOM_DEF.BALC, sway = Math.sin(t * 0.6) * 3;
     dctx.save(); dctx.setTransform(RES, 0, 0, RES, 0, 0);
-    const g = dctx.createLinearGradient(0, y0 - 18, 0, y0 + 80);
-    g.addColorStop(0, `rgba(0,0,0,${0.8 * lvl})`); g.addColorStop(0.35, `rgba(0,0,0,${0.5 * lvl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    const g = dctx.createLinearGradient(14, 0, 150, 0);
+    g.addColorStop(0, `rgba(0,0,0,${0.85 * lvl})`); g.addColorStop(0.3, `rgba(0,0,0,${0.5 * lvl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
     dctx.fillStyle = g; dctx.beginPath();
-    [[X, y0 - 18], [X + Wd, y0 - 18], [X + Wd + 34 + sway, y0 + 80], [X - 6 + sway, y0 + 80]].forEach(([x, y], i) => i ? dctx.lineTo(x, y) : dctx.moveTo(x, y));
+    [[14, BA.y - 4], [30, BA.y], [150 + sway, BA.y - 22], [150 + sway, BA.y + BA.h + 24], [30, BA.y + BA.h], [14, BA.y + BA.h + 4]].forEach(([x, y], i) => i ? dctx.lineTo(x, y) : dctx.moveTo(x, y));
     dctx.closePath(); dctx.fill(); dctx.restore();
   }
   function momLights(t, power, lvl) {
-    const X = MOM_DEF.WIN.x, Wd = MOM_DEF.WIN.w, y0 = MOM_DEF.floor[0].y, sway = Math.sin(t * 0.6) * 3;
-    const g = ctx.createLinearGradient(0, y0, 0, y0 + 80);
-    g.addColorStop(0, `rgba(255,236,196,${0.16 * lvl})`); g.addColorStop(1, 'rgba(255,236,196,0)');
-    ctx.fillStyle = g; poly([[X, y0], [X + Wd, y0], [X + Wd + 34 + sway, y0 + 80], [X - 6 + sway, y0 + 80]]);
-    ctx.fillStyle = `rgba(255,244,220,${0.22 * lvl})`; ctx.fillRect(X, MOM_DEF.faces[0].y + 1, Wd, MOM_DEF.faces[0].h - 1);   // fuera es de día
+    const BA = MOM_DEF.BALC, sway = Math.sin(t * 0.6) * 3, g = ctx.createLinearGradient(30, 0, 150, 0);
+    g.addColorStop(0, `rgba(255,236,196,${0.18 * lvl})`); g.addColorStop(1, 'rgba(255,236,196,0)');
+    ctx.fillStyle = g; poly([[30, BA.y], [150 + sway, BA.y - 22], [150 + sway, BA.y + BA.h + 24], [30, BA.y + BA.h]]);
+    ctx.fillStyle = `rgba(255,244,220,${0.25 * lvl})`; ctx.fillRect(14, BA.y - 4, 16, BA.h + 8);              // fuera es de día
   }
   // ---------- luces del baño: solo la claridad del ventanuco ----------
   function bathReveal(t, lvl) {

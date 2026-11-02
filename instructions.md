@@ -97,8 +97,9 @@ Plano del usuario (entrada en forma de L, ~16 m²). Se llega desde la sala por s
 
 Se entra por la puerta de arriba a la izquierda de la entrada (en la pared del fondo: la hoja se estrecha al abrirse hacia dentro). <!-- HECHO -->
 
-- Cuarto: suelo de tarima, pared rosa palo, cama de matrimonio con cabecero tapizado, almohadas y colcha, dos mesitas (lámpara; despertador y foto), cómoda a la izquierda con perfumes y joyero, armario a la derecha y la puerta del baño al fondo a la derecha. <!-- HECHO -->
-- La puerta-ventana al BALCÓN está ABIERTA: se ve el balcón al sol (cielo, barandilla, suelo de barro, maceta), las cortinas ondean con el aire y entra la luz del día en penumbra. <!-- HECHO -->
+- Cuarto (H1 en el plano del usuario, ancho): se entra desde la entrada por la puerta de abajo a la derecha; la del baño está en la pared del fondo a la derecha. Suelo de tarima, pared rosa palo. Muebles según su dibujo: cama de matrimonio con el cabecero contra la pared de abajo y una mesita a cada lado (lámpara; despertador y foto), una caja grande llena de ropa arriba a la izquierda y marcas de suciedad de muebles que ya no están (en la pared del fondo, junto a la cama y en la pared derecha). <!-- HECHO -->
+- Pared izquierda: puerta doble al BALCÓN (BA1), ABIERTA siempre: se ve el suelo de barro al sol, las cortinas se meten con el aire y entra la luz del día en penumbra. <!-- HECHO -->
+- Salir al balcón (será una segunda salida al salón). <!-- PENDIENTE -->
 - Al entrar por primera vez (tras el grito): "Qué olor tan raro, ¿se ha estropeado el baño?" <!-- HECHO -->
 - Baño (pequeño, ~2 m²), español: azulejo blanco con cenefa de mosaico azul/verde, suelo de baldosa clara, váter con cisterna, lavabo sobre su mueble con espejo, plato de ducha con mampara, toalla, alfombrilla y un ventanuco translúcido (poca luz). Todo limpio. <!-- HECHO -->
 - Al entrar en el baño: "Qué extraño... creo que la luz no va a volver en un rato, iré a prepararme para ir a la casa de apuestas entonces." Al terminar: misión 2 y guardado. <!-- HECHO -->
