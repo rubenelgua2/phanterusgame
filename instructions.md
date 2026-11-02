@@ -9,6 +9,8 @@ Poco a poco se empiece a ver la imagen del sillon y el sonido de el viento sonan
 ## Modificaciones del escenario.
 
 - Añade un telefono con la pantalla encendida, en el que en un estilo pixel-art se vea la hora (16:00) en el sofa. <!-- HECHO -->
+- Más calidad: la escena se pinta al doble de resolución (640×360). Sofá chesterfield redibujado a medio píxel con sombreado por píxel y tramado: capitoné en rombos abombados con botones hundidos, brazos enrollados con espiral, asientos mullidos con vivo, falda con tachuelas de latón y patas torneadas. Cojín nuevo: terciopelo rojo mullido, esquinas pellizcadas, ribete, arrugas, botón y sombra. <!-- HECHO -->
+- Pared pintada (sin papel, como la sala vista desde arriba) con moteado fino y desconchón; vetas finas en el suelo de tablas y bisel en la boiserie. <!-- HECHO -->
 
 ## 1º Parte, introducción
 
@@ -31,6 +33,7 @@ Audio en ./audios/1parte2audio.mp3, convertir a un formato mas ligero para la we
 
 - Notificación de **Danielon135**: "Gordo vamos a la casa de apuestas o que" <!-- HECHO -->
 - Click en el mensaje → pantalla de desbloqueo, código **6767** <!-- HECHO -->
+- En la pantalla del código sale debajo del móvil un subtítulo "La contraseña es: 6767" (letra a letra); se quita al desbloquear o apagar. La letra del juego ya tiene Ñ. <!-- HECHO -->
 - Tras desbloquear → app de mensajería: foto negra (PH), nombre, badge HOY, mensaje, barra de texto (sin interacciones aún) <!-- HECHO -->
 - Sprites HD minimalistas: `phone-lock.png` / `phone-pin.png` / `phone-chat.png` (240×480); tipografía 5×7; animaciones slide/fade <!-- HECHO -->
 - Botón izquierdo del chasis apaga el móvil y vuelve a la escena <!-- HECHO -->

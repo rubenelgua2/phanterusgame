@@ -264,6 +264,7 @@
     aspect-ratio: 240 / 480;
     image-rendering: pixelated; image-rendering: crisp-edges; cursor: default;
   }
+  .pin-hint { display: block; image-rendering: pixelated; image-rendering: crisp-edges; pointer-events: none; }
   /* Interruptor izquierdo del chasis → apagar móvil */
   .phone-side-btn {
     position: absolute; left: 0; top: 24%;
@@ -375,6 +376,8 @@
         <canvas id="phoneUICanvas" width="240" height="480" role="img" aria-label="Pantalla del teléfono"></canvas>
         <button type="button" class="phone-side-btn" id="phoneUIClose" aria-label="Apagar teléfono" title="Apagar"></button>
       </div>
+      <!-- subtítulo con la contraseña, mientras se ve la pantalla del código -->
+      <canvas id="pinHint" class="pin-hint" role="note" aria-label="La contraseña es: 6767" hidden></canvas>
     </div>
   </div>
 
@@ -1032,6 +1035,7 @@
     '?':'.XXX.|X...X|....X|...X.|..X..|.....|..X..', '!':'..X..|..X..|..X..|..X..|..X..|.....|..X..',
     '(':'...X.|..X..|.X...|.X...|.X...|..X..|...X.', ')':'.X...|..X..|...X.|...X.|...X.|..X..|.X...',
     '/':'....X|....X|...X.|..X..|.X...|X....|X....',
+    'Ñ':'.XX.X|X..X.|.....|X...X|XX..X|X.X.X|X..XX',
     '¿':'..X..|.....|..X..|.X...|X....|X...X|.XXX.', '¡':'..X..|.....|..X..|..X..|..X..|..X..|..X..',
     "'":'..X..|..X..|.....|.....|.....|.....|.....'
   };
@@ -1060,7 +1064,7 @@
   const FONT = {}, TFONT = {};
   for (const k in SRC) FONT[k] = parse(SRC[k]);
   for (const k in TSRC) TFONT[k] = parse(TSRC[k]);
-  const norm = t => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+  const norm = t => t.toUpperCase().split('Ñ').map(s => s.normalize('NFD').replace(/[̀-ͯ]/g, '')).join('Ñ');   // sin tildes, pero la Ñ se queda
   const gl = ch => ch === ' ' ? SPACE : (FONT[ch] || FONT['?']);
   function measure(text) { let w = 0; for (const ch of text) w += gl(ch).w + 1; return w - 1; }
   function drawText(c, text, x, y, color, s) {
@@ -1738,7 +1742,8 @@
   const W = 320, H = 180;
   const cv = document.getElementById('introCanvas');
   const ctx = cv.getContext('2d');
-  cv.width = W; cv.height = H;
+  const RES = 2;                                                     // la escena se pinta al doble: el sofá, el cojín y los detalles finos van a medio píxel
+  cv.width = W * RES; cv.height = H * RES;
   const hash = n => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const ease = u => u * u * (3 - 2 * u);
@@ -1750,10 +1755,11 @@
   let bg = null, bgBare = null, vig = null;
 
   function build() {
-    bg = document.createElement('canvas'); bg.width = W; bg.height = H;
-    const b = bg.getContext('2d');
+    bg = document.createElement('canvas'); bg.width = W * RES; bg.height = H * RES;
+    const b = bg.getContext('2d'); b.setTransform(RES, 0, 0, RES, 0, 0);   // casi todo en px lógicos; lo fino, con hd()
     const R = (x, y, w, h, c, a) => { b.globalAlpha = a == null ? 1 : a; b.fillStyle = c; b.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); b.globalAlpha = 1; };
     const Pt = (x, y, c, a) => R(x, y, 1, 1, c, a);
+    const hd = fn => { b.save(); b.setTransform(1, 0, 0, 1, 0, 0); fn((x, y, w, h, c, a) => { b.globalAlpha = a == null ? 1 : a; b.fillStyle = c; b.fillRect(x, y, w, h); b.globalAlpha = 1; }); b.restore(); };   // dibujo a medio píxel (px reales ×RES)
     const L = (x0, y0, x1, y1, c, a) => { const dx = x1 - x0, dy = y1 - y0, n = Math.max(Math.abs(dx), Math.abs(dy)) || 1; for (let i = 0; i <= n; i++) Pt(Math.round(x0 + dx * i / n), Math.round(y0 + dy * i / n), c, a); };
     const disc = (cx, cy, r, c, a) => { for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (Math.hypot(x, y) <= r + 0.3) Pt(cx + x, cy + y, c, a); };
     const ring = (cx, cy, r, c, a) => { for (let y = -r - 1; y <= r + 1; y++) for (let x = -r - 1; x <= r + 1; x++) if (Math.abs(Math.hypot(x, y) - r) < 0.6) Pt(cx + x, cy + y, c, a); };
@@ -1764,14 +1770,12 @@
     // ---------- techo y moldura ----------
     R(0, 0, W, CEIL, '#211a12'); R(0, 0, W, 2, '#17110b'); R(0, 5, W, 1, '#4a3d2b'); R(0, 6, W, 1, '#2d2418'); R(0, 7, W, 1, '#120d08');
 
-    // ---------- papel pintado (franjas + motivo damasco) ----------
-    for (let x = 0; x < W; x++) R(x, CEIL, 1, RAIL - CEIL, (Math.floor(x / 12) % 2) ? '#85733f' : '#8f7c49');
-    for (let s = 1; s * 12 < W; s++) R(s * 12, CEIL, 1, RAIL - CEIL, '#5d4e2a', 0.3);
-    const MOT = ['..X..', '.XXX.', '..X..', 'X.X.X', '.XXX.', '..X..', '..X..'];
-    for (let m = 0; m < 6; m++) for (let k = 0; k < 14; k++) {
-      const cx = 6 + k * 24 + (m % 2 ? 12 : 0), cy = 15 + m * 14;
-      MOT.forEach((row, j) => { for (let i = 0; i < 5; i++) if (row[i] === 'X') Pt(cx - 2 + i, cy - 3 + j, '#6b5a33'); });
-    }
+    // ---------- pared pintada (sin papel, como en la sala vista desde arriba): amarillo anaranjado, gastada ----------
+    R(0, CEIL, W, RAIL - CEIL, '#8a7745');
+    hd(F => {                                                        // moteado fino de la pintura vieja y brochazos
+      for (let i = 0; i < 5200; i++) { const x = Math.floor(hash(i * 1.71) * W * RES), y = CEIL * RES + Math.floor(hash(i * 2.93) * (RAIL - CEIL) * RES), k = hash(i * 5.3); F(x, y, 1, 1, k > 0.5 ? '#96834f' : '#7c6a3c', 0.55); }
+      for (let i = 0; i < 90; i++) { const x = Math.floor(hash(i * 3.7) * W * RES), y = CEIL * RES + Math.floor(hash(i * 6.1) * (RAIL - CEIL - 4) * RES); F(x, y, 6 + Math.floor(hash(i) * 22), 1, '#7f6d3f', 0.35); }
+    });
     // envejecido: oscurece arriba, goteras, moho, manchas, desconchones y grietas
     for (let y = CEIL; y < CEIL + 36; y += 3) R(0, y, W, 3, '#000', 0.42 * (1 - (y - CEIL) / 36));
     [14, 62, 118, 175, 214, 258, 300].forEach((sx, i) => {
@@ -1784,8 +1788,8 @@
       Pt(x, y, col, 0.55); Pt(W - 1 - x * (0.9 + hash(i) * 0.2), y, col, 0.5);
     }
     blotch(265, 26, 26, 15, '#4a3a18', 0.4, 1); blotch(80, 74, 20, 10, '#4a3a18', 0.28, 2); blotch(180, 44, 16, 9, '#4a3a18', 0.22, 3);
-    blotch(282, 34, 12, 12, '#a89e84', 0.95, 7);                                     // yeso al descubierto
-    for (let y = 20; y <= 46; y++) { R(266 + (y % 7 < 3 ? 0 : 1), y, 4, 1, '#a79868'); Pt(270 + (y % 7 < 3 ? 0 : 1), y, '#2a2010', 0.7); }   // tira de papel despegada
+    blotch(282, 34, 12, 12, '#a89e84', 0.95, 7);                                     // yeso al descubierto (pintura desconchada)
+    hd(F => { for (let i = 0; i < 70; i++) { const a = hash(i * 2.1) * Math.PI * 2, r = 22 + hash(i * 4.4) * 6; F(Math.round((282 + Math.cos(a) * 12) * RES + Math.cos(a) * (r - 22)), Math.round((34 + Math.sin(a) * 12) * RES + Math.sin(a) * (r - 22)), 2, 1, '#9a8754', 0.9); } });   // bordes de las escamas
     const crack = (x, y, len, seed) => { let cx = x, cy = y; for (let i = 0; i < len; i++) { Pt(cx, cy, '#2b2012', 0.8); const r = hash(i * 3.3 + seed); cy += 1; cx += r < 0.3 ? -1 : r > 0.7 ? 1 : 0; if (r > 0.94) crack(cx, cy, Math.floor(len * 0.4), seed + i + 1); } };
     crack(232, CEIL, 34, 1); crack(40, CEIL, 22, 5);
     const web = (cx, cy, sx) => {
@@ -1802,6 +1806,13 @@
       R(px + 2, 106, 26, 16, '#3b2a19'); R(px + 2, 106, 26, 1, '#4c3722');
     }
     for (let i = 0; i < 260; i++) R(hash(i) * W, 100 + hash(i * 1.7) * 28, 1 + Math.floor(hash(i * 3) * 5), 1, '#2a1c0f', 0.35);
+    hd(F => {                                                        // bisel fino de los paneles y vetas
+      for (let px = 4; px < W; px += 36) {
+        F((px + 2) * RES, 106 * RES, 26 * RES, 1, '#5e4630', 0.8); F((px + 2) * RES, 106 * RES, 1, 16 * RES, '#5e4630', 0.6);
+        F((px + 2) * RES, 122 * RES - 1, 26 * RES, 1, '#1e140a', 0.8); F((px + 28) * RES - 1, 106 * RES, 1, 16 * RES, '#1e140a', 0.6);
+        for (let i = 0; i < 6; i++) F((px + 3) * RES + Math.floor(hash(px + i) * 40), (107 + i * 2.4) * RES | 0, 10 + Math.floor(hash(px * 2 + i) * 30), 1, '#2c1e11', 0.35);
+      }
+    });
     R(0, BASE, W, 6, '#2c1f13'); R(0, BASE, W, 1, '#4d3722'); R(0, BASE + 5, W, 1, '#140d08');
 
     // ---------- suelo de tablas en perspectiva ----------
@@ -1815,6 +1826,14 @@
         x += len;
       }
     }
+    hd(F => {                                                        // vetas finas de la madera, nudos y brillo en el canto de cada tabla
+      for (let r = 0; r < rows.length - 1; r++) {
+        const y0 = rows[r] * RES, y1 = rows[r + 1] * RES;
+        for (let i = 0; i < 70; i++) { const y = y0 + 2 + Math.floor(hash(i * 3.1 + r * 17) * (y1 - y0 - 3)), x = Math.floor(hash(i * 1.9 + r * 7) * W * RES); F(x, y, 8 + Math.floor(hash(i * 4.7 + r) * 40), 1, hash(i + r) > 0.5 ? '#2a1d12' : '#4a3624', 0.4); }
+        F(0, y0 + 1, W * RES, 1, '#5a4430', 0.35);
+        for (let i = 0; i < 4; i++) { const x = Math.floor(hash(i * 9.3 + r * 3) * W * RES), y = y0 + 3 + Math.floor(hash(i * 2.2 + r) * (y1 - y0 - 6)); F(x, y, 3, 2, '#1f150c', 0.6); F(x + 1, y, 1, 1, '#3a2a1a', 0.6); }
+      }
+    });
     R(0, FLOOR, W, 3, '#000', 0.45); R(0, FLOOR + 3, W, 2, '#000', 0.2);
 
     // ---------- cuadros: sombras, cuerdas y marcos ----------
@@ -1858,55 +1877,97 @@
     for (let y = 62; y < 72; y++) R(24, y, 192, 1, '#000', 0.22 * (y - 62) / 10);
     for (let y = 137; y < 150; y++) R(18, y, 208, 1, '#000', 0.55 * (1 - (y - 137) / 13));
 
-    // ---------- SOFÁ chesterfield azul ----------
-    const C1 = '#4a8fc7', C2 = '#2b6aa3', C3 = '#1f4f80', C4 = '#143659', C5 = '#0d2540';
-    const sofaBack = () => {
-      R(34, 70, 170, 44, C2);
-      R(37, 69, 164, 1, C5); R(34, 70, 3, 1, C5); R(201, 70, 3, 1, C5);              // contorno redondeado
-      R(35, 70, 168, 2, C1); dith(35, 72, 168, 3, C1, 0); R(34, 70, 2, 44, C1, 0.55); R(202, 70, 2, 44, C3, 0.7);
-      R(34, 108, 170, 6, C3); dith(34, 105, 170, 3, C3, 1);
-      const rowA = 82, rowB = 96;
-      const pleat = (bx, by, nx, ny) => { for (let k = 0.12; k <= 0.66; k += 0.06) { const x = Math.round(bx + (nx - bx) * k), y = Math.round(by + (ny - by) * k); Pt(x, y, C3); Pt(x - 1, y, C1, 0.35); } };
-      for (let i = 0; i < 8; i++) { const bx = 46 + 22 * i; for (const dx of [-11, 11]) { pleat(bx, rowA, bx + dx, rowB); pleat(bx, rowA, bx + dx, rowA - 14); } }
-      for (let i = 0; i < 7; i++) { const bx = 57 + 22 * i; for (const dx of [-11, 11]) { pleat(bx, rowB, bx + dx, rowA); pleat(bx, rowB, bx + dx, rowB + 14); } }
-      const btn = (bx, by) => { R(bx, by, 2, 2, C5); Pt(bx + 1, by + 1, C4); Pt(bx - 1, by - 1, C1); };
-      for (let i = 0; i < 8; i++) btn(46 + 22 * i, rowA);
-      for (let i = 0; i < 7; i++) btn(57 + 22 * i, rowB);
-      for (let i = 0; i < 8; i++) for (const [cx, cy] of [[46 + 22 * i + 11, 89], [46 + 22 * i + 11, 75]]) dith(cx - 2, cy - 1, 5, 3, C1, i, 0.5);   // abombado entre botones
-    };
-    sofaBack();
-    const arm = (cx) => {                                                         // brazo enrollado
-      const x0 = cx - 12;
-      R(x0, 96, 24, 38, C2); R(x0, 96, 3, 38, C1, 0.6); R(x0 + 21, 96, 3, 38, C3, 0.8);
-      for (let r = 12; r >= 0; r--) disc(cx - (12 - r) * 0.25, 96 - (12 - r) * 0.25, r, r > 10 ? C4 : r > 8 ? C3 : r > 5 ? C2 : r > 2 ? C1 : '#6fb0e0', 1);
-      ring(cx, 96, 8, C4, 0.55); ring(cx, 96, 4, C4, 0.7); R(cx - 1, 95, 2, 2, C5);
-      for (const vx of [x0 + 6, x0 + 17]) L(vx, 108, vx, 130, C3, 0.7);
-      R(cx - 1, 116, 2, 2, C5); R(x0, 130, 24, 4, C4);
-    };
-    arm(34); arm(204);
-    const cushions = [[46, 94], [94, 142], [142, 192]];
-    cushions.forEach(([x0, x1], i) => {
-      const w = x1 - x0;
-      R(x0, 112, w, 8, C1); dith(x0, 114, w, 4, C2, 0); R(x0, 118, w, 2, C2);
-      R(x0, 120, w, 12, C2); dith(x0, 123, w, 4, C3, 1); R(x0, 128, w, 3, C3);
-      R(x0, 131, w, 1, C4); R(x0, 111, 1, 21, C5, 0.7); R(x1 - 1, 111, 1, 21, C5, 0.7);
-      R(x0, 119, w, 1, C4, 0.9);
-      const cx = x0 + Math.floor(w / 2); R(cx, 124, 2, 2, C5); Pt(cx - 1, 123, C1);
-      L(cx - 1, 126, cx - 7, 130, C3, 0.8); L(cx + 2, 126, cx + 8, 130, C3, 0.8); L(cx, 122, cx - 4, 119, C3, 0.8);
+    // ---------- SOFÁ chesterfield azul y COJÍN rojo, a medio píxel (todas las medidas aquí en px reales = lógicos ×2) ----------
+    // Cada píxel se sombrea según su forma (capitoné abombado, brazos enrollados, asientos mullidos) con la luz de la
+    // ventana desde arriba a la izquierda, y se elige el tono de la paleta con un tramado ordenado: más volumen y más
+    // detalle sin perder el aspecto pixel art.
+    hd(F => {
+      const BAY = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+      const pick = (pal, v, x, y) => { v = clamp(v, 0, 0.999) * (pal.length - 1); const i = Math.floor(v); return pal[Math.min(pal.length - 1, i + ((v - i) * 16 > BAY[(y & 3) * 4 + (x & 3)] + 0.5 ? 1 : 0))]; };
+      const BLUE = ['#06142a', '#0b2240', '#123256', '#1a466f', '#245d8e', '#2f72a8', '#3d86bd', '#5a9fd0', '#82bbe0'];
+      const RED = ['#1c0507', '#330b0e', '#511316', '#6d1d21', '#88262a', '#a23333', '#bb4844', '#d06a5d', '#e2917f'];
+      const px = (x, y, pal, v) => F(x, y, 1, 1, pick(pal, v, x, y));
+      const grain = (x, y) => (hash(x * 1.31 + y * 7.17) - 0.5) * 0.06;   // terciopelo: un poco de ruido
+      // RESPALDO: barra de arriba redondeada + capitoné en rombos (botones en dos filas al tresbolillo)
+      const BX0 = 68, BX1 = 408, BY0 = 138, BY1 = 228;
+      const puff = (x, y) => { const p = (x - 92) / 44 + (y - 164) / 56, q = (x - 92) / 44 - (y - 164) / 56; return Math.sin(Math.PI * (p - Math.floor(p))) * Math.sin(Math.PI * (q - Math.floor(q))); };
+      for (let y = BY0; y < BY1; y++) for (let x = BX0; x < BX1; x++) {
+        const cr = 7, dx = x < BX0 + cr ? BX0 + cr - x : x >= BX1 - cr ? x - (BX1 - cr - 1) : 0, dy = BY0 + cr - y;
+        if (dx > 0 && dy > 0 && dx * dx + dy * dy > cr * cr) continue;    // esquinas de arriba redondeadas
+        let v;
+        if (y < BY0 + 12) v = 0.86 - (y - BY0) * 0.035 - Math.abs(x - 238) / 900;   // la barra de arriba, mullida
+        else {
+          const h = puff(x, y), hu = puff(x, y - 2);
+          v = 0.34 + 0.42 * h + 2.4 * (h - hu) - (y - BY0) / 420;
+          if (y < BY0 + 16) v -= (BY0 + 16 - y) * 0.03;                 // pliegue bajo la barra
+        }
+        v -= Math.max(0, 14 - (x - BX0)) * 0.012 + Math.max(0, 14 - (BX1 - x)) * 0.02;   // bordes laterales
+        px(x, y, BLUE, v + grain(x, y));
+      }
+      F(BX0 + 7, BY0 - 1, BX1 - BX0 - 14, 1, '#04101e');                  // contorno de arriba
+      for (const [by, xs] of [[164, 92], [192, 114]]) for (let x = xs; x <= BX1 - 8; x += 44) {
+        F(x - 2, by - 2, 4, 4, '#030c18'); F(x - 1, by - 1, 2, 2, '#0e2848'); F(x - 2, by - 2, 1, 1, '#5a9fd0', 0.7);   // botones hundidos
+      }
+      // BRAZOS enrollados: frente con volumen cilíndrico y el rollo en espiral
+      const arm = cx => {
+        for (let y = 192; y < 268; y++) for (let x = cx - 24; x < cx + 24; x++) {
+          const u = (x - (cx - 24)) / 48; let v = 0.62 - u * 0.32 - (y - 192) / 300 + Math.sin(u * Math.PI) * 0.1;
+          if (Math.abs(x - (cx - 12)) < 1 || Math.abs(x - (cx + 11)) < 1) v -= 0.12;   // costuras verticales
+          px(x, y, BLUE, v + grain(x, y));
+        }
+        for (let y = 166; y < 218; y++) for (let x = cx - 26; x < cx + 26; x++) {
+          const ddx = x - cx, ddy = y - 192, r = Math.hypot(ddx, ddy); if (r > 25) continue;
+          const ang = Math.atan2(ddy, ddx), s = (r / 7.5 - ang / (Math.PI * 2)) % 1;
+          let v = 0.42 + 0.34 * Math.cos(ang + 2.36) * Math.min(1, r / 18) - (r > 23 ? 0.25 : 0);
+          if ((s + 1) % 1 < 0.16 && r > 3) v -= 0.2;                    // la espiral del rollo
+          px(x, y, BLUE, v + grain(x, y));
+        }
+        F(cx - 2, 190, 4, 4, '#030c18'); F(cx - 1, 191, 2, 2, '#1a466f'); F(cx - 2, 190, 1, 1, '#82bbe0', 0.6);
+        F(cx - 24, 262, 48, 6, '#0b2240'); F(cx - 24, 262, 48, 1, '#245d8e', 0.7);
+      };
+      arm(68); arm(408);
+      // ASIENTOS: tres almohadones mullidos con vivo (ribete) y la cara de delante en sombra
+      [[92, 188], [188, 284], [284, 384]].forEach(([x0, x1]) => {
+        const w = x1 - x0;
+        for (let y = 220; y < 262; y++) for (let x = x0; x < x1; x++) {
+          const u = (x - x0) / w, ex = Math.min(x - x0, x1 - 1 - x);
+          if (ex < 4 && ((y < 224 && (4 - ex) + (224 - y) > 5) || (y > 257 && (4 - ex) + (y - 257) > 5))) continue;   // esquinas redondeadas
+          let v;
+          if (y < 240) v = 0.66 - (y - 220) * 0.012 + Math.sin(u * Math.PI) * 0.1 - (y < 223 ? 0.15 : 0);   // tapa
+          else v = 0.36 - (y - 240) * 0.011 + Math.sin(u * Math.PI) * 0.08;                                  // frente
+          if (y === 239) v = 0.9; else if (y === 240 || y === 241) v = 0.2;                                // vivo
+          if (ex < 2) v -= 0.22;
+          px(x, y, BLUE, v + grain(x, y));
+        }
+      });
+      // FALDA con tachuelas de latón y patas torneadas
+      for (let y = 262; y < 274; y++) for (let x = 44; x < 432; x++) { const v = 0.22 - (y - 262) * 0.01 + (((x - 44) % 14) < 1 ? -0.1 : 0); px(x, y, BLUE, v + grain(x, y)); }
+      F(44, 273, 388, 1, '#030c18');
+      for (let x = 48; x < 430; x += 7) { F(x, 263, 3, 3, '#6e5420'); F(x, 263, 2, 2, '#b8943a'); F(x, 263, 1, 1, '#f0d890'); }
+      for (const fx of [56, 410]) { F(fx, 274, 12, 6, '#2a1a0f'); F(fx + 2, 274, 3, 6, '#7a5430'); F(fx + 1, 279, 10, 1, '#140c06'); }
+      // desgaste: rozaduras claras en los bordes, rasgón y polvo en lo alto
+      for (let i = 0; i < 160; i++) { const x = 60 + Math.floor(hash(i * 1.3) * 360), y = 140 + Math.floor(hash(i * 2.9) * 120); F(x, y, 1, 1, hash(i) > 0.55 ? '#82bbe0' : '#06142a', 0.3); }
+      F(340, 200, 10, 1, '#030a14'); F(342, 201, 8, 1, '#030a14'); F(341, 199, 9, 1, '#5a9fd0', 0.5);
+      for (let i = 0; i < 80; i++) F(72 + Math.floor(hash(i * 5.3) * 330), 139 + Math.floor(hash(i) * 4), 1, 1, '#d6dde2', 0.35);
+      // COJÍN de terciopelo rojo, algo ladeado y apoyado en el respaldo: esquinas pellizcadas, ribete, arrugas y sombra
+      const CX = 126, CY = 201, A = 25, B = 22, ROT = -0.14, K = 0.13, cs = Math.cos(ROT), sn = Math.sin(ROT);
+      const local = (x, y) => { const dx = x - CX, dy = y - CY; return [(dx * cs + dy * sn) / A, (-dx * sn + dy * cs) / B]; };
+      const margin = (u, v) => Math.min(1 - K * (1 - v * v) - Math.abs(u), 1 - K * (1 - u * u) - Math.abs(v));
+      for (let y = CY - 30; y < CY + 34; y++) for (let x = CX - 34; x < CX + 40; x++) {   // sombra sobre el sofá
+        const [u, v] = local(x - 6, y - 5); if (margin(u, v) > 0) F(x, y, 1, 1, '#020812', 0.45);
+      }
+      for (let y = CY - 30; y < CY + 30; y++) for (let x = CX - 34; x < CX + 34; x++) {
+        const [u, v] = local(x, y), m = margin(u, v); if (m <= 0) continue;
+        const h = Math.max(0, (1 - u * u) * (1 - v * v));
+        let c = 0.16 + 0.66 * h + (-u * 0.22 - v * 0.3) * Math.sqrt(h) + grain(x, y) * 1.4;   // bien mullido: centro claro, bordes hundidos
+        if (Math.abs(Math.abs(u) - Math.abs(v)) < 0.04 && Math.abs(u) > 0.5) c -= 0.16;   // arrugas desde las esquinas
+        if (u * u + v * v < 0.006) c -= 0.25;                                           // botón hundido del centro
+        if (m < 0.075) c = c * 0.55 + 0.3;                                               // ribete
+        if (m < 0.03) c = 0.06;                                                           // contorno
+        px(x, y, RED, c);
+      }
+      for (let i = 0; i < 26; i++) { const t = i / 26, x = Math.round(CX - 16 + t * 20), y = Math.round(CY - 14 + t * 6 + Math.sin(t * 6) * 1.5); F(x, y, 1, 1, '#e2917f', 0.45); }   // brillo del terciopelo
     });
-    R(22, 131, 194, 6, C4);                                                       // falda
-    for (let x = 26; x < 214; x += 6) R(x, 131, 1, 6, C5, 0.55);
-    R(22, 136, 194, 1, C5);
-    for (const fx of [28, 206]) { R(fx, 137, 5, 3, '#2a1a0f'); R(fx, 137, 1, 3, '#5a3a20'); }
-    // cojín rojo apagado
-    for (let y = 92; y <= 114; y++) { const sh = Math.round((y - 92) * 0.18); R(51 + sh, y, 21, 1, '#7a2a2c'); Pt(51 + sh, y, '#a04448'); Pt(71 + sh, y, '#4a1618'); }
-    R(52, 114, 22, 2, '#4a1618'); dith(54, 96, 15, 15, '#8a3436', 0, 0.55); R(60 + 2, 102, 2, 2, '#3a1012');
-    R(50, 92, 22, 1, '#a04448');
-    // desgaste: rozaduras, rasgón y mancha
-    for (let i = 0; i < 70; i++) { const x = 36 + hash(i * 1.3) * 166, y = 72 + hash(i * 2.9) * 40; Pt(x, y, hash(i) > 0.5 ? C1 : C4, 0.35); }
-    R(170, 100, 5, 1, '#06121e'); R(171, 101, 4, 1, '#06121e'); R(170, 99, 5, 1, C1, 0.5);
-    for (let i = 0; i < 40; i++) Pt(150 + hash(i * 3.1) * 22, 120 + hash(i * 1.7) * 9, C5, 0.35);
-    for (let i = 0; i < 40; i++) Pt(36 + hash(i * 5.3) * 168, 70 + hash(i) * 2, '#c9d6e0', 0.25);   // polvo en lo alto
 
     // ---------- cómoda de madera (recortada por la derecha) ----------
     R(0, 0, 0, 0, '#000');
@@ -1932,15 +1993,16 @@
     b.globalCompositeOperation = 'multiply'; b.fillStyle = 'rgb(226,204,168)'; b.fillRect(0, 0, W, H); b.globalCompositeOperation = 'source-over';
 
     // sala sin móvil (para cuando se recoge)
-    bgBare = document.createElement('canvas'); bgBare.width = W; bgBare.height = H;
+    bgBare = document.createElement('canvas'); bgBare.width = W * RES; bgBare.height = H * RES;
     bgBare.getContext('2d').drawImage(bg, 0, 0);
 
     // móvil cocido en el fondo (tiembla con la escena; no flota encima)
     bakePhoneOnto(b);
 
     // ---------- viñeta ----------
-    vig = document.createElement('canvas'); vig.width = W; vig.height = H;
-    const v = vig.getContext('2d'), g = v.createRadialGradient(W / 2, H * 0.52, 40, W / 2, H * 0.52, 210);
+    vig = document.createElement('canvas'); vig.width = W * RES; vig.height = H * RES;
+    const v = vig.getContext('2d'); v.setTransform(RES, 0, 0, RES, 0, 0);
+    const g = v.createRadialGradient(W / 2, H * 0.52, 40, W / 2, H * 0.52, 210);
     g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.55, 'rgba(0,0,0,0.28)'); g.addColorStop(1, 'rgba(0,0,0,0.88)');
     v.fillStyle = g; v.fillRect(0, 0, W, H);
   }
@@ -2233,6 +2295,7 @@
       // Apagar UI sin perder chat / desbloqueo
       anim = null; hits = []; pin = ''; shakeT = 0; flashKey = null; dragY0 = null;
       poweringOff = false; if (momSeq === 'tray') momSeq = 'answer';   // el panel de stickers se cierra al apagar
+      pinHint(false);
       if (rafId) cancelAnimationFrame(rafId); rafId = 0;
       if (chatRaf) cancelAnimationFrame(chatRaf); chatRaf = 0;
     }
@@ -2256,6 +2319,26 @@
       requestAnimationFrame(step);
     }
     function hit(x, y, w, h, fn) { hits.push({ x, y, w, h, fn }); }
+    // subtítulo "La contraseña es: 6767" debajo del móvil mientras está la pantalla del código (como los de la intro, letra a letra)
+    const PIN_HINT = 'La contraseña es: 6767';
+    let hintOn = false, hintRaf = 0;
+    function pinHint(show) {
+      const hc = document.getElementById('pinHint'), PD = window.PD; if (!hc || !PD || show === hintOn) return;
+      hintOn = show; hc.hidden = !show; cancelAnimationFrame(hintRaf);
+      if (!show) return;
+      const txt = PD.norm(PIN_HINT), PX = 5, PY = 3;
+      hc.width = PD.measure(txt) + PX * 2; hc.height = 7 + PY * 2; hc.style.width = `calc(${hc.width} * var(--px))`;
+      const g = hc.getContext('2d'), t0 = performance.now();
+      const step = () => {
+        const n = reduce() ? txt.length : Math.min(txt.length, Math.floor((performance.now() - t0) / 45) + 1);
+        g.clearRect(0, 0, hc.width, hc.height);
+        g.globalAlpha = 0.72; g.fillStyle = '#000'; g.fillRect(0, 0, hc.width, hc.height);
+        g.globalAlpha = 0.35; g.fillStyle = '#1a1010'; g.fillRect(1, 1, hc.width - 2, hc.height - 2); g.globalAlpha = 1;
+        PD.drawText(g, txt.slice(0, n), PX + 1, PY + 1, 'rgba(0,0,0,0.9)'); PD.drawText(g, txt.slice(0, n), PX, PY, '#e8e0d0');
+        if (n < txt.length && hintOn) hintRaf = requestAnimationFrame(step);
+      };
+      step();
+    }
 
     function loadImg(src) {
       return new Promise(res => {
@@ -2914,6 +2997,7 @@
         }
         if (homeMode) { hit(22, 30, 14, 36, toList); hit(90, 446, 60, 8, goHome); }      // "<" a la lista de chats; barra de inicio
       }
+      pinHint(!anim && screen === 'pin');
 
       cv.setAttribute('aria-label',
         screen === 'lock' ? 'Desliza hacia arriba o toca la notificacion'
@@ -3254,8 +3338,9 @@
 
     // temblor de proyector (el móvil va en el fondo → tiembla con la sala)
     const jy = hash(Math.floor(t * 12) * 3.1) > 0.9 ? 1 : 0;
+    ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;   // a partir de aquí, en px lógicos
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-    ctx.drawImage(phoneTaken && bgBare ? bgBare : bg, 0, jy);
+    ctx.drawImage(phoneTaken && bgBare ? bgBare : bg, 0, jy, W, H);
 
     // ambiente oscuro
     ctx.fillStyle = `rgba(0,0,0,${0.2 + dip * 0.45})`; ctx.fillRect(0, 0, W, H);
@@ -3304,7 +3389,7 @@
     // solo el parpadeo de notificación (el sprite base ya está en el fondo)
     if (buzzing) drawPhoneVibe(jy, t);
 
-    ctx.drawImage(vig, 0, 0);
+    ctx.drawImage(vig, 0, 0, W, H);
 
     // grano de película, rayones y motas
     for (let i = 0; i < 240; i++) { ctx.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.12)'; ctx.fillRect((Math.random() * W) | 0, (Math.random() * H) | 0, 1, 1); }
