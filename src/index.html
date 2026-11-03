@@ -245,6 +245,7 @@
   .todo-item.gone { opacity: 0; transform: translateX(calc(var(--px) * -6)); }
   .todo-item canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
   .todo-help { padding-left: calc(var(--px) * 11); }
+  .todo-sub { padding-left: calc(var(--px) * 6); }
   /* joystick del móvil (sala): abajo a la izquierda, el pulgar arrastra la bola */
   .joystick {
     position: absolute; z-index: 3; touch-action: none;
@@ -2154,6 +2155,7 @@
     // WhatsApp: con quién es el chat abierto, qué pantalla de la app se vio la última vez y si se tocó el campo del chat de mamá
     let chatWith = 'daniel', waScreen = 'chat', momFocus = false;
     const HOME_TIME = '16:05', HOME_DATE = 'Jueves 24 sep';          // como el reloj de la pared; el 24/09/2026 es jueves
+    let clock = HOME_TIME;                                           // la hora que marca ahora (avanza al completar misiones)
     const SCREEN = { x: 20, y: 22, w: 200, h: 432 };                  // pantalla exacta dentro del marco del sprite (medida en el png)
     const APPS = { chat: { x: 70, y: 304, label: 'WhatsApp' }, flash: { x: 130, y: 304, label: 'Linterna' } };
     const ICON = 40, TORCH = { x: 120, y: 150 }, SWITCH = { x: 82, y: 330, w: 76, h: 34 };   // app Linterna: dibujo y interruptor
@@ -2300,7 +2302,7 @@
 
     function reset() {
       // Solo al empezar partida nueva — borra conversación
-      screen = 'lock'; pin = ''; hits = []; shakeT = 0; anim = null; dragY0 = null;
+      screen = 'lock'; pin = ''; hits = []; shakeT = 0; anim = null; dragY0 = null; clock = HOME_TIME;
       flashKey = null; chatReveal = 1; poweringOff = false;
       unlocked = false; chatSeq = 'idle'; chatTyped = 0; chatT0 = 0; firstBubble = null;
       typeTarget = REPLY; sentReply = false; sentOk = false;
@@ -2399,7 +2401,7 @@
       mText(g, t, x, y, col);
     }
     function statusBar(g, col) {                                     // hora, cobertura y batería
-      mText(g, HOME_TIME, SCREEN.x + 8, SCREEN.y + 6, col);
+      mText(g, clock, SCREEN.x + 8, SCREEN.y + 6, col);
       g.fillStyle = col;
       for (let i = 0; i < 4; i++) g.fillRect(SCREEN.x + SCREEN.w - 44 + i * 4, SCREEN.y + 13 - i * 2 - 1, 3, i * 2 + 2);
       g.fillRect(SCREEN.x + SCREEN.w - 24, SCREEN.y + 6, 14, 7); g.fillRect(SCREEN.x + SCREEN.w - 10, SCREEN.y + 8, 2, 3);
@@ -2429,7 +2431,7 @@
     }
     function paintHome(g) {
       statusBar(g, '#14202c');
-      bigText(g, HOME_TIME, 120, 62, 5, '#101820');
+      bigText(g, clock, 120, 62, 5, '#101820');
       centered(g, HOME_DATE, 120, 106, '#1c2a38');
       appIcon(g, 'chat', APPS.chat.x, APPS.chat.y);
       appIcon(g, 'flash', APPS.flash.x, APPS.flash.y);
@@ -3020,7 +3022,7 @@
       cv.setAttribute('aria-label',
         screen === 'lock' ? 'Desliza hacia arriba o toca la notificacion'
           : screen === 'pin' ? 'Introduce el codigo 6767'
-            : screen === 'home' ? 'Pantalla de inicio: ' + HOME_TIME + '. Apps: WhatsApp y Linterna'
+            : screen === 'home' ? 'Pantalla de inicio: ' + clock + '. Apps: WhatsApp y Linterna'
               : screen === 'flash' ? 'Linterna ' + (flash ? 'encendida' : 'apagada') + '. Toca el boton para cambiar'
                 : screen === 'list' ? 'WhatsApp: chats. Mama (anclado), ' + FROM + ' y otros'
                   : chatWith === 'mama' ? (momOk && momSeq === 'idle' ? 'Toca el campo de texto para escribir a Mama'
@@ -3083,17 +3085,19 @@
     }
     function enableHome() { homeMode = true; screen = 'home'; ensureAssets(() => {}); }
     // partida guardada: qué se recuerda del móvil y cómo queda al continuar (chat con Daniel ya terminado)
-    function snapshot() { return { flash, waScreen, chatWith, mom: momSeq === 'done' }; }   // mom: ya se habló con mamá (y se le mandó el sticker)
+    function snapshot() { return { flash, waScreen, chatWith, mom: momSeq === 'done', clock }; }   // mom: ya se habló con mamá (y se le mandó el sticker)
     function restore(s) {
       unlocked = true; chatSeq = 'done'; sentReply = true; sentOk = true; chatReveal = 1;
       typeTarget = REPLY_OK; chatTyped = REPLY_OK.length;
       waScreen = s && s.waScreen === 'list' ? 'list' : 'chat'; chatWith = s && s.chatWith === 'mama' ? 'mama' : 'daniel';
       setFlash(!!(s && s.flash));
+      clock = s && /^\d\d:\d\d$/.test(s.clock) ? s.clock : HOME_TIME;
       if (s && s.mom) { momOk = true; momSeq = 'done'; momGot = MOM_REPLIES.length; }       // la conversación con mamá, terminada
       enableHome();
     }
+    function setTime(hhmm) { clock = hhmm; if (uiOpen() && !anim) frame(); }
     function allowMom() { if (momOk) return; momOk = true; if (uiOpen() && !anim && screen === 'chat' && chatWith === 'mama') frame(); }
-    return { reset, render, open, bind, powerOff, enableHome, snapshot, restore, allowMom, get flashlight() { return flash; } };
+    return { reset, render, open, bind, powerOff, enableHome, snapshot, restore, allowMom, setTime, get time() { return clock; }, get flashlight() { return flash; } };
   })();
   window.PDPhone = PhoneApp;
 
@@ -3443,7 +3447,7 @@
     clearSub(); setHud(true);
     const ui = document.getElementById('phoneUI'); if (ui) ui.classList.remove('open');
     cancelAnimationFrame(raf);                             // la escena lateral no se dibuja
-    if (window.PDRoom) window.PDRoom.start({ from: save.at, player: save.player });
+    if (window.PDRoom) window.PDRoom.start({ from: save.at, player: save.player, jr: save.jr });
     const GA = A(); if (!GA) return;
     GA.loadURL('wind', 'assets/wind.mp3').then(buf => { if (running && !wind) { wind = GA.loop(buf, 3, windLvl); wind.muffle(WIND_MUFFLE, 0); } }).catch(() => {});
   }
@@ -3556,7 +3560,7 @@
   const MOM = {
     name: 'madre', walk: MOM_DEF.walk, floor: MOM_DEF.floor,
     lit: MOM_DEF.floor.concat(MOM_DEF.faces, [{ x: 234, y: 150, w: 28, h: 3 }, { x: 57, y: 74, w: 4, h: 44 }]),
-    solid: [{ x: 102, y: 92, w: 82, h: 58 }, { x: 69, y: 40, w: 24, h: 26 }]   // cama con sus mesitas; la caja de ropa
+    solid: [{ x: 118, y: 91, w: 50, h: 59 }, { x: 103, y: 136, w: 16, h: 14 }, { x: 167, y: 136, w: 16, h: 14 }, { x: 69, y: 40, w: 24, h: 26 }]   // cama, las dos mesitas (se llega a ellas por arriba) y la caja de ropa
   };
   // El baño, pequeño (unos 2 m²): azulejo blanco con una cenefa de mosaico, váter, lavabo con mueble y espejo, plato de ducha
   const BATH_DEF = {
@@ -3585,7 +3589,72 @@
     name: 'balcon', walk: BALC_DEF.walk, floor: BALC_DEF.floor, lit: BALC_DEF.floor.concat(BALC_DEF.faces),
     solid: [{ x: 184, y: 46, w: 16, h: 13 }]                         // la maceta grande del rincón
   };
-  const ROOMS = { sala: SALA, entrada: HALL, madre: MOM, bano: BATH, balcon: BALC };
+  // ---------- CUARTO DE JUANJO (el remarcado en rojo en el plano): a la derecha de la entrada, se entra por la pared
+  // izquierda, abajo. Infantil: paredes verde claro con rodapié azul. Cama en el centro contra la pared del fondo, la mesita
+  // a su izquierda y el armario a la derecha; abajo, la mesa de madera oscura con el ordenador viejo y la silla de oficina.
+  const JR_DEF = {
+    caps: [{ x: 84, y: 22, w: 152, h: 6 }, { x: 84, y: 22, w: 6, h: 134 }, { x: 230, y: 22, w: 6, h: 134 }, { x: 84, y: 150, w: 152, h: 6 }],
+    faces: [{ x: 90, y: 28, w: 140, h: 22 }],
+    floor: [{ x: 90, y: 50, w: 140, h: 100 }],
+    walk: [{ x: 91, y: 51, w: 138, h: 98 }],
+    DOOR: { y: 122, h: 20 },                                         // puerta a la entrada (pared izquierda, abajo)
+    WIN: { y: 82, h: 40 },                                           // ventana en la pared derecha
+    BED: { x: 140, y: 52, w: 36, h: 52 },
+    WALLET: { x: 199, y: 125, w: 7, h: 5 }                           // la cartera, en la mesa junto al ratón
+  };
+  const JR = {
+    name: 'juanjo', walk: JR_DEF.walk, floor: JR_DEF.floor,
+    lit: JR_DEF.floor.concat(JR_DEF.faces, [{ x: 86, y: 120, w: 5, h: 24 }, { x: 178, y: 28, w: 52, h: 52 }]),   // + la puerta y el frente del armario
+    solid: [{ x: 119, y: 50, w: 18, h: 11 }, { x: 139, y: 50, w: 38, h: 54 }, { x: 139, y: 124, w: 74, h: 26 }]   // mesita, cama, mesa (la silla no estorba)
+  };
+  // el ARMARIO EMPOTRADO ocupa la esquina de arriba a la derecha, con el frente en diagonal: su huella, en tiras de 2 px
+  for (let x = 178; x < 230; x += 2) JR.solid.push({ x, y: 50, w: 2, h: Math.round((x < 214 ? 30 + (Math.max(x, 180) - 180) * 28 / 34 : 58) + 22) - 50 });
+  // ---------- EL EDIFICIO (misión 4): el RELLANO del primero y el ASCENSOR por dentro (la recepción, cuando llegue su dibujo) ----------
+  // Brutalista y a oscuras: paredes de mármol gris en placas, suelo de baldosa gris clara (también en la escalera) y
+  // puertas de madera marrón claro. El rellano, según el plano del usuario: la puerta de casa a la izquierda, la de la
+  // vecina a la derecha, el ascensor (pequeño, de puertas de metal que se abren solas hacia un lado) en la pared de arriba
+  // y, arriba a la derecha, el hueco de la escalera con su ventanita al norte.
+  const LND_DEF = {
+    caps: [{ x: 34, y: 44, w: 81, h: 6 }, { x: 224, y: 44, w: 62, h: 6 }, { x: 34, y: 44, w: 6, h: 94 }, { x: 280, y: 44, w: 6, h: 94 }, { x: 34, y: 132, w: 252, h: 6 },
+      { x: 109, y: 0, w: 6, h: 50 }, { x: 224, y: 0, w: 6, h: 50 }, { x: 109, y: 0, w: 121, h: 4 }],
+    faces: [{ x: 40, y: 50, w: 75, h: 20 }, { x: 224, y: 50, w: 56, h: 20 }, { x: 115, y: 4, w: 109, h: 14 }],
+    floor: [{ x: 40, y: 70, w: 240, h: 62 }],
+    walk: [{ x: 41, y: 71, w: 238, h: 60 }],
+    LIFT: { x: 76, y: 55, w: 24, h: 15 }, DOOR_W: { y: 90, h: 22 }, DOOR_E: { y: 90, h: 22 }, STAIRS: { x: 162, w: 62 }, UP: { x: 115, w: 46 }, WIN: { x: 180, w: 18 }
+  };
+  const LND = {
+    name: 'rellano', walk: LND_DEF.walk, floor: LND_DEF.floor, solid: [],
+    lit: LND_DEF.floor.concat(LND_DEF.faces, [{ x: 115, y: 18, w: 109, h: 52 }, { x: 36, y: 88, w: 5, h: 26 }])
+  };
+  // la cabina del ascensor (según el dibujo del usuario): de metal, más honda que ancha, la botonera en la pared izquierda,
+  // el espejo en la de enfrente (la derecha) y DOS puertas: la de abajo (sur) da al rellano del primero y la de arriba
+  // (norte), en la pared del fondo, se abre al llegar a la planta 0
+  const ELV_DEF = {
+    caps: [{ x: 130, y: 38, w: 60, h: 6 }, { x: 130, y: 38, w: 6, h: 98 }, { x: 184, y: 38, w: 6, h: 98 }, { x: 130, y: 130, w: 60, h: 6 }],
+    faces: [{ x: 136, y: 44, w: 48, h: 22 }],
+    floor: [{ x: 136, y: 66, w: 48, h: 64 }],
+    walk: [{ x: 139, y: 67, w: 41, h: 62 }],
+    DOOR: { x: 142, w: 36 }, NDOOR: { x: 148, y: 48, w: 24, h: 18 }, PANEL: { x: 136, y: 72, w: 4, h: 20 }, MIRROR: { x: 182, y: 54, h: 64 }
+  };
+  const ELV = { name: 'ascensor', walk: ELV_DEF.walk, floor: ELV_DEF.floor, lit: ELV_DEF.floor.concat(ELV_DEF.faces), solid: [] };
+  // la RECEPCIÓN (planta 0), según el plano del usuario: en L y amplia. Arriba a la izquierda, la sala grande con dos
+  // puertas de madera en la pared izquierda; a la derecha, el tramo por donde se sale del ascensor (abajo), con los
+  // buzones y otra puerta de madera en su pared; DETRÁS de esa pared, la escalera, que se coge desde la sala (desde el
+  // oeste) y sube hacia el este. Abajo a la izquierda baja el pasillo, ancho, con el ESPEJO, hasta la PUERTA BLANCA CON
+  // CRISTAL; tras ella, el portal con la VERJA blanca de la calle (como la de las fotos) y, en la acera, Daniel.
+  const LOB_DEF = {
+    caps: [{ x: 14, y: 0, w: 294, h: 4 }, { x: 14, y: 0, w: 6, h: 158 }, { x: 302, y: 0, w: 6, h: 86 },
+      { x: 170, y: 32, w: 138, h: 6 },                                // la pared de los buzones (con la escalera detrás)
+      { x: 80, y: 80, w: 160, h: 6 }, { x: 264, y: 80, w: 44, h: 6 }, { x: 80, y: 80, w: 6, h: 78 },   // abajo (el hueco del ascensor) y el pasillo, estrecho
+      { x: 14, y: 128, w: 16, h: 6 }, { x: 70, y: 128, w: 16, h: 6 }, { x: 14, y: 156, w: 10, h: 4 }, { x: 76, y: 156, w: 10, h: 4 }],
+    faces: [{ x: 20, y: 4, w: 150, h: 16 }, { x: 170, y: 4, w: 132, h: 10 }, { x: 170, y: 38, w: 132, h: 16 }],
+    floor: [{ x: 20, y: 20, w: 150, h: 60 }, { x: 170, y: 54, w: 132, h: 26 }, { x: 20, y: 80, w: 60, h: 48 }, { x: 20, y: 134, w: 60, h: 24 }, { x: 170, y: 14, w: 132, h: 18 }],
+    walk: [{ x: 21, y: 21, w: 148, h: 58 }, { x: 169, y: 55, w: 132, h: 24 }, { x: 21, y: 79, w: 58, h: 48 }],
+    VEST: [{ x: 31, y: 126, w: 38, h: 10 }, { x: 21, y: 134, w: 58, h: 6 }],   // el portal: se puede pisar con la puerta blanca abierta
+    STAIRS: { x: 170, y: 14, w: 132, h: 18 }, LIFT: { x: 240, w: 24 }, WDOOR: { x: 30, y: 128, w: 40 }, GATE: { x: 24, w: 52 }, DAN: { x: 50, y: 178 }
+  };
+  const LOB = { name: 'portal', walk: LOB_DEF.walk.slice(), floor: LOB_DEF.floor, lit: LOB_DEF.floor.concat(LOB_DEF.faces), solid: [] };
+  const ROOMS = { sala: SALA, entrada: HALL, madre: MOM, bano: BATH, balcon: BALC, juanjo: JR, rellano: LND, ascensor: ELV, portal: LOB };
   let room = SALA;
   const inRects = (rs, x, y) => rs.some(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
   const boxOf = rs => ({ x0: Math.min(...rs.map(r => r.x)), y0: Math.min(...rs.map(r => r.y)), x1: Math.max(...rs.map(r => r.x + r.w)), y1: Math.max(...rs.map(r => r.y + r.h)) });
@@ -3656,20 +3725,24 @@
     const hand = (ang, len, c) => { for (let k = 1; k <= len; k++) Pt(244 + Math.round(Math.cos(ang) * k), 18 + Math.round(Math.sin(ang) * k), c); };
     hand(((4 + 5 / 60) / 12) * 2 * Math.PI - Math.PI / 2, 2, '#1a120a'); hand((5 / 60) * 2 * Math.PI - Math.PI / 2, 4, '#1a120a');
 
-    // PUERTA DEL BALCÓN (arriba a la izquierda): toda de cristal. Como miramos desde arriba, a través del cristal
-    // se ve el suelo de baldosas de barro del balcón, la barandilla al fondo y una franja de cielo; todo al sol
-    const DN = DOOR_N, dy0 = FY0 + 1, dy1 = F.y0, gh = dy1 - dy0 - 1, gy = dy0 + 1;
+    // PUERTA DEL BALCÓN (arriba a la izquierda): toda de cristal. A través se ve el balcón tal cual es: al fondo (norte)
+    // su pared de piedra amarillenta, el suelo de granito rojo, la barandilla blanca a la izquierda y la maceta; al sol
+    const DN = DOOR_N, dy0 = FY0 + 1, dy1 = F.y0, gh = dy1 - dy0 - 1, gy = dy0 + 1, wallB = gy + 7;
     R(DN.x - 2, dy0 - 1, DN.w + 4, gh + 2, '#7c6244'); R(DN.x - 2, dy0 - 1, DN.w + 4, 1, '#98794f');
-    for (let y = 0; y < 4; y++) R(DN.x, gy + y, DN.w, 1, `rgb(${214 - y * 4},${226 - y * 3},${234 - y * 2})`);   // cielo
-    R(DN.x, gy + 4, DN.w, 1, '#3a3a3e'); R(DN.x, gy + 8, DN.w, 1, '#3a3a3e');                                  // barandilla
-    for (let x = DN.x + 1; x < DN.x + DN.w; x += 3) R(x, gy + 5, 1, 3, '#4a4a50');
-    for (let y = gy + 9; y < dy1; y++) R(DN.x, y, DN.w, 1, (y - gy) % 5 === 0 ? GRANITE.grout : GRANITE.base[(y >> 2) & 1]);   // suelo del balcón: granito rojo
-    for (let x = DN.x + 3; x < DN.x + DN.w; x += 5) R(x, gy + 9, 1, dy1 - gy - 9, GRANITE.grout);
-    R(DN.x + DN.w - 6, gy + 10, 5, 4, '#7a3f26'); R(DN.x + DN.w - 7, gy + 7, 7, 4, '#3d7a45'); Pt(DN.x + DN.w - 5, gy + 7, '#5fa060');   // maceta
-    R(DN.x, gy, DN.w, gh, '#fff3d6', 0.22);                                                                        // a pleno sol
+    R(DN.x, gy, DN.w, wallB - gy, STONE.base);                                                                   // pared de piedra
+    for (let i = 0; i < 40; i++) { const x = DN.x + Math.floor(hash(i * 1.7) * DN.w), y = gy + Math.floor(hash(i * 2.3) * (wallB - gy)); Pt(x, y, STONE.peb[Math.floor(hash(i * 4.1) * 6)]); }
+    R(DN.x, gy, DN.w, 1, '#000', 0.2); R(DN.x, wallB - 1, DN.w, 1, '#7a5a34', 0.7);
+    for (let y = wallB; y < dy1; y++) R(DN.x, y, DN.w, 1, (y - wallB) % 4 === 3 ? GRANITE.grout : GRANITE.base[((y - wallB) >> 2) & 1]);   // granito
+    for (let x = DN.x + 4; x < DN.x + DN.w; x += 6) R(x, wallB, 1, dy1 - wallB, GRANITE.grout);
+    for (let i = 0; i < 24; i++) Pt(DN.x + Math.floor(hash(i * 3.9) * DN.w), wallB + Math.floor(hash(i * 6.1) * (dy1 - wallB)), GRANITE.speck[i & 3], 0.8);
+    R(DN.x, wallB, DN.w, 2, '#000', 0.25);                                                                        // sombra de la pared
+    R(DN.x, gy + 3, 2, dy1 - gy - 3, '#eef2f4'); R(DN.x, gy + 3, 1, dy1 - gy - 3, '#ffffff');                   // barandilla (a la izquierda)
+    for (let y = gy + 5; y < dy1; y += 4) Pt(DN.x + 2, y, '#c9d0d4');
+    R(DN.x + DN.w - 6, wallB - 1, 5, 4, '#8a4a2a'); disc(DN.x + DN.w - 4, wallB - 2, 2, '#3d7a45'); Pt(DN.x + DN.w - 4, wallB - 3, '#d23a3a');   // maceta
+    R(DN.x, gy, DN.w, gh, '#fff3d6', 0.2);                                                                        // a pleno sol
     R(DN.x + DN.w / 2 - 1, dy0 + 1, 2, gh, '#7c6244');                                                // dos hojas de cristal
     R(DN.x + DN.w / 2 - 3, dy0 + 10, 1, 3, '#b8943a'); R(DN.x + DN.w / 2 + 2, dy0 + 10, 1, 3, '#b8943a');
-    for (let k = 0; k < 4; k++) { Pt(DN.x + 3 + k, dy0 + 9 - k, '#ffffff', 0.55); Pt(DN.x + DN.w / 2 + 4 + k, dy0 + 11 - k, '#ffffff', 0.4); }   // brillos
+    for (let k = 0; k < 4; k++) { Pt(DN.x + 3 + k, dy0 + 9 - k, '#ffffff', 0.5); Pt(DN.x + DN.w / 2 + 4 + k, dy0 + 11 - k, '#ffffff', 0.35); }   // brillos
     R(DN.x - 1, F.y0, DN.w + 2, 2, '#8a8478');
 
     // TAPAS de las paredes vistas desde arriba (amarillas)
@@ -3697,7 +3770,7 @@
     for (let k = 1; k < 4; k++) R(wx, WIN.y + k * PANE - 1, WL.t, 2, '#7c6244');
     R(F.x0, WIN.y - 1, 3, WIN.h + 2, '#8a7350'); R(F.x0, WIN.y - 1, 3, 1, '#a88c62');
 
-    // MESA de madera con dos sillas (papeles, una taza, las llaves y un cenicero encima)
+    // MESA de madera con dos sillas (papeles, una taza, el mando de la tele y un cenicero encima)
     const T = TABLE;
     R(T.x + 2, T.y + T.h, T.w, 3, '#000', 0.25);
     R(T.x, T.y, T.w, T.h, '#24140a'); R(T.x + 1, T.y + 1, T.w - 2, T.h - 4, '#6b4426');
@@ -3707,31 +3780,47 @@
     for (let k = 0; k < 3; k++) R(T.x + 11, T.y + 13 + k * 2, 8, 1, '#a89e84');
     disc(T.x + 38, T.y + 18, 3, '#c9c2b0'); disc(T.x + 38, T.y + 18, 2, '#3a2410'); Pt(T.x + 42, T.y + 18, '#c9c2b0');
     disc(T.x + 12, T.y + 54, 3, '#4a4a4e'); disc(T.x + 12, T.y + 54, 1, '#2a2a2e'); R(T.x + 13, T.y + 52, 4, 1, '#d8d0c0'); Pt(T.x + 16, T.y + 52, '#c04a20');
-    disc(T.x + 30, T.y + 50, 2, '#9a9a90'); R(T.x + 32, T.y + 50, 6, 1, '#b8b8b0'); R(T.x + 36, T.y + 51, 2, 1, '#b8b8b0'); Pt(T.x + 33, T.y + 50, '#f0ece0');
-    CHAIRS.forEach(c => {
-      R(c.x + 1, c.y + 10, 10, 2, '#000', 0.25);
-      R(c.x, c.y, 10, 10, '#24140a'); R(c.x + 1, c.y + 1, 8, 8, '#5a3a1e'); R(c.x + 1, c.y + 1, 8, 1, '#7a5430');
-      R(c.x + 8, c.y - 3, 3, 13, '#24140a'); R(c.x + 9, c.y - 2, 1, 11, '#3d2614');            // respaldo
+    R(T.x + 28, T.y + 48, 4, 10, '#141418'); R(T.x + 29, T.y + 49, 2, 1, '#c04040'); for (let k = 0; k < 3; k++) R(T.x + 29, T.y + 51 + k * 2, 2, 1, '#4a4a52');   // el mando de la tele
+    CHAIRS.forEach(c => {                                            // sillas de madera mirando a la mesa (respaldo a la derecha)
+      R(c.x + 1, c.y + 10, 11, 2, '#000', 0.25);
+      R(c.x - 1, c.y - 1, 11, 12, '#1a0e06'); R(c.x, c.y, 9, 10, '#5a3a1e'); R(c.x, c.y, 9, 1, '#7a5430'); R(c.x, c.y, 1, 10, '#6a4626');
+      R(c.x + 1, c.y + 2, 7, 6, '#8a3436'); R(c.x + 1, c.y + 2, 7, 1, '#a04448'); R(c.x + 1, c.y + 7, 7, 1, '#6a2426'); Pt(c.x + 4, c.y + 4, '#5a1e20');   // cojín
+      R(c.x + 8, c.y - 3, 4, 15, '#1a0e06'); R(c.x + 9, c.y - 2, 2, 13, '#6a4626'); R(c.x + 9, c.y - 2, 1, 13, '#8a5c34');   // respaldo con dos postes...
+      for (let y = c.y + 1; y < c.y + 10; y += 3) Pt(c.x + 10, y, '#3d2614');                                                  // ...y sus barrotes
+      [[0, 0], [7, 0], [0, 9], [7, 9]].forEach(([dx, dy]) => Pt(c.x + dx, c.y + dy, '#2a1a0c'));
     });
 
-    // SOFÁ chesterfield azul (el de la primera escena) con su cojín rojo
+    // SOFÁ chesterfield azul (el de la primera escena), visto desde arriba: respaldo capitoné, dos brazos enrollados,
+    // tres cojines de asiento y el cojín rojo
     const C1 = '#4a8fc7', C2 = '#2b6aa3', C3 = '#1f4f80', C4 = '#143659', C5 = '#0d2540', S = SOFA;
-    R(S.x - 1, S.y + S.h - 2, S.w + 2, 4, '#000', 0.28);
+    R(S.x, S.y + S.h - 1, S.w + 2, 4, '#000', 0.3);
     R(S.x, S.y, S.w, S.h, C5);
-    R(S.x + 1, S.y + 1, S.w - 2, 8, C2); R(S.x + 1, S.y + 1, S.w - 2, 1, C1); dith(S.x + 1, S.y + 2, S.w - 2, 2, C1, 0, 0.6);
-    for (let x = S.x + 14; x < S.x + S.w - 10; x += 11) { R(x, S.y + 4, 2, 2, C5); Pt(x - 1, S.y + 3, C1); }
-    [[S.x + 1, 9], [S.x + S.w - 10, 9]].forEach(([x, w]) => {                                   // brazos enrollados
-      R(x, S.y + 2, w, S.h - 4, C2); R(x, S.y + 2, w, 1, C1); R(x + 1, S.y + S.h - 8, w - 2, 5, C1, 0.55);
-      R(x, S.y + 2, 1, S.h - 4, C1, 0.6); R(x + w - 1, S.y + 2, 1, S.h - 4, C4, 0.8);
-    });
-    for (let i = 0; i < 3; i++) {                                                               // cojines del asiento
-      const x = S.x + 10 + i * 27;
-      R(x, S.y + 9, 27, 18, C2); R(x, S.y + 9, 27, 2, C1); dith(x + 1, S.y + 12, 25, 8, C1, i, 0.35);
-      R(x, S.y + 9, 1, 18, C4); R(x + 13, S.y + 17, 2, 2, C5);
+    R(S.x + 1, S.y + 1, S.w - 2, 10, C2); R(S.x + 1, S.y + 1, S.w - 2, 1, C1); dith(S.x + 1, S.y + 2, S.w - 2, 2, C1, 0, 0.5);   // respaldo
+    R(S.x + 1, S.y + 10, S.w - 2, 1, C4);
+    for (let r = 0; r < 2; r++) for (let x = S.x + 14 + r * 5; x < S.x + S.w - 12; x += 10) {   // botones del capitoné, al tresbolillo
+      const y = S.y + 4 + r * 3; Pt(x, y, C5); Pt(x - 1, y - 1, C1, 0.7); Pt(x + 1, y + 1, C3, 0.8);
+      Pt(x - 2, y + 1, C3, 0.5); Pt(x + 2, y - 1, C3, 0.5);                                        // los pliegues hacia los botones de al lado
     }
-    R(S.x + 10, S.y + 27, S.w - 20, 2, C3); R(S.x + 1, S.y + S.h - 2, S.w - 2, 1, C4);
-    for (let i = 0; i < 50; i++) Pt(S.x + 2 + hash(i * 1.3) * (S.w - 4), S.y + 2 + hash(i * 2.9) * (S.h - 4), hash(i) > 0.5 ? C1 : C4, 0.3);
-    R(S.x + 12, S.y + 11, 10, 9, '#4a1618'); R(S.x + 13, S.y + 11, 9, 8, '#7a2a2c'); R(S.x + 13, S.y + 11, 9, 1, '#a04448'); dith(S.x + 14, S.y + 13, 7, 5, '#8a3436', 0, 0.5);
+    for (const [x, side] of [[S.x + 1, -1], [S.x + S.w - 11, 1]]) {   // brazos enrollados: más altos que el asiento, con el rollo delante
+      R(x, S.y + 2, 10, S.h - 3, C5); R(x + 1, S.y + 3, 8, S.h - 6, C2);
+      R(x + 1, S.y + 3, 8, 1, C1); R(side < 0 ? x + 1 : x + 2, S.y + 4, 2, S.h - 9, C1, 0.7);    // luz arriba
+      R(side < 0 ? x + 7 : x + 1, S.y + 4, 1, S.h - 9, C3);                                        // sombra hacia el asiento
+      R(x + 1, S.y + S.h - 6, 8, 3, C3); R(x + 2, S.y + S.h - 6, 6, 1, C1, 0.8); Pt(x + 4, S.y + S.h - 5, C5); Pt(x + 5, S.y + S.h - 5, C5);   // el rollo del brazo
+      for (let y = S.y + 7; y < S.y + S.h - 8; y += 4) Pt(x + 4 + (side > 0 ? 1 : 0), y, C4);      // botones del brazo
+    }
+    for (let i = 0; i < 3; i++) {                                    // cojines del asiento
+      const x = S.x + 11 + i * 26, w = i === 2 ? 26 : 26;
+      R(x, S.y + 11, w, 17, C5); R(x + 1, S.y + 11, w - 2, 16, C2); R(x + 1, S.y + 11, w - 2, 2, C1); dith(x + 2, S.y + 14, w - 4, 8, C1, i, 0.3);
+      R(x + 1, S.y + 24, w - 2, 3, C3); R(x + 1, S.y + 24, w - 2, 1, C2);                         // el canto de delante
+      Pt(x + 1, S.y + 11, C3); Pt(x + w - 2, S.y + 11, C3);
+    }
+    R(S.x + 10, S.y + 28, S.w - 20, 2, C4); R(S.x + 1, S.y + S.h - 1, S.w - 2, 1, C5);         // faldón
+    for (let i = 0; i < 40; i++) Pt(S.x + 12 + hash(i * 1.3) * (S.w - 24), S.y + 12 + hash(i * 2.9) * 12, hash(i) > 0.5 ? C1 : C4, 0.25);
+    const CU = { x: S.x + 13, y: S.y + 12 };                         // cojín rojo, apoyado en el brazo: mullido, con las esquinas en pico
+    R(CU.x, CU.y, 11, 10, '#3a1012'); R(CU.x + 1, CU.y + 1, 9, 8, '#7a2a2c'); R(CU.x + 1, CU.y + 1, 9, 1, '#a04448'); R(CU.x + 1, CU.y + 1, 1, 8, '#93393c');
+    R(CU.x + 1, CU.y + 8, 9, 1, '#5a1e20'); R(CU.x + 9, CU.y + 2, 1, 6, '#5a1e20'); dith(CU.x + 2, CU.y + 3, 7, 4, '#8a3436', 1, 0.5);
+    [[0, 0], [10, 0], [0, 9], [10, 9]].forEach(([dx, dy]) => Pt(CU.x + dx, CU.y + dy, '#a04448'));            // las puntas
+    Pt(CU.x + 5, CU.y + 4, '#3a1012'); Pt(CU.x + 4, CU.y + 3, '#a04448', 0.7);                                 // el botón del centro
 
     // CÓMODA con la lámpara de mesa y el retrato pequeño
     const D = DRESSER;
@@ -3756,11 +3845,15 @@
     const flaps = (x, top, w, d) => {                                 // solapas abiertas hacia fuera
       [[x - 4, top + 2, 4, d - 3], [x + w, top + 2, 4, d - 3], [x + 2, top - 4, w - 4, 4]].forEach(([fx, fy, fw, fh]) => { R(fx, fy, fw, fh, '#5e4220'); R(fx + 1, fy + 1, fw - 2, fh - 2, '#cfa265'); });
     };
-    // (2) cajas pequeñas cerradas, amontonadas contra la pared derecha
-    crate(267, 36, 24, 14, 12, 0); crate(270, 38, 18, 11, 9, 12);
-    crate(268, 64, 22, 13, 12, 0); crate(271, 66, 16, 10, 8, 12); crate(273, 68, 11, 7, 6, 20);
-    crate(274, 85, 16, 11, 8, 0);
-    [[270, 52], [271, 80], [276, 98]].forEach(([x, y]) => { R(x, y, 6, 1, '#3a2a18'); R(x + 7, y, 3, 1, '#3a2a18'); });   // rotulador
+    // (2) cajas cerradas apiladas contra la pared derecha, en tres montones (el de delante tapa al de detrás), con la
+    // cinta y lo escrito a rotulador en sus caras
+    const label = (x, y, w) => { R(x, y, Math.min(6, w - 2), 1, '#2a1c10'); R(x + Math.min(7, w - 2), y, 2, 1, '#2a1c10'); R(x, y + 2, Math.min(4, w - 2), 1, '#2a1c10'); };
+    let tp = crate(267, 42, 24, 13, 12, 0); label(270, tp + 13 + 4, 24);
+    tp = crate(270, 43, 18, 10, 8, 12); label(272, tp + 10 + 3, 18);
+    tp = crate(267, 70, 24, 13, 12, 0); label(270, tp + 13 + 4, 24);
+    tp = crate(269, 71, 15, 9, 7, 12); R(272, tp + 1, 9, 2, '#d24a3a', 0.8);                                        // pegatina de FRÁGIL
+    tp = crate(268, 92, 21, 11, 9, 0); label(271, tp + 11 + 3, 21);
+
     // (4) cajas abiertas llenas de cosas, junto a la puerta del balcón
     let top = crate(60, 40, 21, 15, 12, 0, true); flaps(60, top, 21, 15);
     ['#7a2a2c', '#2b4a6a', '#b8a070', '#5a6a2a', '#d9d2bf', '#4a2f17'].forEach((c, i) => { R(62 + i * 3, top + 2, 2, 10 - (i % 3), c); R(62 + i * 3, top + 2, 2, 1, '#e8e0d0', 0.35); });   // libros
@@ -3799,7 +3892,7 @@
     const v = vig.getContext('2d'), g = v.createRadialGradient(W / 2, H / 2 + 6, 70, W / 2, H / 2 + 6, 200);
     g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.6, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0.85)');
     v.fillStyle = g; v.fillRect(0, 0, W, H);
-    buildHall(); buildBalc(); buildMom(); buildBath();   // el balcón antes que el cuarto: el cuarto lo ve por la puerta
+    buildHall(); buildBalc(); buildMom(); buildBath(); buildJr(); buildLnd(); buildElv(); buildLob();   // el balcón antes que el cuarto: el cuarto lo ve por la puerta
   }
 
   // ---------- fondo de la ENTRADA: paredes, suelo y puertas (sin muebles todavía) ----------
@@ -4215,6 +4308,325 @@
     sepia();
   }
 
+  // ---------- fondo del CUARTO DE JUANJO ----------
+  // lo que cambia (cama hecha o deshecha, ropa del suelo, cartera) va aparte, en sprites con el mismo tinte que el fondo
+  function tintedSprite(w, h, draw) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d'), R = (x, y, ww, hh, col, a) => { g.globalAlpha = a == null ? 1 : a; g.fillStyle = col; g.fillRect(x, y, ww, hh); g.globalAlpha = 1; };
+    draw(R, (x, y, col, a) => R(x, y, 1, 1, col, a));
+    const mask = document.createElement('canvas'); mask.width = w; mask.height = h; mask.getContext('2d').drawImage(c, 0, 0);
+    g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgb(240,228,208)'; g.fillRect(0, 0, w, h);
+    g.globalCompositeOperation = 'destination-in'; g.drawImage(mask, 0, 0);
+    return c;
+  }
+  // la ropa tirada por el suelo (se recoge de una en una)
+  const JR_CLOTHES = [{ x: 100, y: 78, w: 12, h: 11, kind: 'shirt' }, { x: 112, y: 104, w: 10, h: 14, kind: 'jeans' }, { x: 198, y: 88, w: 8, h: 6, kind: 'socks' }];
+  let jrBg = null, bedMade = null, bedMessy = null, walletSp = null;
+  function buildJr() {
+    jrBg = document.createElement('canvas'); jrBg.width = W; jrBg.height = H;
+    const b = jrBg.getContext('2d'), D = JR_DEF, F = D.floor[0], FC = D.faces[0];
+    const { R, Pt, disc, caps, paint, floorShade, sill, sepia } = roomPainter(b);
+    R(0, 0, W, H, '#070304'); caps(D.caps);
+    // suelo de tarima clara
+    for (let y = F.y, r = 0; y < F.y + F.h; y += 6, r++) {
+      let x = F.x - Math.floor(hash(r * 5.3 + 1) * 28);
+      while (x < F.x + F.w) {
+        const len = 24 + Math.floor(hash(r * 9 + x) * 26), c = ['#b8946a', '#ae8a60', '#c29e72', '#a8845a'][Math.floor(hash(x * 0.9 + r * 11) * 4)];
+        const x0 = Math.max(x, F.x), x1 = Math.min(x + len, F.x + F.w), h = Math.min(6, F.y + F.h - y);
+        R(x0, y, x1 - x0, h, c); R(x0, y, x1 - x0, 1, '#8a6a46', 0.7); if (x + len < F.x + F.w) R(x1 - 1, y, 1, h, '#8a6a46', 0.8);
+        if (x1 - x0 > 8) R(x0 + Math.floor(hash(x + r) * (x1 - x0 - 6)), y + 3, 5, 1, '#9a7a52', 0.4);
+        x += len;
+      }
+    }
+    // alfombra redonda azul con el borde verde
+    for (let y = 96; y < 120; y++) for (let x = 96; x < 136; x++) {
+      const u = ((x + 0.5 - 116) / 20) ** 2 + ((y + 0.5 - 108) / 12) ** 2;
+      if (u <= 1) Pt(x, y, u > 0.72 ? '#7cc070' : u > 0.6 ? '#e8e4d0' : ((x + y) & 3) ? '#5b8fd0' : '#5287c8');
+    }
+    floorShade(F);
+    // PARED: verde claro entera, con el rodapié azul
+    paint(FC.x, FC.y, FC.w, FC.h, '#a6d39c', '#98c78e', '#b4dcab');
+    R(FC.x, FC.y + FC.h - 4, FC.w, 1, '#7fb0e8'); R(FC.x, FC.y + FC.h - 3, FC.w, 2, '#4f86c6'); R(FC.x, FC.y + FC.h - 1, FC.w, 1, '#2a4a78');
+    [[124, 33], [133, 31], [147, 35], [171, 33], [178, 37], [168, 31]].forEach(([x, y]) => {          // pegatinas de estrellas que brillan
+      Pt(x, y, '#f6e070'); Pt(x - 1, y, '#e8c440', 0.8); Pt(x + 1, y, '#e8c440', 0.8); Pt(x, y - 1, '#e8c440', 0.8); Pt(x, y + 1, '#e8c440', 0.8);
+    });
+    R(152, 30, 14, 9, '#1d2a4a'); disc(159, 34, 2, '#e07a4a'); R(155, 34, 9, 1, '#f0d890'); Pt(153, 31, '#ffffff'); Pt(164, 37, '#ffffff');   // póster: un planeta
+    // CORCHO con dibujos y fotos, a la izquierda (la ventana está en la pared derecha)
+    R(95, 30, 20, 14, '#3a2614'); R(96, 31, 18, 12, '#c49a62');
+    for (let i = 0; i < 40; i++) Pt(96 + Math.floor(hash(i * 2.3) * 18), 31 + Math.floor(hash(i * 4.1) * 12), hash(i) > 0.5 ? '#b08850' : '#d4aa72');
+    R(98, 33, 6, 7, '#f4f0e6'); R(99, 35, 3, 1, '#d24a3a'); R(99, 37, 4, 1, '#4f86c6'); Pt(101, 34, '#7cc070');   // un dibujo
+    R(106, 32, 6, 5, '#e8e4d8'); R(107, 33, 4, 3, '#7fa6c8'); Pt(108, 34, '#e9b997');                             // una foto
+    R(105, 39, 7, 3, '#f6e070'); Pt(100, 32, '#d24a3a'); Pt(108, 31, '#4f86c6'); Pt(108, 39, '#d24a3a');         // un pósit y las chinchetas
+    // MESITA de noche (verde, cajón con borde, tirador azul, patas) con la lámpara y un despertador
+    R(119, 44, 18, 15, '#22301f'); R(120, 45, 16, 4, '#c2e4b8'); R(120, 45, 16, 1, '#dcf2d4');
+    R(120, 49, 16, 9, '#98c88e'); R(121, 50, 14, 5, '#8cbe84'); R(121, 50, 14, 1, '#b4dcab'); R(121, 54, 14, 1, '#6e9e68'); R(127, 52, 2, 1, '#2f5f9f');
+    R(120, 57, 16, 1, '#4f86c6'); R(120, 58, 2, 2, '#3a2a1a'); R(134, 58, 2, 2, '#3a2a1a'); R(121, 60, 16, 1, '#000', 0.25);
+    R(124, 43, 7, 2, '#a8a49a'); R(125, 43, 5, 1, '#d8d4c8'); R(127, 38, 1, 5, '#8a867c');                         // lámpara: pie y barra
+    for (let y = 33; y < 38; y++) { const hw = 3 + Math.floor((y - 33) / 2); R(127 - hw, y, hw * 2 + 1, 1, y === 37 ? '#4f86c6' : '#7fb0e0'); Pt(127 - hw, y, '#9cc4ec'); }   // pantalla
+    R(131, 42, 4, 3, '#d24a3a'); R(132, 43, 2, 1, '#f4f0e6'); Pt(131, 41, '#8a2a20'); Pt(134, 41, '#8a2a20');    // despertador
+    // CABECERO arqueado (azul, franja verde) y los postes con sus bolas
+    for (let x = 139; x < 178; x++) {
+      const top = 38 - Math.round(2 * Math.sin(Math.PI * (x - 139) / 38));
+      R(x, top, 1, 52 - top, '#1d3354'); if (x > 139 && x < 177) { R(x, top + 1, 1, 50 - top, '#4f86c6'); Pt(x, top + 1, '#7fb0e8'); R(x, 44, 1, 2, '#8acb7e'); Pt(x, 50, '#3a68a8'); }
+    }
+    for (const px of [139, 174]) { R(px, 35, 4, 17, '#1d3354'); R(px + 1, 36, 2, 15, '#3f72b4'); Pt(px + 1, 36, '#6fa0dc'); disc(px + 1.5, 34, 1.6, '#8acb7e'); Pt(px + 1, 33, '#b4e0a8'); }
+    R(176, 54, 2, 50, '#000', 0.22);                                                                 // sombra de la cama
+    // ARMARIO ESQUINERO grande, apoyado en la esquina de arriba a la derecha (como en el dibujo): frente en diagonal desde
+    // el cabecero y luego recto hasta la pared derecha. Es un mueble: se ve su tapa, con su canto, del color de la pared
+    const wTop = x => x < 214 ? 30 + (x - 180) * 28 / 34 : 58;
+    for (let x = 178; x < 230; x++) {
+      const yt = Math.round(wTop(Math.max(x, 180))), diag = x < 214;
+      R(x, 29, 1, yt - 29, '#b4dcab'); for (let y = 30; y < yt - 1; y++) if (hash(x * 3.1 + y * 7.7) > 0.86) Pt(x, y, '#a6d39c');   // la tapa
+      Pt(x, 29, '#d2ecc8'); Pt(x, yt - 2, '#c8e6be'); Pt(x, yt - 1, '#22301f');
+      R(x, yt, 1, 22, diag ? '#8fbf87' : '#9ccc94'); Pt(x, yt, '#4f86c6'); Pt(x, yt + 1, diag ? '#a6d39c' : '#b4dcab');
+      Pt(x, yt + 4, diag ? '#a0cc98' : '#acd6a4'); Pt(x, yt + 16, '#7aa872');                       // marcos de las puertas
+      R(x, yt + 19, 1, 1, '#7fb0e8'); R(x, yt + 20, 1, 2, '#4f86c6');
+      R(x, yt + 22, 1, 2, '#000', 0.22);
+    }
+    R(178, 28, 52, 1, '#22301f'); R(178, 28, 1, 24, '#22301f'); R(179, 29, 1, 22, '#22301f');
+    R(197, Math.round(wTop(197)) + 2, 1, 17, '#5f8f5a'); R(214, 58, 1, 22, '#2f5f9f');               // juntas de las puertas y la esquina
+    R(195, Math.round(wTop(195)) + 9, 1, 3, '#2f5f9f'); R(199, Math.round(wTop(199)) + 9, 1, 3, '#2f5f9f'); R(217, 67, 1, 3, '#2f5f9f');   // tiradores
+    const sy = Math.round(wTop(188)) + 8; Pt(188, sy, '#f6e070'); R(187, sy + 1, 3, 1, '#f6e070'); Pt(188, sy + 2, '#f6e070');   // pegatina de estrella
+    // VENTANA en la pared derecha (vista desde arriba: el marco, el cristal y el alféizar por dentro)
+    const WN = D.WIN;
+    R(229, WN.y - 1, 8, WN.h + 2, '#1c1408'); R(230, WN.y, 6, WN.h, '#c8c8c0'); R(232, WN.y + 1, 2, WN.h - 2, '#8fb4c8'); R(232, WN.y + 1, 1, WN.h - 2, '#b4d0de');
+    R(230, WN.y + WN.h / 2 - 1, 6, 2, '#c8c8c0'); R(227, WN.y, 3, WN.h, '#b0aea4'); R(227, WN.y, 1, WN.h, '#cfcdc4'); R(226, WN.y, 1, WN.h, '#000', 0.2);
+    // MESA de madera marrón oscuro contra la pared de abajo, con el ordenador viejo (torre y monitor de tubo, beis) y
+    // los periféricos modernos (teclado y ratón con luces de colores, alfombrilla grande, cascos)
+    R(139, 123, 74, 27, '#140b05'); R(140, 124, 72, 22, '#4a2f1c'); R(140, 124, 72, 1, '#6e4a30'); R(140, 145, 72, 1, '#3a2414'); R(140, 146, 72, 4, '#24160c');
+    for (let i = 0; i < 30; i++) R(140 + Math.floor(hash(i * 3.3) * 62), 125 + Math.floor(hash(i * 5.7) * 20), 5 + Math.floor(hash(i) * 10), 1, hash(i * 9) > 0.5 ? '#3e2616' : '#56381f', 0.7);
+    R(143, 124, 9, 1, '#16161a'); Pt(142, 125, '#16161a'); Pt(152, 125, '#16161a');                    // cascos: diadema y almohadillas con luz
+    R(141, 126, 3, 3, '#16161a'); R(151, 126, 3, 3, '#16161a'); Pt(142, 127, '#3ae0c0'); Pt(152, 127, '#e03ac0');
+    R(141, 130, 14, 16, '#2a2620'); R(142, 131, 12, 14, '#d8d0b8'); R(142, 131, 12, 1, '#ece6d2'); R(153, 132, 1, 13, '#b4ac94');   // torre
+    R(142, 131, 12, 2, '#c4bca2'); R(144, 131, 8, 1, '#5a5444'); Pt(152, 132, '#4caf50');
+    for (let y = 135; y < 143; y += 2) R(144, y, 8, 1, '#c0b8a0');
+    R(155, 138, 4, 1, '#16161a');                                                                     // cable
+    R(158, 129, 30, 4, '#1e1b16'); R(159, 130, 28, 2, '#b8b29e'); R(160, 129, 26, 1, '#0e1014'); R(162, 129, 6, 1, '#2a3440');   // monitor de tubo: el marco y el cristal...
+    for (let y = 132; y < 141; y++) { const i = Math.floor((y - 132) / 2); R(159 + i, y, 28 - i * 2, 1, '#1e1b16'); R(160 + i, y, 26 - i * 2, 1, y % 2 ? '#aaa490' : '#9a947f'); Pt(185 - i, y, '#878170'); }   // ...y el culo, con rejillas
+    R(171, 141, 4, 2, '#1e1b16');                                                                     // el pie
+    R(159, 124, 26, 4, '#0c0c10');                                                                    // teclado con luces
+    for (let r = 0; r < 3; r++) for (let x = 160; x < 184; x += 2) Pt(x + (r & 1), 125 + r, `hsl(${Math.round((x - 160) * 13 + r * 25)},85%,${58 - r * 4}%)`);
+    R(187, 124, 22, 9, '#101016'); R(187, 132, 22, 1, '#7a4ae0'); R(187, 124, 1, 9, '#3a8ae0', 0.7);  // alfombrilla con borde de luz
+    R(192, 126, 4, 3, '#16161a'); R(193, 125, 2, 1, '#16161a'); Pt(194, 126, '#2a2a30'); Pt(193, 128, '#3ae0c0');   // ratón
+    R(190, 136, 10, 8, '#f4f0e6'); for (let y = 138; y < 143; y += 2) R(191, y, 7, 1, '#9a968e');        // papeles
+    R(204, 135, 5, 5, '#e8e4dc'); R(205, 136, 3, 2, '#4a2a14'); R(209, 136, 1, 3, '#e8e4dc'); R(204, 139, 5, 1, '#c8c4b8');   // taza
+    // SILLA de oficina básica (sin colisión: se puede pasar por detrás): cinco patas con ruedas, asiento, brazos y respaldo
+    [[-7, 2], [7, 2], [-4, 6], [4, 6], [0, -4]].forEach(([dx, dy]) => {
+      const n = Math.max(Math.abs(dx), Math.abs(dy)); for (let k = 1; k <= n; k++) Pt(174 + Math.round(dx * k / n), 117 + Math.round(dy * k / n), '#2a2a2e');
+      R(173 + dx, 117 + dy, 2, 1, '#0c0c0e');
+    });
+    R(167, 112, 14, 10, '#16161a'); R(168, 112, 12, 9, '#3a3a42'); R(168, 112, 12, 1, '#55555e'); R(168, 113, 1, 7, '#4a4a52');
+    R(169, 116, 10, 1, '#30303a'); Pt(167, 112, '#070304'); Pt(180, 112, '#070304');
+    R(165, 113, 2, 7, '#1e1e24'); R(181, 113, 2, 7, '#1e1e24'); Pt(165, 113, '#3a3a42'); Pt(181, 113, '#3a3a42');   // brazos
+    R(173, 110, 2, 2, '#16161a');
+    R(167, 106, 14, 5, '#16161a'); R(168, 107, 12, 3, '#2a2a32'); R(168, 107, 12, 1, '#4a4a55');        // respaldo de rejilla
+    for (let x = 169; x < 180; x += 2) Pt(x, 108, '#3a3a44');
+    // PUERTA a la entrada (pared izquierda; dentro = derecha): solo la mitad de dentro
+    const DW = D.DOOR;
+    R(85, DW.y - 2, 5, 2, '#7c6244'); R(85, DW.y + DW.h, 5, 2, '#7c6244'); R(85, DW.y - 2, 5, 1, '#98794f');
+    sill(88, DW.y, 2, DW.h); R(86, DW.y, 2, DW.h, '#2a1a0c'); R(87, DW.y + 1, 1, DW.h - 2, '#7a5430'); R(87, DW.y + 2, 1, DW.h - 6, '#9a6c40');
+    R(89, DW.y + 1, 1, 2, '#8f949a'); R(88, DW.y + DW.h - 6, 2, 2, '#c8a040'); Pt(89, DW.y + DW.h - 6, '#e0c070');
+    sepia();
+    // LA CAMA (36 × 52, con 4 px de margen a la derecha para el edredón que cuelga): barandillas azules, colchón
+    const frame = R => {
+      R(0, 0, 36, 50, '#1d3354'); R(1, 0, 2, 49, '#3f72b4'); R(33, 0, 2, 49, '#3f72b4'); R(1, 0, 1, 49, '#6fa0dc'); R(33, 0, 1, 49, '#5a8ccc');
+      R(3, 0, 30, 49, '#ece8e0'); R(3, 0, 1, 49, '#d4cfc4');
+      R(0, 47, 36, 5, '#1d3354'); R(1, 48, 34, 3, '#3f72b4'); R(1, 48, 34, 1, '#6fa0dc');               // piecero
+      R(0, 46, 3, 3, '#8acb7e'); R(33, 46, 3, 3, '#8acb7e'); Pt(0, 46, '#b4e0a8'); Pt(33, 46, '#b4e0a8');
+    };
+    const pillow = (R, Pt, dx) => {
+      for (let y = 0; y < 8; y++) { const x0 = 7 + Math.round(dx * y), w = 22 - (y === 0 || y === 7 ? 2 : 0), o = y === 0 || y === 7 ? 1 : 0;
+        R(x0 + o, 2 + y, w, 1, y === 7 ? '#c9c4b8' : y === 0 ? '#ffffff' : y > 4 ? '#ebe8e0' : '#f8f6f0'); Pt(x0 + o, 2 + y, '#d4cfc4'); }
+      R(16 + Math.round(dx * 3), 5, 4, 1, '#e2ded4');
+    };
+    const stars = (Pt, list) => list.forEach(([x, y]) => { Pt(x, y, '#f6e070'); Pt(x - 1, y, '#e0c040', 0.6); Pt(x + 1, y, '#e0c040', 0.6); Pt(x, y - 1, '#e0c040', 0.6); Pt(x, y + 1, '#e0c040', 0.6); });
+    bedMade = tintedSprite(40, 52, (R, Pt) => {                      // hecha: almohada, sábana doblada y el edredón con estrellas y un cohete
+      frame(R); pillow(R, Pt, 0);
+      R(3, 12, 30, 3, '#f6f3ec'); R(3, 14, 30, 1, '#cfcac0');
+      R(2, 15, 32, 32, '#6fa3dc'); R(2, 15, 32, 1, '#9cc4ec'); R(2, 16, 1, 31, '#4f86c6'); R(33, 16, 1, 31, '#4f86c6'); R(2, 45, 32, 2, '#5b8fd0');
+      [24, 33, 41].forEach(y => R(3, y, 30, 1, '#629ad6'));                                         // pespuntes
+      stars(Pt, [[6, 19], [28, 21], [9, 37], [29, 30], [24, 43], [6, 28]]);
+      R(15, 21, 4, 10, '#ece8e0'); R(16, 20, 2, 1, '#d24a3a'); R(15, 21, 4, 1, '#d24a3a'); Pt(16, 24, '#4f86c6'); Pt(17, 24, '#4f86c6'); R(18, 22, 1, 9, '#c8c4b8');   // cohete
+      R(14, 28, 1, 3, '#d24a3a'); R(19, 28, 1, 3, '#d24a3a'); R(16, 31, 2, 2, '#f2a040'); Pt(16, 33, '#f6e070'); Pt(17, 33, '#f6e070');
+      R(23, 36, 5, 5, '#8acb7e'); Pt(23, 36, '#6fa3dc'); Pt(27, 36, '#6fa3dc'); Pt(23, 40, '#6fa3dc'); Pt(27, 40, '#6fa3dc'); Pt(24, 37, '#b4e0a8');   // planeta
+      R(21, 38, 9, 1, '#f0d890');
+    });
+    bedMessy = tintedSprite(40, 52, (R, Pt) => {                     // deshecha: almohada torcida, sábana arrugada y el edredón hecho un gurruño que cuelga
+      frame(R); pillow(R, Pt, 0.5);
+      for (let k = 0; k < 5; k++) for (let t = 0; t < 7; t++) Pt(4 + k * 5 + t, 13 + t + k * 2, '#d0cbc0');   // arrugas
+      const edge = y => [Math.round(7 + 3 * Math.sin(y * 0.42) + (y > 41 ? -2 : 0)), Math.min(39, Math.round(33 + 3 * Math.sin(y * 0.33 + 1) + (y > 29 ? 3 : 0)))];
+      for (let y = 23; y < 47; y++) {
+        const [x0, x1] = edge(y);
+        R(x0, y, x1 - x0, 1, y === 23 ? '#9cc4ec' : '#6fa3dc'); Pt(x0, y, '#3f72b4'); Pt(x1 - 1, y, '#3f72b4');
+        for (const [o, a, f] of [[5, 0.6, 3], [13, 0.5, 2], [21, 0.7, 2]]) { const fx = x0 + o + Math.round(f * Math.sin(y * a + o)); if (fx < x1 - 2) { Pt(fx, y, '#4a7ec0'); Pt(fx + 1, y, '#8cbcec'); } }   // pliegues
+      }
+      R(edge(46)[0], 46, edge(46)[1] - edge(46)[0], 1, '#3f72b4');
+      R(36, 30, 3, 15, '#000', 0.25);                                                                // el trozo que cuelga, con su sombra
+      stars(Pt, [[11, 28], [26, 33], [16, 41]]);
+    });
+    walletSp = tintedSprite(7, 5, (R, Pt) => { R(0, 0, 7, 5, '#3a2210'); R(1, 0, 5, 4, '#6a3c1c'); R(1, 0, 5, 1, '#8a5428'); R(1, 2, 5, 1, '#4a2a12'); Pt(5, 3, '#d8b048'); });
+    JR_CLOTHES.forEach(c => {
+      c.sp = tintedSprite(c.w + 1, c.h + 1, (R, Pt) => {
+        if (c.kind === 'shirt') {                                                                     // camiseta roja tirada, con sus arrugas
+          R(1, 2, 12, 10, '#000', 0.18);
+          R(3, 0, 6, 1, '#5a1414'); R(1, 1, 10, 1, '#5a1414'); R(0, 2, 12, 3, '#5a1414'); R(2, 5, 8, 6, '#5a1414');
+          R(1, 2, 10, 2, '#c23a32'); R(3, 1, 6, 1, '#c23a32'); R(3, 4, 6, 6, '#c23a32'); R(4, 1, 4, 1, '#7a1a1a');
+          R(4, 3, 4, 1, '#d85a50'); Pt(5, 6, '#9a2a24'); Pt(6, 7, '#9a2a24'); Pt(7, 8, '#9a2a24'); R(3, 9, 6, 1, '#9a2a24');
+        } else if (c.kind === 'jeans') {                                                              // pantalones vaqueros, con una pernera doblada
+          R(1, 1, 10, 14, '#000', 0.18);
+          R(0, 0, 9, 13, '#1e3150'); R(1, 1, 7, 2, '#3a5a8a'); R(1, 3, 3, 9, '#4a6a9a'); R(5, 3, 3, 7, '#4a6a9a'); R(5, 10, 4, 2, '#3a5a8a');
+          R(4, 3, 1, 9, '#1e3150'); Pt(4, 1, '#d8b048'); R(1, 4, 1, 7, '#6a8aba'); Pt(2, 7, '#3a5a8a');
+        } else {                                                                                     // calcetines
+          R(1, 1, 7, 5, '#000', 0.18); R(0, 0, 3, 5, '#a8a49a'); R(0, 0, 2, 4, '#f0ece4'); R(4, 1, 3, 4, '#a8a49a'); R(4, 1, 2, 3, '#e4e0d8');
+          Pt(0, 0, '#d24a3a'); Pt(1, 0, '#d24a3a'); Pt(4, 1, '#4f86c6'); Pt(5, 1, '#4f86c6');
+        }
+      });
+    });
+  }
+
+  // ---------- fondos del EDIFICIO ----------
+  let lndBg = null, elvBg = null;
+  function bldPainter(b) {
+    const P0 = roomPainter(b), { R, Pt } = P0;
+    const caps = list => {                                           // tapas de hormigón visto, grises
+      list.forEach(c => R(c.x - 1, c.y - 1, c.w + 2, c.h + 2, '#0e0e10'));
+      list.forEach(c => { R(c.x, c.y, c.w, c.h, '#6e7074'); for (let i = 0; i < c.w * c.h / 6; i++) Pt(c.x + hash(i * 1.3 + c.x) * c.w, c.y + hash(i * 2.7 + c.y) * c.h, hash(i + c.y) > 0.5 ? '#7c7e82' : '#606266', 0.8); });
+    };
+    const marble = (x, y, w, h, seed) => {                         // mármol gris en placas, con sus vetas
+      R(x, y, w, h, '#8a8c90');
+      for (let i = 0; i < w * h / 5; i++) Pt(x + hash(i * 1.7 + seed) * w, y + hash(i * 3.1 + seed) * h, hash(i * 2.3 + seed) > 0.5 ? '#94969a' : '#7e8084', 0.7);
+      for (let v = 0; v < Math.max(2, w / 12); v++) {
+        let vx = x + hash(v * 5.3 + seed) * w, vy = y; const c = hash(v * 7.1 + seed) > 0.45 ? '#b2b4b8' : '#66686c';
+        for (let k = 0; k < h * 2; k++) { Pt(Math.floor(vx), Math.floor(vy), c, 0.8); vy += 0.6; vx += (hash(k * 3.3 + v + seed) - 0.5) * 1.8; if (vy >= y + h - 2) break; }
+      }
+      for (let px = x + 28; px < x + w; px += 28) R(px, y, 1, h, '#5a5c60', 0.9);                 // juntas entre placas
+      R(x, y, w, 2, '#000', 0.35); R(x, y + h - 3, w, 1, '#5a5c60'); R(x, y + h - 2, w, 1, '#3e4044'); R(x, y + h - 1, w, 1, '#1e2024');   // zócalo
+    };
+    const tiles = F => {                                             // baldosa gris clara
+      for (let y = F.y; y < F.y + F.h; y += 12) for (let x = F.x; x < F.x + F.w; x += 12) {
+        const w = Math.min(12, F.x + F.w - x), h = Math.min(12, F.y + F.h - y);
+        R(x, y, w, h, ((x - F.x) / 12 + (y - F.y) / 12) & 1 ? '#c6c6c2' : '#bcbcb8'); R(x, y, w, 1, '#a2a29e'); R(x, y, 1, h, '#a2a29e');
+      }
+      for (let i = 0; i < F.w * F.h / 40; i++) Pt(F.x + hash(i * 1.9 + F.x) * F.w, F.y + hash(i * 2.7 + F.y) * F.h, hash(i) > 0.5 ? '#d2d2ce' : '#aaaaa6', 0.6);
+    };
+    const stairs = (x, y, w, h, vert, down) => {                    // un tramo: peldaños de la misma baldosa, con su canto
+      const n = Math.floor((vert ? h : w) / 5);
+      for (let k = 0; k < n; k++) {
+        const shade = down ? 0.08 + k / n * 0.4 : 0.25 * (1 - k / n);   // bajando, cada peldaño más hondo (más oscuro)
+        if (vert) { const sy = y + h - (k + 1) * 5; R(x, sy, w, 5, '#c0c0bc'); R(x, sy, w, 1, '#deded8'); R(x, sy + 4, w, 1, '#86867f'); R(x, sy, w, 5, '#000', shade); }
+        else { const sx = x + w - (k + 1) * 5; R(sx, y, 5, h, '#c0c0bc'); R(sx, y, 1, h, '#deded8'); R(sx + 4, y, 1, h, '#86867f'); R(sx, y, 5, h, '#000', shade); }
+      }
+    };
+    const liftFrame = (L, floorY) => {                               // el marco de acero del ascensor, su pantallita y el botón de llamada
+      R(L.x - 3, L.y - 2, L.w + 6, L.h + 2, '#2e3034'); R(L.x - 2, L.y - 1, L.w + 4, L.h + 1, '#6a6e74'); R(L.x - 2, L.y - 1, L.w + 4, 1, '#9a9ea4');
+      R(L.x + 7, L.y - 7, 12, 6, '#2e3034'); R(L.x + 8, L.y - 6, 10, 4, '#0a0a0c');
+      R(L.x + L.w + 3, L.y + 3, 7, 9, '#3a3c40'); R(L.x + L.w + 4, L.y + 4, 5, 7, '#9a9ca0'); R(L.x + L.w + 5, L.y + 6, 3, 3, '#4a4c50'); Pt(L.x + L.w + 5, L.y + 6, '#7a7c80');
+      R(L.x - 2, floorY, L.w + 4, 2, '#8a8c90');                    // umbral de acero
+    };
+    const sideDoor = (x, y, len, inRight) => {                       // puerta de madera clara en una pared de los lados: su mitad de dentro
+      const dark = '#5a3a1e', wood = '#b08a5a', hi = '#caa676';
+      R(x - 2, y - 2, 6, 2, '#8a8c90'); R(x - 2, y + len, 6, 2, '#8a8c90');
+      if (inRight) { R(x + 1, y, 2, len, '#8a8a84'); R(x - 1, y, 2, len, dark); R(x, y + 1, 1, len - 2, wood); R(x, y + 2, 1, len - 6, hi); R(x + 1, y + len - 6, 2, 2, '#c8a040'); }
+      else { R(x - 1, y, 2, len, '#8a8a84'); R(x + 1, y, 2, len, dark); R(x + 1, y + 1, 1, len - 2, wood); R(x + 1, y + 2, 1, len - 6, hi); R(x - 1, y + len - 6, 2, 2, '#c8a040'); }
+    };
+    const tint = () => { b.globalCompositeOperation = 'multiply'; b.fillStyle = 'rgb(236,232,226)'; b.fillRect(0, 0, W, H); b.globalCompositeOperation = 'source-over'; };
+    return Object.assign(P0, { caps, marble, tiles, stairs, liftFrame, sideDoor, tint });
+  }
+  function buildLnd() {
+    lndBg = document.createElement('canvas'); lndBg.width = W; lndBg.height = H;
+    const b = lndBg.getContext('2d'), D = LND_DEF, { R, Pt, disc, caps, marble, tiles, stairs, liftFrame, sideDoor, floorShade, tint } = bldPainter(b);
+    R(0, 0, W, H, '#060607');
+    tiles(D.floor[0]); floorShade(D.floor[0]);
+    // EL HUECO DE LA ESCALERA: a la izquierda, el tramo que SUBE al piso de arriba; a la derecha, el que baja hasta el
+    // descansillo; entre los dos, la baranda
+    stairs(115, 18, 46, 52, true, false);
+    tiles({ x: 163, y: 18, w: 61, h: 26 }); stairs(163, 44, 61, 26, true, true);
+    R(222, 44, 2, 26, '#2a2a2e'); R(223, 44, 1, 26, '#6a6a70');                                         // pasamanos de la pared
+    R(161, 18, 3, 54, '#141416'); R(162, 18, 1, 54, '#8a8c92');                                         // la baranda (desde arriba: el pasamanos)...
+    for (let y = 22; y < 72; y += 6) { R(160, y, 5, 2, '#141416'); Pt(162, y, '#b0b2b8'); }             // ...y sus barrotes
+    R(165, 18, 2, 54, '#000', 0.25);                                                                    // su sombra en los peldaños
+    R(115, 18, 109, 2, '#000', 0.3);
+    marble(115, 4, 109, 14, 7);                                     // pared norte de la escalera, con su ventanita
+    const WN = D.WIN; R(WN.x - 1, 6, WN.w + 2, 10, '#2e3034'); R(WN.x, 7, WN.w, 8, '#9ab4c4'); R(WN.x + WN.w / 2, 7, 1, 8, '#2e3034'); R(WN.x + 1, 8, 4, 1, '#d0e0e8'); R(WN.x - 2, 16, WN.w + 4, 1, '#a8aaae');
+    D.faces.slice(0, 2).forEach((fc, i) => marble(fc.x, fc.y, fc.w, fc.h, i + 1));       // la pared de arriba, a los dos lados del hueco de la escalera
+    for (let k = 0; k < 4; k++) R(115 - 1 - k, 50, 1, 20, '#000', 0.12 - k * 0.025);             // sombra en la esquina de la escalera
+    caps(D.caps);
+    liftFrame(D.LIFT, 70);
+    sideDoor(37, D.DOOR_W.y, D.DOOR_W.h, true); sideDoor(282, D.DOOR_E.y, D.DOOR_E.h, false);     // casa de Juanjo y la de la vecina
+    R(41, 93, 8, 16, '#4a3a2c'); for (let y = 94; y < 108; y += 2) R(42, y, 6, 1, '#5e4a38');      // felpudo
+    R(272, 94, 7, 14, '#3a2e24'); for (let y = 95; y < 107; y += 2) R(273, y, 5, 1, '#4e3e30');
+    R(262, 72, 12, 10, '#5a5048'); R(263, 72, 10, 2, '#3a2a1e'); disc(268, 70, 3, '#5a5a3a'); Pt(266, 68, '#6a6a40');   // una maceta seca
+    tint();
+  }
+  function buildElv() {
+    elvBg = document.createElement('canvas'); elvBg.width = W; elvBg.height = H;
+    const b = elvBg.getContext('2d'), D = ELV_DEF, F = D.floor[0], FC = D.faces[0], { R, Pt, tint } = bldPainter(b);
+    R(0, 0, W, H, '#060607');
+    R(F.x, F.y, F.w, F.h, '#3e4044'); for (let y = F.y + 2; y < F.y + F.h; y += 4) for (let x = F.x + 2 + ((y >> 2) & 1) * 2; x < F.x + F.w; x += 4) Pt(x, y, '#4e5054');   // suelo de goma con topos
+    for (let k = 0; k < 4; k++) R(F.x, F.y + k, F.w, 1, '#000', 0.3 - k * 0.07);
+    R(FC.x, FC.y, FC.w, FC.h, '#9ea2a8'); for (let x = FC.x; x < FC.x + FC.w; x += 2) R(x, FC.y, 1, FC.h, '#aeb2b8', 0.7);   // pared del fondo: acero cepillado
+    const ND = D.NDOOR;                                             // la puerta norte (sus hojas se pintan en cada fotograma)
+    for (const [x0, x1] of [[FC.x, ND.x - 3], [ND.x + ND.w + 3, FC.x + FC.w]]) { R(x0, FC.y + 12, x1 - x0, 2, '#d8dce0'); R(x0, FC.y + 14, x1 - x0, 1, '#6a6e74'); }   // pasamanos, a los dos lados de la puerta
+    R(ND.x - 3, ND.y - 2, ND.w + 6, ND.h + 2, '#2e3034'); R(ND.x - 2, ND.y - 1, ND.w + 4, ND.h + 1, '#6a6e74'); R(ND.x - 2, ND.y - 1, ND.w + 4, 1, '#9a9ea4');
+    R(FC.x, FC.y + FC.h - 1, FC.w, 1, '#2a2c30');
+    // tapas de acero de la cabina y el hueco de la puerta abajo
+    [[130, 38, 60, 6], [130, 38, 6, 98], [184, 38, 6, 98], [130, 130, 60, 6]].forEach(([x, y, w, h]) => { R(x - 1, y - 1, w + 2, h + 2, '#0e0e10'); R(x, y, w, h, '#7a7e84'); R(x, y, w, 1, '#9a9ea4'); });
+    R(D.DOOR.x - 2, 130, D.DOOR.w + 4, 6, '#3a3e44');
+    // la BOTONERA en la pared izquierda (vista desde arriba: la placa saliendo un poco de la pared, con sus botones)
+    const PN = D.PANEL; R(PN.x - 1, PN.y - 1, PN.w + 2, PN.h + 2, '#2e3034'); R(PN.x, PN.y, PN.w, PN.h, '#8a8e94'); R(PN.x, PN.y, 1, PN.h, '#b0b4ba');
+    R(PN.x + 1, PN.y + 1, 2, 3, '#0a0a0c');
+    for (let k = 0; k < 4; k++) { Pt(PN.x + 2, PN.y + 6 + k * 3, '#d8dce2'); Pt(PN.x + 1, PN.y + 6 + k * 3, '#5a5e64'); }
+    R(PN.x + PN.w, PN.y + 2, 1, PN.h - 4, '#000', 0.3);
+    // el ESPEJO en la pared derecha (de frente a la botonera): una franja de cristal con sus brillos
+    const MR = D.MIRROR; R(MR.x - 1, MR.y - 1, 3, MR.h + 2, '#4a4e54'); R(MR.x, MR.y, 2, MR.h, '#b8c8d2'); R(MR.x, MR.y, 1, MR.h, '#dce8ee');
+    for (let k = 0; k < 4; k++) R(MR.x, MR.y + 8 + k * 15, 2, 3, '#f2f8fa');
+    R(MR.x - 3, MR.y, 2, MR.h, '#000', 0.15);
+    tint();
+  }
+
+  let lobBg = null;
+  function buildLob() {
+    lobBg = document.createElement('canvas'); lobBg.width = W; lobBg.height = H;
+    const b = lobBg.getContext('2d'), D = LOB_DEF, { R, Pt, caps, marble, tiles, sideDoor, floorShade, tint } = bldPainter(b);
+    R(0, 0, W, H, '#060607');
+    // FUERA, al sur: la acera (baldosa rojiza, como en la foto, con su rejilla)
+    R(0, 158, 130, 22, '#a8624a'); for (let y = 158; y < 180; y += 6) for (let x = 0; x < 130; x += 6) { R(x, y, 6, 1, '#8a4e3a'); R(x, y, 1, 6, '#8a4e3a'); Pt(x + 3, y + 3, '#c07a5e'); }
+    R(92, 166, 20, 10, '#2a2a2c'); for (let x = 93; x < 112; x += 2) R(x, 167, 1, 8, '#4a4a4e');
+    [0, 1, 2].forEach(i => tiles(D.floor[i])); D.floor.slice(0, 3).forEach(floorShade);
+    R(20, 134, 60, 24, '#b8b0a0'); for (let y = 134; y < 158; y += 8) for (let x = 20; x < 80; x += 8) { R(x, y, 8, 1, '#9a9282'); R(x, y, 1, 8, '#9a9282'); }   // el suelo del portal
+    for (let k = 0; k < 4; k++) R(20, 134 + k, 60, 1, '#000', 0.3 - k * 0.07);
+    // LA ESCALERA, detrás de la pared de los buzones: se coge desde la sala (oeste) y sube hacia el este. Cada peldaño:
+    // la huella (baldosa clara, con su junta), el mamperlán que brilla y la tabica en sombra; zócalo arriba, baranda abajo;
+    // y cuanto más sube (más a la derecha), más a oscuras
+    const SR = D.STAIRS, SW = 7, n = Math.floor((SR.w - 8) / SW);
+    R(SR.x, SR.y, SR.w, SR.h, '#2a2a2c');
+    R(SR.x, SR.y, 8, SR.h, '#bcbcb8'); R(SR.x, SR.y + Math.floor(SR.h / 2), 8, 1, '#a2a29e');           // el arranque, a ras del suelo
+    for (let k = 0; k < n; k++) {
+      const x = SR.x + 8 + k * SW;
+      R(x, SR.y, 2, SR.h, '#7a7a74');                                   // la tabica (de cara al oeste, en sombra)
+      R(x + 2, SR.y, SW - 2, SR.h, '#c6c6c2'); R(x + 2, SR.y, 1, SR.h, '#ececE6'); R(x + SW - 1, SR.y, 1, SR.h, '#b0b0aa');   // la huella y el mamperlán
+      R(x + 2, SR.y + Math.floor(SR.h / 2), SW - 3, 1, '#a8a8a2');      // la junta de la baldosa
+      for (let i = 0; i < 4; i++) Pt(x + 3 + Math.floor(hash(i * 3.1 + k) * (SW - 4)), SR.y + 2 + Math.floor(hash(i * 5.7 + k) * (SR.h - 4)), '#d6d6d0', 0.8);
+    }
+    R(SR.x, SR.y, SR.w, 3, '#5a5c60'); R(SR.x, SR.y + 3, SR.w, 1, '#000', 0.35);                           // el zócalo de la pared de arriba
+    R(SR.x, SR.y + SR.h - 4, SR.w, 1, '#000', 0.3);
+    for (let k = 0; k < n; k++) { const x = SR.x + 8 + k * SW + 3; R(x, SR.y + SR.h - 5, 1, 3, '#141416'); Pt(x, SR.y + SR.h - 5, '#a8aab0'); }   // barrotes...
+    R(SR.x + 6, SR.y + SR.h - 3, SR.w - 6, 2, '#141416'); R(SR.x + 6, SR.y + SR.h - 3, SR.w - 6, 1, '#9a9ca2'); R(SR.x + 6, SR.y + SR.h - 5, 3, 5, '#2a2a2e');   // ...el pasamanos y su poste
+    for (let x = SR.x + 8; x < SR.x + SR.w; x++) { const u = (x - SR.x - 8) / (SR.w - 8); R(x, SR.y, 1, SR.h, '#000', Math.min(0.85, 0.08 + u * u * 0.9)); }   // sube hacia la oscuridad
+    marble(20, 4, 150, 16, 11); marble(170, 4, 132, 10, 13); marble(170, 38, 132, 16, 12);
+    // BUZONES y la PUERTA DE MADERA en la pared del tramo del ascensor
+    R(182, 40, 50, 12, '#2a2c30'); for (let r = 0; r < 2; r++) for (let c = 0; c < 6; c++) { const x = 184 + c * 8, y = 41 + r * 5; R(x, y, 7, 4, '#8a8e94'); R(x, y, 7, 1, '#a8acb2'); R(x + 1, y + 1, 5, 1, '#2a2c30'); Pt(x + 5, y + 3, '#d8d4c8'); }
+    R(275, 39, 20, 15, '#3a2a18'); R(276, 40, 18, 14, '#b08a5a'); R(276, 40, 18, 1, '#caa676'); R(278, 42, 6, 10, '#a07a4a'); R(286, 42, 6, 10, '#a07a4a'); R(291, 47, 2, 1, '#c8a040');
+    caps(D.caps);
+    [[14, 156, 10, 4], [76, 156, 10, 4]].forEach(([x, y, w, h]) => { R(x, y, w, h, '#c8a890'); for (let i = 0; i < w * h / 2; i++) Pt(x + hash(i * 1.3 + x) * w, y + hash(i * 2.9) * h, ['#b89880', '#d8b8a0', '#a88870'][i % 3]); });   // la fachada, de granito
+    R(77, 156, 8, 4, '#d8805a'); R(78, 157, 6, 1, '#e8a080');                                          // la caja de la luz, naranja
+    sideDoor(17, 28, 16, true); sideDoor(17, 58, 16, true);         // las dos puertas de madera de la pared izquierda
+    // el ESPEJO en la pared derecha del pasillo
+    R(77, 92, 3, 30, '#4a4e54'); R(78, 93, 2, 28, '#b8c8d2'); R(78, 93, 1, 28, '#dce8ee'); for (let k = 0; k < 3; k++) R(78, 97 + k * 9, 2, 2, '#f2f8fa');
+    R(D.LIFT.x - 2, 80, D.LIFT.w + 4, 6, '#3a3e44');                // el hueco del ascensor (la puerta se pinta aparte)
+    tint();
+  }
+
   // ---------- fondo del BAÑO (español, azulejo blanco con cenefa de mosaico; todo limpio y compacto) ----------
   let bathBg = null;
   function buildBath() {
@@ -4274,7 +4686,7 @@
   const keys = new Set();
   function update(dt) {
     // cruzando una puerta (lo mueve la animación de la puerta), en una mini escena o con el cuadro abierto: no se controla
-    if ((swap && tNow - swap.at < DOOR_T.inside) || cut || panel) { P.moving = false; if (!swap) P.phase = 0; return; }
+    if ((swap && tNow - swap.at < DOOR_T.inside) || cut || panel || jrAct || fp || (lob.talk && !jr.met)) { P.moving = false; if (!swap) P.phase = 0; return; }
     let dx =(keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), dy = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0), k = 1;
     const jm = Math.hypot(joy.x, joy.y);
     if (dx || dy) P.tx = null;                                      // el teclado manda sobre el joystick y el ratón
@@ -4329,16 +4741,17 @@
   };
   // JJ[dir] = { idle, walk: [4] } y lo mismo con el móvil (holdIdle, holdWalk). Ciclo de andar: pie A delante, pasar
   // (el cuerpo sube 1 px), pie B delante, pasar. Los brazos se balancean al revés que las piernas.
-  const JJ = {};
-  (function buildJJ() {
+  function makeJJ(pal, restyle) {
+    const J = {};
     const mk = rows => {
+      if (restyle) rows = restyle(rows);
       const c = document.createElement('canvas'); c.width = 14; c.height = rows.length + 2;
       const g = c.getContext('2d'), on = (x, y) => y >= 0 && y < rows.length && x >= 0 && x < 12 && rows[y][x] !== '.';
       for (let y = -1; y <= rows.length; y++) for (let x = -1; x <= 12; x++) {   // contorno: alrededor de lo pintado
         if (on(x, y)) continue;
         if (on(x - 1, y) || on(x + 1, y) || on(x, y - 1) || on(x, y + 1)) { g.fillStyle = 'rgba(20,12,10,0.9)'; g.fillRect(x + 1, y + 1, 1, 1); }
       }
-      rows.forEach((row, y) => { for (let x = 0; x < 12; x++) if (row[x] !== '.') { g.fillStyle = JJ_PAL[row[x]]; g.fillRect(x + 1, y + 1, 1, 1); } });
+      rows.forEach((row, y) => { for (let x = 0; x < 12; x++) if (row[x] !== '.') { g.fillStyle = pal[row[x]]; g.fillRect(x + 1, y + 1, 1, 1); } });
       return c;
     };
     const flip = rows => rows.map(r => [...r].reverse().join(''));
@@ -4367,13 +4780,18 @@
     };
     for (const dir of ['down', 'up', 'left']) {
       const n = frames(dir, false), h = frames(dir, true);
-      JJ[dir] = { idle: mk(n.idle), walk: n.walk.map(mk), holdIdle: mk(h.idle), holdWalk: h.walk.map(mk) };
-      if (dir === 'left') JJ.right = { idle: mk(flip(n.idle)), walk: n.walk.map(r => mk(flip(r))), holdIdle: mk(flip(h.idle)), holdWalk: h.walk.map(r => mk(flip(r))) };
+      J[dir] = { idle: mk(n.idle), walk: n.walk.map(mk), holdIdle: mk(h.idle), holdWalk: h.walk.map(mk) };
+      if (dir === 'left') J.right = { idle: mk(flip(n.idle)), walk: n.walk.map(r => mk(flip(r))), holdIdle: mk(flip(h.idle)), holdWalk: h.walk.map(r => mk(flip(r))) };
     }
-  })();
+    return J;
+  }
+  const JJ = makeJJ(JJ_PAL);
+  // ROPA DE SALIR (tras cambiarse en su cuarto): camiseta azul marino a rayas finas claras y vaqueros oscuros
+  const JJ_OUT = makeJJ(Object.assign({}, JJ_PAL, { T: '#1f2b47', t: '#151d33', Y: '#c9d3e2', P: '#2b3a58', K: '#2a2220' }),
+    rows => rows.map((r, y) => y >= 10 && y <= 15 ? r.replace(/[DRB]/g, 'T').replace(/T/g, y % 2 ? 'Y' : 'T') : r));
   // pose (mini escenas): rot = inclinación desde los pies (π/2 = tumbado de bruces hacia la derecha); arms = brazos en alto
   function drawPlayer(pose) {
-    const x = Math.round(P.x), y = Math.round(P.y), set = JJ[P.dir], hold = flashOn && !pose;   // con la linterna, el móvil en la mano
+    const x = Math.round(P.x), y = Math.round(P.y), set = (jr.dressed ? JJ_OUT : JJ)[P.dir], hold = flashOn && !pose;   // con la linterna, el móvil en la mano
     const fi = Math.floor(P.phase) % 4, img = P.moving ? (hold ? set.holdWalk : set.walk)[fi] : (hold ? set.holdIdle : set.idle);
     const bob = P.moving && fi % 2 === 1 ? -1 : 0;                                            // al pasar una pierna por delante de la otra, sube
     const rot = pose ? pose.rot : 0;
@@ -4394,8 +4812,9 @@
 
   // ---------- controles: flechas/WASD; con ratón, clic (o arrastrar) adonde ir; en móvil, joystick ----------
   const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
-  const busy = () => !running || panel || document.getElementById('settings').classList.contains('open') || document.getElementById('phoneUI').classList.contains('open');
+  const busy = () => !running || panel || fp || document.getElementById('settings').classList.contains('open') || document.getElementById('phoneUI').classList.contains('open');
   addEventListener('keydown', e => {
+    if (fp && running) { if (furnKey(e.code)) e.preventDefault(); return; }   // un mueble abierto
     if (panel && running) {                                          // cuadro de luz abierto: W/S (o flechas) el DIF; F o Escape, cerrar
       if (e.code === 'KeyF' || e.code === 'Escape') closeFuse();
       else if (e.code === 'KeyW' || e.code === 'ArrowUp') setDif(true);
@@ -4403,7 +4822,7 @@
       else return;
       e.preventDefault(); return;
     }
-    if (e.code === 'KeyF' && !busy()) { if (moveBox1() || openFuse()) e.preventDefault(); return; }   // F: apartar la caja o abrir el cuadro (si está al lado)
+    if (e.code === 'KeyF' && !busy()) { if (moveBox1() || openFuse() || jrUse() || openFurn() || callLift()) e.preventDefault(); return; }   // F: apartar la caja o abrir el cuadro (si está al lado)
     const k = KEYMAP[e.code]; if (!k || busy()) return;
     keys.add(k); moved = true; e.preventDefault();
   });
@@ -4422,18 +4841,22 @@
   }
   cv.addEventListener('pointerdown', e => {
     const tp = toRoom(e), B = HALL_DEF.BOX1;
-    if (panel && running) { panelTap(tp); e.preventDefault(); return; }   // con el cuadro abierto: interruptores o cerrar
+    if (panel && running) { panelTap(tp); e.preventDefault(); return; }
+    if (fp && running) { furnDown(tp, e); e.preventDefault(); return; }   // un mueble abierto: su minijuego, coger algo o salir   // con el cuadro abierto: interruptores o cerrar
     if (busy()) return;
     // tocar (o clicar) la caja 1 o el cuadro de luz estando al lado
     if (box1 === 'here' && room === HALL && tp.x > B.x - 4 && tp.x < B.x + B.w + 4 && tp.y > B.fy - B.h - 4 && tp.y < B.fy + B.d + 4 && moveBox1()) { e.preventDefault(); return; }
     if (inBox(tp, HALL_DEF.FUSE, 5) && openFuse()) { e.preventDefault(); return; }
+    if (jrTap(tp)) { e.preventDefault(); return; }
+    { const f = furnNear(); if (f && inBox(tp, f.rect, 3) && openFurn(f)) { e.preventDefault(); return; } }   // tocar un mueble al lado
+    if (liftCallNear() && inBox(tp, { x: 70, y: 48, w: 44, h: 26 }, 2) && callLift()) { e.preventDefault(); return; }   // el botón del ascensor                  // en su cuarto: el armario, la cama, la ropa, la cartera
     if (e.pointerType !== 'mouse') return;                         // con el dedo ya no se va tocando: para eso está el joystick
     dragging = true; aim(e);
     try { cv.setPointerCapture(e.pointerId); } catch (_) {}
     e.preventDefault();
   });
-  cv.addEventListener('pointermove', e => { if (dragging) aim(e); });
-  ['pointerup', 'pointercancel'].forEach(ev => cv.addEventListener(ev, () => { dragging = false; }));
+  cv.addEventListener('pointermove', e => { if (fp) furnMove(toRoom(e)); else if (dragging) aim(e); });
+  ['pointerup', 'pointercancel'].forEach(ev => cv.addEventListener(ev, () => { dragging = false; furnUp(); }));
 
   // joystick (solo en pantallas táctiles): la bola sigue al pulgar dentro del círculo; joy = dirección y fuerza (0..1)
   const joyEl = document.getElementById('joystick'), knob = joyEl.querySelector('.joy-knob');
@@ -4502,9 +4925,14 @@
     balcE: { kind: 'hole' },                                       // en el balcón, el hueco de esa misma puerta (las hojas quedan dentro del cuarto)
     balcS: { kind: 'h1', x: 164, y: 120, w: 26, beyond: '#4a3a2c', glass: true },   // puerta de cristal del balcón al salón...
     salaN: { kind: 'front', x: 33, y: 9, w: 19, h: 21, beyond: GRANITE.base[0], glass: true },  // ...y la misma vista desde el salón
-    bathS: { kind: 'h1', x: 150, y: 120, w: 22, beyond: '#4a3a30' }
+    bathS: { kind: 'h1', x: 150, y: 120, w: 22, beyond: '#4a3a30' },
+    hallJ: { kind: 'v1', x: 269, hole: 266, y0: 61, y1: 81, dir: -1, beyond: '#5a4630' },   // la del cuarto de Juanjo (pared derecha de la entrada)...
+    hallExit: { kind: 'h1', x: 126, y: 170, w: 26, beyond: '#141416' },   // la puerta de la calle (de casa al rellano)...
+    lndW: { kind: 'v1', x: 37, hole: 34, y0: 90, y1: 112, dir: 1, beyond: '#2a2a2e' },   // ...y la misma, desde el rellano
+    liftL: { kind: 'hole' }, liftC: { kind: 'hole' }, liftB: { kind: 'hole' },                // el ascensor: sus puertas se pintan aparte
+    jrW: { kind: 'v1', x: 87, hole: 84, y0: JR_DEF.DOOR.y, y1: JR_DEF.DOOR.y + JR_DEF.DOOR.h, dir: 1, beyond: '#3a3630' }   // ...y la misma, desde dentro
   };
-  SALA.doors = [DOORS.salaE, DOORS.salaN]; BALC.doors = [DOORS.balcE, DOORS.balcS]; HALL.doors = [DOORS.hallW, DOORS.hallMom]; MOM.doors = [DOORS.momS, DOORS.momBath, DOORS.momBalc]; BATH.doors = [DOORS.bathS];
+  SALA.doors = [DOORS.salaE, DOORS.salaN]; BALC.doors = [DOORS.balcE, DOORS.balcS]; HALL.doors = [DOORS.hallW, DOORS.hallMom, DOORS.hallJ, DOORS.hallExit]; LND.doors = [DOORS.lndW, DOORS.liftL]; ELV.doors = [DOORS.liftC]; LOB.doors = [DOORS.liftB]; JR.doors = [DOORS.jrW]; MOM.doors = [DOORS.momS, DOORS.momBath, DOORS.momBalc]; BATH.doors = [DOORS.bathS];
   // salidas: test (empujando contra la puerta), out (hasta dónde cruza), place (cómo aparece al otro lado) y path (los pasos que da dentro)
   const DWD = HALL_DEF.DOOR_W;
   SALA.exits = [{ door: DOORS.salaE, to: HALL, arrive: DOORS.hallW, out: { x: 291 }, path: { x: [52, 66] },
@@ -4540,6 +4968,22 @@
   BATH.exits = [{ door: DOORS.bathS, to: MOM, arrive: DOORS.momBath, out: { y: 123 }, path: { y: [52, 64] },
     test: () => P.dir === 'down' && P.y >= 116 && P.x > 152 && P.x < 170,
     place: () => ({ x: 247, dir: 'down', ang: Math.PI / 2 }) }];
+  HALL.exits.push({ door: DOORS.hallJ, to: JR, arrive: DOORS.jrW, out: { x: 270 }, path: { x: [88, 101] },   // su cuarto: cuando ya tiene que prepararse
+    test: () => story.bath && P.dir === 'right' && P.x >= 259 && P.y > 64 && P.y < 82,
+    place: () => ({ y: clamp(P.y - 61 + JR_DEF.DOOR.y, 127, 141), dir: 'right', ang: 0 }) });
+  HALL.exits.push({ door: DOORS.hallExit, to: LND, arrive: DOORS.lndW, out: { y: 175 }, path: { x: [42, 58] },   // salir de casa: solo con las llaves
+    test: () => jr.keyGot && P.dir === 'down' && P.y >= 166 && P.x > 128 && P.x < 150,
+    place: () => ({ x: 42, y: 104, dir: 'right', ang: 0 }) });
+  LND.exits = [
+    { door: DOORS.lndW, to: HALL, arrive: DOORS.hallExit, out: { x: 35 }, path: { y: [176, 160] },
+      test: () => P.dir === 'left' && P.x <= 47 && P.y > 93 && P.y < 113, place: () => ({ x: 139, y: 176, dir: 'up', ang: -Math.PI / 2 }) },
+    { door: DOORS.liftL, to: ELV, arrive: DOORS.liftC, out: { y: 66 }, path: { y: [132, 116] },   // al ascensor, con la puerta abierta
+      test: () => lift.state === 'open' && P.dir === 'up' && P.y <= 77 && P.x > 80 && P.x < 96, place: () => ({ x: 160, dir: 'up', ang: -Math.PI / 2 }) }];
+  ELV.exits = [{ door: DOORS.liftC, to: LOB, arrive: DOORS.liftB, out: { y: 60 }, path: { y: [90, 74] },   // en la planta 0: por la puerta del fondo, a la recepción
+    test: () => lift.state === 'arrived' && P.dir === 'up' && P.y <= 72 && P.x > 150 && P.x < 170, place: () => ({ x: 252, dir: 'up', ang: -Math.PI / 2 }) }];
+  JR.exits = [{ door: DOORS.jrW, to: HALL, arrive: DOORS.hallJ, out: { x: 85 }, path: { x: [266, 253] },
+    test: () => P.dir === 'left' && P.x <= 97 && P.y > JR_DEF.DOOR.y + 3 && P.y < JR_DEF.DOOR.y + JR_DEF.DOOR.h + 1,
+    place: () => ({ y: clamp(P.y - JR_DEF.DOOR.y + 61, 66, 80), dir: 'left', ang: Math.PI }) }];
   let swap = null;                                                   // { at, from, to, exit, sx, sy, fx }
   function doorCheck(t) {
     if (swap || !P.moving) return;
@@ -4570,6 +5014,12 @@
           ctx.strokeStyle = 'rgba(235,245,250,0.9)'; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(gx0 + (gx1 - gx0) * 0.25, gy0 + (gy1 - gy0) * 0.25); ctx.lineTo(gx0 + (gx1 - gx0) * 0.45, gy0 + (gy1 - gy0) * 0.45); ctx.stroke();   // brillo
           ctx.fillStyle = '#b8943a'; ctx.fillRect(Math.round(ex - d.dir * Math.sin(th) * 2) - 1, Math.round(ey - sy * Math.cos(th) * 2) - 1, 2, 2);   // pomo
         }
+      } else if (a > 0 && d.kind === 'v1') {                        // sencilla en una pared de los lados: una hoja que gira desde arriba
+        const len = d.y1 - d.y0, ex = d.x + d.dir * Math.sin(th) * len, ey = d.y0 + Math.cos(th) * len;
+        ctx.fillRect(d.hole, d.y0, 6, len);
+        ctx.strokeStyle = '#2a1a0c'; ctx.lineWidth = 3.2; ctx.beginPath(); ctx.moveTo(d.x, d.y0); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.strokeStyle = '#7a5430'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(d.x, d.y0); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.fillStyle = '#c8a040'; ctx.fillRect(Math.round(ex - d.dir * Math.sin(th) * 3) - 1, Math.round(ey - Math.cos(th) * 3) - 1, 2, 2);   // pomo
       } else if (a > 0 && d.kind === 'front') {                     // en la pared del fondo: el hueco y la hoja estrechándose hacia la bisagra
         ctx.fillRect(d.x, d.y, d.w, d.h);
         const pw = Math.max(1, Math.round(d.w * Math.cos(th)));
@@ -4782,6 +5232,780 @@
     PD.drawText(ctx, msg, x, y, '#e8e0d0', k); ctx.restore();
   }
 
+  // ---------- MUEBLES DONDE BUSCAR (misión 3, "Encuentra las llaves") ----------
+  // Todos los muebles de la casa (menos los del cuarto de Juanjo) se pueden registrar: con F (o tocándolos) se ven en
+  // grande y CADA UNO TIENE SU PROPIO MINIJUEGO. En cada partida las llaves están en uno al azar (jr.keySpot); en la
+  // mesita del despertador de su madre está, además, la tarjeta de crédito (misión 2). Lo que se mueve en cada mueble
+  // (cajones abiertos, cojines levantados...) se queda así hasta empezar otra partida.
+  const fstate = {};
+  let fp = null;                                                     // el mueble abierto: { f, st, take, closeAt }
+  const inR = (p, r, m = 0) => p.x >= r.x - m && p.x <= r.x + r.w + m && p.y >= r.y - m && p.y <= r.y + r.h + m;
+  const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  const keyHere = f => missionOn('llaves') && !jr.keyGot && jr.keySpot === f.id;
+  const cardHere = f => f.id === 'night1' && missionOn('apostar') && !jr.card;
+  const sfx = (...a) => { const GA = window.GameAudio; if (GA) GA.blip(...a); };
+  const PR = (x, y, w, h, c, a) => { ctx.globalAlpha = a == null ? 1 : a; ctx.fillStyle = c; ctx.fillRect(x, y, w, h); ctx.globalAlpha = 1; };
+  const PP = (x, y, c, a) => PR(x, y, 1, 1, c, a);
+  const circ = (cx, cy, r, c, a) => { ctx.globalAlpha = a == null ? 1 : a; ctx.fillStyle = c; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; };
+  const grain = (x, y, w, h, c, n, seed) => { for (let i = 0; i < n; i++) PR(x + Math.floor(hash(i * 2.3 + seed) * (w - 8)), y + Math.floor(hash(i * 4.7 + seed) * h), 4 + Math.floor(hash(i * 1.3 + seed) * 10), 1, c, 0.6); };
+  // lo encontrado (llaves o tarjeta): al tocarlo sube y desaparece
+  function drawFound(kind, x, y) {
+    const T = fp && fp.take, u = T && T.kind === kind ? clamp((tNow - T.t) / 0.5, 0, 1) : 0, a = 1 - u;
+    const R = (xx, yy, w, h, c, al) => PR(xx, yy, w, h, c, (al == null ? 1 : al) * a), Pt = (xx, yy, c, al) => R(xx, yy, 1, 1, c, al);
+    ctx.globalAlpha = a; drawItem(kind, x, y - u * 30, R, Pt); ctx.globalAlpha = 1;
+  }
+  function drawHidden(f, st) {                                       // cada minijuego lo llama en la capa que toca (debajo de lo que lo tapa)
+    const pl = f.game.place(st);
+    if (keyHere(f) && pl.key) drawFound('key', pl.key.x, pl.key.y);
+    if (cardHere(f) && pl.card) drawFound('card', pl.card.x, pl.card.y);
+  }
+
+  // ===== 1. LA CÓMODA (salón): cada cajón se abre ARRASTRANDO SU POMO hacia ti y se cierra empujándolo =====
+  const DR = { x: 98, w: 124, top: 24, front: 38, legs: 146, DEPTH: 28, H: 30, GAP: 4 };
+  const drawerY = i => DR.front + 4 + i * (DR.H + DR.GAP);
+  const KNOB_R = 4;
+  const DRAWER_ITEMS = [
+    [{ kind: 'photo', u: 10, v: 6, w: 14, h: 10 }, { kind: 'photo2', u: 28, v: 14, w: 12, h: 9 }, { kind: 'candle', u: 60, v: 5, w: 7, h: 7 }, { kind: 'scarf', u: 78, v: 8, w: 26, h: 9 }],
+    [{ kind: 'batteries', u: 12, v: 7, w: 10, h: 6 }, { kind: 'ribbon', u: 30, v: 15, w: 9, h: 9 }, { kind: 'box', u: 86, v: 10, w: 16, h: 11 }],
+    []                                                               // vacío (solo polvo)
+  ];
+  const drItem = (i, it, o) => { const d = o * DR.DEPTH, y0 = drawerY(i); return { x: DR.x + 9 + it.u, y: y0 + d - 2 - it.v - it.h }; };
+  const knobAt = (i, o) => ({ x: DR.x + DR.w / 2, y: drawerY(i) + o * DR.DEPTH + DR.H / 2 });
+  const G_DRESSER = {
+    area: { x: DR.x - 4, y: DR.top - 34, w: DR.w + 8, h: DR.legs - DR.top + 40 },
+    help: 'Arrastra el pomo para abrir o cerrar un cajón (o 1, 2, 3)', helpTouch: 'Arrastra el pomo para abrir o cerrar un cajón',
+    init: () => ({ open: [0, 0, 0], target: [0, 0, 0], drag: null }),
+    place: st => ({ key: drItem(1, { u: 62, v: 4, h: 7 }, st.open[1]) }),
+    shows: (st, kind, r) => r.y >= drawerY(1) - 1,
+    down(st, p, e) {
+      for (let i = 0; i < 3; i++) {
+        const k = knobAt(i, st.open[i]);
+        if (Math.hypot(p.x - k.x, p.y - k.y) <= KNOB_R + 3) { st.drag = { i, y0: p.y, o0: st.open[i], last: st.open[i] }; try { cv.setPointerCapture(e.pointerId); } catch (_) {} return true; }
+      }
+      return inR(p, this.area);
+    },
+    move(st, p) {
+      if (st.drag) {
+        const o = clamp(st.drag.o0 + (p.y - st.drag.y0) / DR.DEPTH, 0, 1);
+        st.open[st.drag.i] = st.target[st.drag.i] = o;
+        if (Math.abs(o - st.drag.last) > 0.12) { st.drag.last = o; sfx(90 + o * 40, 0.05, 'sawtooth', 0.012, 70); }   // la madera roza
+        return 'grabbing';
+      }
+      for (let i = 0; i < 3; i++) { const k = knobAt(i, st.open[i]); if (Math.hypot(p.x - k.x, p.y - k.y) <= KNOB_R + 3) return 'grab'; }
+      return '';
+    },
+    up(st) { if (!st.drag) return; const o = st.open[st.drag.i]; if (o < 0.03 || o > 0.97) sfx(o < 0.03 ? 70 : 110, 0.08, 'square', 0.05, 50); st.drag = null; },
+    key(st, code) { const i = ['Digit1', 'Digit2', 'Digit3'].indexOf(code); if (i < 0 || st.drag) return false; st.target[i] = st.target[i] > 0.5 ? 0 : 1; sfx(100, 0.12, 'sawtooth', 0.015, 80); return true; },
+    tick(st, t, dt) { for (let i = 0; i < 3; i++) if (!st.drag || st.drag.i !== i) st.open[i] += clamp(st.target[i] - st.open[i], -dt * 3, dt * 3); },
+    draw(st, t, f) {
+      const R = PR, Pt = PP, x0 = DR.x, x1 = DR.x + DR.w;
+      R(x0 - 2, DR.legs + 2, DR.w + 8, 4, '#000', 0.5);
+      R(x0 - 3, DR.top - 1, DR.w + 6, DR.front - DR.top + 2, '#2a1a0c'); R(x0 - 2, DR.top, DR.w + 4, DR.front - DR.top, '#7a5430'); R(x0 - 2, DR.top, DR.w + 4, 1, '#98703f');
+      grain(x0, DR.top + 2, DR.w, 10, '#6a4524', 30, 1); R(x0 - 2, DR.front - 2, DR.w + 4, 2, '#5a3a1c');
+      R(x0 + 14, DR.top - 22, 2, 26, '#5a4c2e');                                                   // lámpara y retrato encima
+      for (let y = DR.top - 30; y < DR.top - 18; y++) { const hw = 6 + Math.floor((y - DR.top + 30) / 2); R(x0 + 15 - hw, y, hw * 2, 1, y === DR.top - 19 ? '#7a6a44' : '#9b8a5c'); Pt(x0 + 15 - hw, y, '#bba980'); }
+      R(x0 + 8, DR.top + 3, 14, 3, '#6f6040');
+      R(x1 - 30, DR.top - 14, 18, 20, '#2a1a0f'); R(x1 - 29, DR.top - 13, 16, 18, '#6a4a28'); R(x1 - 27, DR.top - 11, 12, 14, '#4a3d2a'); Pt(x1 - 21, DR.top - 6, '#a89868');
+      R(x0 - 1, DR.front, DR.w + 2, DR.legs - DR.front, '#2a1a0c'); R(x0, DR.front, DR.w, DR.legs - DR.front, '#63401f');
+      R(x0, DR.front, 3, DR.legs - DR.front, '#7d5530'); R(x0, DR.front, 1, DR.legs - DR.front, '#98703f'); R(x1 - 2, DR.front, 2, DR.legs - DR.front, '#4a2e14');
+      R(x0 + 4, DR.legs - 1, 8, 6, '#2a1a0c'); R(x1 - 12, DR.legs - 1, 8, 6, '#2a1a0c');
+      for (let i = 2; i >= 0; i--) {                                 // de abajo arriba: el cajón abierto tapa al de debajo
+        const o = st.open[i], d = Math.round(o * DR.DEPTH), y0 = drawerY(i), fx = x0 + 5, fw = DR.w - 10;
+        R(fx - 1, y0 - 1, fw + 2, DR.H + 2, '#1a0f06');
+        if (d > 0) {
+          ctx.save(); ctx.beginPath(); ctx.rect(fx, y0, fw, d); ctx.clip();
+          R(fx, y0, fw, d, '#a07a4e'); for (let k = 0; k < 6; k++) R(fx + 3, y0 + d - 4 - k * 5, fw - 6, 1, '#8e6a42', 0.6);
+          R(fx, y0, 3, d, '#6a4626'); R(fx + fw - 3, y0, 3, d, '#5a3a1e'); R(fx, y0 + d - 2 - DR.DEPTH, fw, 2, '#5a3a1e');
+          if (i === 2) for (let k = 0; k < 14; k++) Pt(fx + 4 + Math.floor(hash(k * 3.3) * (fw - 8)), y0 + d - 3 - Math.floor(hash(k * 5.1) * DR.DEPTH), '#c8b090', 0.6);
+          for (const it of DRAWER_ITEMS[i]) { const q = drItem(i, it, o); drawItem(it.kind, q.x, q.y, R, Pt); }
+          if (i === 1) drawHidden(f, st);
+          const g = ctx.createLinearGradient(0, y0, 0, y0 + Math.min(d, 16)); g.addColorStop(0, 'rgba(0,0,0,0.75)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g; ctx.fillRect(fx, y0, fw, Math.min(d, 16)); ctx.restore();
+        }
+        const fy = y0 + d;
+        R(fx - 1, fy - 1, fw + 2, DR.H + 2, '#2a1a0c'); R(fx, fy, fw, DR.H, '#6c4723'); R(fx, fy, fw, 1, '#8a6232'); R(fx, fy + DR.H - 1, fw, 1, '#46301a');
+        R(fx + 4, fy + 4, fw - 8, DR.H - 8, '#664220'); R(fx + 4, fy + 4, fw - 8, 1, '#4e3218'); R(fx + 4, fy + DR.H - 5, fw - 8, 1, '#80592c');
+        grain(fx + 4, fy + 7, fw - 8, DR.H - 14, '#5c3a1c', 8, i);
+        if (d > 0) { R(fx, fy - 2, fw, 2, '#85602f'); R(fx - 1, fy + DR.H + 1, fw + 2, 2, '#000', 0.35); }
+        const k = knobAt(i, o), hov = st.drag && st.drag.i === i;
+        circ(k.x, k.y + 0.5, KNOB_R + 1, '#2a1a0a'); circ(k.x, k.y, KNOB_R, hov ? '#d8b048' : '#b8943a'); circ(k.x - 1.2, k.y - 1.2, 1.4, '#e8cf7a');
+        R(k.x - 6, k.y + KNOB_R + 1, 12, 1, '#000', 0.2);
+      }
+    }
+  };
+
+  // ===== 2. EL SOFÁ (salón): visto desde arriba; cada cojín se LEVANTA arrastrándolo hacia arriba (debajo, migas y cosas) =====
+  const SF = { x: 40, y: 30, w: 240, back: 26, deck: { x: 64, y: 56, w: 192, h: 84 }, cy: 60, ch: 76, LIFT: 46 };
+  const cushX = i => 66 + i * 63;
+  const cushRect = (st, i) => { const l = st.lift[i], top = SF.cy - l * SF.LIFT, h = SF.ch * (1 - 0.5 * l); return { x: cushX(i), y: top, w: 60, h }; };
+  const SOFA_UNDER = [[{ kind: 'coin', x: 86, y: 118 }, { kind: 'crumbs', x: 100, y: 100 }], [{ kind: 'crumbs', x: 140, y: 126 }, { kind: 'hairpin', x: 176, y: 100 }], [{ kind: 'coin', x: 232, y: 96 }, { kind: 'crumbs', x: 206, y: 122 }]];
+  const G_SOFA = {
+    area: { x: SF.x, y: SF.y - 20, w: SF.w, h: 130 },
+    help: 'Arrastra un cojín hacia arriba para levantarlo', helpTouch: 'Arrastra un cojín hacia arriba para levantarlo',
+    init: () => ({ lift: [0, 0, 0], drag: null }),
+    place: () => ({ key: { x: 150, y: 114 } }),
+    shows: (st, kind, r) => { const c = cushRect(st, 1); return c.y + c.h < r.y; },
+    down(st, p, e) {
+      for (let i = 2; i >= 0; i--) if (inR(p, cushRect(st, i))) { st.drag = { i, y0: p.y, l0: st.lift[i] }; try { cv.setPointerCapture(e.pointerId); } catch (_) {} sfx(240, 0.12, 'sawtooth', 0.012, 160); return true; }
+      return inR(p, this.area);
+    },
+    move(st, p) {
+      if (st.drag) { st.lift[st.drag.i] = clamp(st.drag.l0 + (st.drag.y0 - p.y) / SF.LIFT, 0, 1); return 'grabbing'; }
+      for (let i = 0; i < 3; i++) if (inR(p, cushRect(st, i))) return 'grab';
+      return '';
+    },
+    up(st) { if (!st.drag) return; if (st.lift[st.drag.i] < 0.05) sfx(80, 0.1, 'square', 0.04, 50); st.drag = null; },   // ¡puf!, cae en su sitio
+    draw(st, t, f) {
+      const R = PR, Pt = PP, C1 = '#4a8fc7', C2 = '#2b6aa3', C3 = '#1f4f80', C4 = '#143659', C5 = '#0d2540', x0 = SF.x, x1 = SF.x + SF.w;
+      R(x0 + 2, 144, SF.w, 6, '#000', 0.45);
+      R(x0, SF.y, SF.w, 116, C5);
+      R(x0 + 2, SF.y + 2, SF.w - 4, SF.back - 2, C2); R(x0 + 2, SF.y + 2, SF.w - 4, 2, C1);           // respaldo capitoné
+      for (let r = 0; r < 3; r++) for (let x = x0 + 30 + (r & 1) * 9; x < x1 - 28; x += 18) {
+        const y = SF.y + 8 + r * 6; circ(x, y, 1.4, C5); PP(x - 1, y - 2, C1, 0.7); PR(x - 6, y + 2, 4, 1, C3, 0.6); PR(x + 3, y - 3, 4, 1, C3, 0.6);
+      }
+      R(x0 + 2, SF.y + SF.back - 1, SF.w - 4, 2, C4);
+      for (const [ax, s] of [[x0 + 2, -1], [x1 - 24, 1]]) {           // brazos enrollados
+        R(ax, SF.y + 6, 22, 108, C5); R(ax + 1, SF.y + 7, 20, 104, C2); R(ax + 1, SF.y + 7, 20, 2, C1);
+        R(s < 0 ? ax + 2 : ax + 6, SF.y + 10, 5, 96, C1, 0.5); R(s < 0 ? ax + 18 : ax + 1, SF.y + 10, 2, 96, C3);
+        R(ax + 1, SF.y + 100, 20, 11, C3); R(ax + 3, SF.y + 101, 16, 2, C1, 0.8); circ(ax + 11, SF.y + 106, 2, C5);
+        for (let y = SF.y + 22; y < SF.y + 96; y += 14) circ(ax + 11, y, 1.2, C4);
+      }
+      const D = SF.deck;                                             // el fondo del asiento, bajo los cojines: tela gastada, costuras
+      R(D.x, D.y, D.w, D.h, C4); for (let y = D.y + 10; y < D.y + D.h; y += 14) R(D.x, y, D.w, 1, C5, 0.7);
+      for (let x = D.x + 63; x < D.x + D.w; x += 63) R(x, D.y, 1, D.h, C5);
+      for (let i = 0; i < 70; i++) Pt(D.x + Math.floor(hash(i * 2.9) * D.w), D.y + Math.floor(hash(i * 5.3) * D.h), hash(i) > 0.5 ? C3 : '#0a1c30', 0.7);
+      SOFA_UNDER.forEach(list => list.forEach(it => drawItem(it.kind, it.x, it.y, R, Pt)));
+      drawHidden(f, st);
+      R(D.x, D.y + D.h - 4, D.w, 4, C5, 0.6);
+      for (let i = 0; i < 3; i++) {                                   // los cojines (levantados: más arriba, más cortos y se les ve la tela de debajo)
+        const c = cushRect(st, i), l = st.lift[i];
+        if (l > 0) R(c.x + 2, c.y + c.h, c.w, 3 + l * 6, '#000', 0.35);                         // su sombra
+        R(c.x - 1, c.y - 1, c.w + 2, c.h + 2, C5); R(c.x, c.y, c.w, c.h, C2); R(c.x, c.y, c.w, 2, C1);
+        for (let k = 0; k < 18; k++) Pt(c.x + 3 + Math.floor(hash(k * 3.1 + i) * (c.w - 6)), c.y + 4 + Math.floor(hash(k * 6.7 + i) * Math.max(1, c.h - 10)), C1, 0.4);
+        circ(c.x + c.w / 2, c.y + c.h * 0.45, 1.6, C5);
+        R(c.x, c.y + c.h - 4, c.w, 4, C3); R(c.x, c.y + c.h - 4, c.w, 1, C2);                       // canto de delante
+        if (l > 0.05) { const uh = Math.round(l * 10); R(c.x, c.y + c.h - uh, c.w, uh, C4); R(c.x, c.y + c.h - uh, c.w, 1, C3); R(c.x + 4, c.y + c.h - uh + 2, c.w - 8, 1, '#0a1c30', 0.6); }   // la tela de debajo, más gastada
+        if (i === 0) {                                                // el cojín rojo, encima del primero
+          const cx = c.x + 6, cy = c.y + 6, sz = Math.round(20 * (1 - 0.3 * l));
+          R(cx, cy, sz + 2, sz, '#3a1012'); R(cx + 1, cy + 1, sz, sz - 2, '#7a2a2c'); R(cx + 1, cy + 1, sz, 1, '#a04448'); circ(cx + sz / 2 + 1, cy + sz / 2, 1.5, '#3a1012');
+        }
+      }
+    }
+  };
+
+  // ===== 3. EL MUEBLE DE LA TELE (salón): de frente; las dos puertas se abren ARRASTRANDO SU TIRADOR hacia fuera =====
+  const TVU = { x: 60, top: 70, y: 78, w: 200, legs: 150, doorY: 84, doorH: 60 };
+  const doorW = o => Math.max(3, Math.round(96 * Math.cos(o * Math.PI / 2 * 0.92)));
+  const tvHandle = (st, i) => { const w = doorW(st.open[i]); return { x: i ? 256 - w + 4 : 64 + w - 6, y: TVU.doorY + 24, w: 3, h: 12 }; };
+  const G_TV = {
+    area: { x: TVU.x - 6, y: 10, w: TVU.w + 12, h: 146 },
+    help: 'Arrastra el tirador de una puerta hacia fuera para abrirla', helpTouch: 'Arrastra el tirador de una puerta hacia fuera para abrirla',
+    init: () => ({ open: [0, 0], drag: null }),
+    place: () => ({ key: { x: 172, y: 132 } }),
+    shows: (st, kind, r) => 256 - doorW(st.open[1]) > r.x + r.w,
+    down(st, p, e) {
+      for (let i = 0; i < 2; i++) if (inR(p, tvHandle(st, i), 4)) { st.drag = { i, x0: p.x, o0: st.open[i], last: st.open[i] }; try { cv.setPointerCapture(e.pointerId); } catch (_) {} sfx(300, 0.05, 'square', 0.03, 200); return true; }
+      return inR(p, this.area);
+    },
+    move(st, p) {
+      if (st.drag) {
+        const i = st.drag.i, o = clamp(st.drag.o0 + (i ? p.x - st.drag.x0 : st.drag.x0 - p.x) / 70, 0, 1);
+        st.open[i] = o; if (Math.abs(o - st.drag.last) > 0.15) { st.drag.last = o; sfx(320 - o * 120, 0.08, 'sawtooth', 0.012, 260); }   // la bisagra chirría
+        return 'grabbing';
+      }
+      for (let i = 0; i < 2; i++) if (inR(p, tvHandle(st, i), 4)) return 'grab';
+      return '';
+    },
+    up(st) { if (st.drag && st.open[st.drag.i] < 0.03) sfx(90, 0.08, 'square', 0.05, 60); st.drag = null; },
+    draw(st, t, f) {
+      const R = PR, Pt = PP, x0 = TVU.x, x1 = TVU.x + TVU.w;
+      R(x0 - 2, TVU.legs + 2, TVU.w + 8, 4, '#000', 0.5);
+      R(96, 12, 128, 54, '#0a0a0c'); R(98, 14, 124, 48, '#141820'); R(98, 14, 124, 1, '#2a3040');   // la tele (apagada) y su pie
+      PR(104, 18, 40, 2, '#2a3444', 0.6); PR(108, 22, 22, 1, '#2a3444', 0.5); R(150, 62, 20, 6, '#0a0a0c'); R(140, 67, 40, 3, '#16161a'); Pt(214, 58, '#c04040');
+      R(x0 - 2, TVU.top - 1, TVU.w + 4, TVU.y - TVU.top + 2, '#24140a'); R(x0 - 1, TVU.top, TVU.w + 2, TVU.y - TVU.top, '#7a5430'); R(x0 - 1, TVU.top, TVU.w + 2, 1, '#98703f');
+      R(x0 - 1, TVU.y, TVU.w + 2, TVU.legs - TVU.y, '#24140a'); R(x0, TVU.y, TVU.w, TVU.legs - TVU.y, '#63401f'); R(x0, TVU.y, 2, TVU.legs - TVU.y, '#7d5530');
+      R(x0 + 6, TVU.legs - 1, 8, 6, '#24140a'); R(x1 - 14, TVU.legs - 1, 8, 6, '#24140a');
+      const IY = TVU.doorY, IH = TVU.doorH;                         // por dentro: dos baldas
+      R(64, IY, 192, IH, '#1e120a'); R(64, IY, 192, 3, '#000', 0.4); R(64, IY + 28, 192, 3, '#4a2e16'); R(64, IY + 28, 192, 1, '#6a4626');
+      ['#c23a32', '#2b4a6a', '#d8c070', '#3a6a4a', '#7a2a6a', '#e8e4d8', '#2a2a2e', '#5b8fd0'].forEach((c, k) => { R(70 + k * 6, IY + 6, 5, 22, c); R(70 + k * 6, IY + 8, 5, 1, '#000', 0.25); R(71 + k * 6, IY + 12, 3, 1, '#e8e4d8', 0.5); });   // DVD
+      R(196, IY + 16, 36, 12, '#1a1a1e'); R(197, IY + 16, 34, 1, '#3a3a40'); for (let k = 0; k < 4; k++) Pt(200 + k * 4, IY + 22, '#2a2a30'); R(200, IY + 6, 1, 10, '#2a2a2e'); R(228, IY + 6, 1, 10, '#2a2a2e');   // router (apagado)
+      for (let k = 0; k < 3; k++) { R(70, IY + 54 - k * 7, 30, 6, '#141414'); R(72, IY + 55 - k * 7, 26, 2, '#e8e4d8'); R(78, IY + 55 - k * 7, 6, 2, '#c23a32'); }   // cintas VHS
+      ctx.strokeStyle = '#0a0a0a'; ctx.lineWidth = 1; ctx.beginPath(); for (let k = 0; k < 5; k++) { ctx.moveTo(112 + k * 3, IY + 56); ctx.bezierCurveTo(120 + k * 6, IY + 36, 150 - k * 4, IY + 62, 160 + k * 2, IY + 44); } ctx.stroke();   // cables
+      drawHidden(f, st);
+      for (let i = 0; i < 2; i++) {                                   // las puertas: se estrechan al girar sobre su bisagra (fuera)
+        const w = doorW(st.open[i]), dx = i ? 256 - w : 64, shade = st.open[i] * 0.35;
+        R(dx - 1, IY - 1, w + 2, IH + 2, '#24140a'); R(dx, IY, w, IH, '#6c4723'); R(dx, IY, w, 1, '#8a6232');
+        if (w > 12) { R(dx + 4, IY + 4, w - 8, IH - 8, '#664220'); R(dx + 4, IY + 4, w - 8, 1, '#4e3218'); R(dx + 4, IY + IH - 5, w - 8, 1, '#80592c'); }
+        R(dx, IY, w, IH, '#000', shade);
+        const hd = tvHandle(st, i); R(hd.x, hd.y, hd.w, hd.h, '#2a1a0a'); R(hd.x, hd.y, 2, hd.h - 1, st.drag && st.drag.i === i ? '#d8b048' : '#b8943a'); Pt(hd.x, hd.y, '#e8cf7a');
+      }
+    }
+  };
+
+  // ===== 4. LA MESA (salón): vista desde arriba; las cosas de encima se ARRASTRAN para mirar debajo =====
+  const TB = { x: 66, y: 22, w: 188, h: 128 };
+  const TABLE_THINGS = () => [
+    { kind: 'folder', x: 80, y: 34, w: 40, h: 30 }, { kind: 'paper', x: 186, y: 30, w: 34, h: 44 }, { kind: 'mugBig', x: 210, y: 92, w: 18, h: 18 },
+    { kind: 'ashtray', x: 92, y: 110, w: 22, h: 22 }, { kind: 'remote', x: 192, y: 118, w: 10, h: 26 }, { kind: 'paper', x: 128, y: 70, w: 34, h: 44 },
+    { kind: 'news', x: 130, y: 84, w: 56, h: 40 }                   // el periódico, encima del papel (y de lo que haya debajo)
+  ];
+  const G_TABLE = {
+    area: TB,
+    help: 'Arrastra las cosas de la mesa para mirar debajo', helpTouch: 'Arrastra las cosas de la mesa para mirar debajo',
+    init: () => ({ things: TABLE_THINGS(), drag: null }),
+    place: () => ({ key: { x: 150, y: 96 } }),
+    shows: (st, kind, r) => !st.things.some(o => overlap(o, r)),
+    down(st, p, e) {
+      for (let i = st.things.length - 1; i >= 0; i--) {
+        const o = st.things[i]; if (!inR(p, o)) continue;
+        st.things.splice(i, 1); st.things.push(o);                    // lo que coges queda encima
+        st.drag = { o, dx: p.x - o.x, dy: p.y - o.y }; try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+        sfx(o.kind === 'paper' || o.kind === 'news' ? 900 : 300, 0.05, o.kind === 'paper' || o.kind === 'news' ? 'sawtooth' : 'square', 0.015, 600); return true;
+      }
+      return inR(p, this.area);
+    },
+    move(st, p) {
+      if (st.drag) { const o = st.drag.o; o.x = clamp(p.x - st.drag.dx, TB.x - o.w / 2, TB.x + TB.w - o.w / 2); o.y = clamp(p.y - st.drag.dy, TB.y - o.h / 2, TB.y + TB.h - o.h / 2); return 'grabbing'; }
+      return st.things.some(o => inR(p, o)) ? 'grab' : '';
+    },
+    up(st) { if (st.drag) { sfx(200, 0.04, 'square', 0.02, 150); st.drag = null; } },
+    draw(st, t, f) {
+      const R = PR, Pt = PP;
+      R(TB.x + 3, TB.y + TB.h, TB.w, 5, '#000', 0.45);
+      R(TB.x - 1, TB.y - 1, TB.w + 2, TB.h + 2, '#24140a'); R(TB.x, TB.y, TB.w, TB.h, '#6b4426');
+      for (let x = TB.x + 30; x < TB.x + TB.w; x += 31) R(x, TB.y, 1, TB.h, '#4a2c16');            // tablones
+      for (let i = 0; i < 60; i++) R(TB.x + 2 + Math.floor(hash(i * 1.9) * (TB.w - 4)), TB.y + 2 + Math.floor(hash(i * 3.3) * (TB.h - 14)), 1, 4 + Math.floor(hash(i * 5.1) * 12), '#5c381d', 0.6);
+      R(TB.x, TB.y, TB.w, 2, '#8a5c34'); R(TB.x, TB.y + TB.h - 4, TB.w, 4, '#4a2c16');
+      circ(110, 60, 7, '#000', 0.12); circ(214, 54, 5, '#000', 0.1);                                // cercos de vasos
+      drawHidden(f, st);
+      for (const o of st.things) { R(o.x + 2, o.y + 2, o.w, o.h, '#000', st.drag && st.drag.o === o ? 0.35 : 0.2); drawBig(o.kind, o.x, o.y, o.w, o.h); }
+    }
+  };
+  function drawBig(kind, x, y, w, h) {                               // cosas de la mesa, grandes
+    const R = PR, Pt = PP;
+    if (kind === 'paper') { R(x, y, w, h, '#e8e2d2'); R(x, y, w, 1, '#f6f2e8'); for (let k = 6; k < h - 4; k += 4) R(x + 4, y + k, w - 8 - (k % 3) * 3, 1, '#9a968e'); R(x + 4, y + 2, 12, 2, '#4a4a6a'); }
+    else if (kind === 'news') {
+      R(x, y, w, h, '#cfcabe'); R(x, y, w, 1, '#e0dcd0'); R(x + 3, y + 3, w - 6, 5, '#2a2a2e'); R(x + w / 2, y + 10, 1, h - 13, '#8a867c');
+      for (let k = 11; k < h - 3; k += 3) { R(x + 3, y + k, w / 2 - 5, 1, '#7a766c'); R(x + w / 2 + 3, y + k, w / 2 - 6, 1, '#7a766c'); }
+      R(x + w / 2 + 3, y + 11, w / 2 - 6, 10, '#8a8478');                                       // una foto
+    } else if (kind === 'folder') { R(x, y, w, h, '#2b4a6a'); R(x, y, w, 2, '#3f6a96'); R(x + w - 10, y - 3, 10, 4, '#2b4a6a'); R(x + 6, y + 10, w - 12, 8, '#e8e4d8'); R(x + 8, y + 13, w - 18, 1, '#6a6a7a'); }
+    else if (kind === 'mugBig') { circ(x + 9, y + 9, 9, '#c9c2b0'); circ(x + 9, y + 9, 7, '#3a2410'); circ(x + 7, y + 7, 2, '#5a3a20'); R(x + 17, y + 6, 4, 6, '#c9c2b0'); }
+    else if (kind === 'ashtray') { circ(x + 11, y + 11, 11, '#4a4a4e'); circ(x + 11, y + 11, 8, '#2a2a2e'); R(x + 6, y + 9, 10, 2, '#e8e0d0'); R(x + 15, y + 9, 2, 2, '#c04a20'); PR(x + 8, y + 13, 3, 1, '#8a8a8a'); }
+    else if (kind === 'remote') { R(x, y, w, h, '#141418'); R(x + 1, y + 1, w - 2, 1, '#3a3a40'); circ(x + 5, y + 5, 2, '#c04040'); for (let k = 0; k < 4; k++) { R(x + 2, y + 10 + k * 4, 2, 2, '#4a4a52'); R(x + 6, y + 10 + k * 4, 2, 2, '#4a4a52'); } }
+  }
+
+  // ===== 5 y 6. LAS MESITAS DE NOCHE (cuarto de su madre): el cajón está ATASCADO; hay que tirar del pomo varias veces =====
+  const NS = { x: 110, w: 100, top: 40, y: 48, legs: 148, dy: 56, dh: 32, DEPTH: 40 };
+  const NIGHT_ITEMS = [
+    [{ kind: 'glasses', u: 6, v: 12, w: 18, h: 8 }, { kind: 'pills', u: 34, v: 22, w: 10, h: 6 }, { kind: 'tissues', u: 50, v: 16, w: 14, h: 10 }],
+    [{ kind: 'rosary', u: 8, v: 22, w: 16, h: 12 }, { kind: 'photo', u: 52, v: 20, w: 14, h: 10 }, { kind: 'pills', u: 70, v: 10, w: 10, h: 6 }]
+  ];
+  const nsItem = (st, it) => { const d = st.pull * NS.DEPTH; return { x: NS.x + 8 + it.u, y: NS.dy + d - 2 - it.v - (it.h || 8) }; };
+  function makeNight(n) {
+    return {
+      area: { x: NS.x - 6, y: 6, w: NS.w + 12, h: 150 },
+      help: 'El cajón está atascado: toca el pomo varias veces para abrirlo', helpTouch: 'El cajón está atascado: toca el pomo varias veces',
+      init: () => ({ pull: 0, target: 0, jig: -9 }),
+      place: st => ({ key: nsItem(st, { u: n ? 32 : 70, v: 4, h: 7 }), card: nsItem(st, { u: 72, v: 22, h: 8 }) }),
+      shows: (st, kind, r) => st.pull > 0.95 && r.y >= NS.dy - 1,
+      down(st, p) {
+        const k = { x: NS.x + NS.w / 2, y: NS.dy + st.pull * NS.DEPTH + NS.dh / 2 };
+        if (Math.hypot(p.x - k.x, p.y - k.y) <= 8) {
+          if (st.target >= 1 && st.pull >= 0.99) { st.target = 0; sfx(110, 0.2, 'sawtooth', 0.015, 80); return true; }   // abierto: lo cierra
+          st.target = Math.min(1, st.target + 0.26); st.jig = tNow;
+          if (st.target >= 1) setTimeout(() => sfx(140, 0.1, 'square', 0.05, 90), 120);           // ¡clac!, sale del todo
+          sfx(170 + Math.random() * 40, 0.12, 'sawtooth', 0.02, 120); return true;               // cruje
+        }
+        return inR(p, this.area);
+      },
+      move(st, p) { const k = { x: NS.x + NS.w / 2, y: NS.dy + st.pull * NS.DEPTH + NS.dh / 2 }; return Math.hypot(p.x - k.x, p.y - k.y) <= 8 ? 'pointer' : ''; },
+      tick(st, t, dt) { st.pull += clamp(st.target - st.pull, -dt * 2.5, dt * 4); },
+      draw(st, t, f) {
+        const R = PR, Pt = PP, x0 = NS.x, x1 = NS.x + NS.w, jig = t - st.jig < 0.25 ? Math.round(Math.sin((t - st.jig) * 70) * 2 * (1 - (t - st.jig) / 0.25)) : 0;
+        R(x0 - 2, NS.legs + 2, NS.w + 8, 4, '#000', 0.5);
+        if (n === 0) {                                                // encima: la lámpara...
+          R(x0 + 46, NS.top - 4, 10, 4, '#8a7a50'); R(x0 + 50, NS.top - 22, 2, 18, '#6a5a3a');
+          for (let y = NS.top - 36; y < NS.top - 20; y++) { const hw = 8 + Math.floor((y - NS.top + 36) / 2); R(x0 + 51 - hw, y, hw * 2, 1, '#d8c8a0'); Pt(x0 + 51 - hw, y, '#efe2c0'); }
+        } else {                                                      // ...o el despertador y una foto
+          R(x0 + 20, NS.top - 14, 18, 14, '#2a2a2e'); circ(x0 + 29, NS.top - 7, 5, '#e8e4d8'); PR(x0 + 29, NS.top - 10, 1, 4, '#1a1a1e'); PR(x0 + 29, NS.top - 7, 3, 1, '#1a1a1e');
+          R(x0 + 58, NS.top - 18, 16, 18, '#c9b78a'); R(x0 + 60, NS.top - 16, 12, 13, '#7a8a9a'); Pt(x0 + 65, NS.top - 12, '#e9c9a0');
+        }
+        R(x0 - 2, NS.top, NS.w + 4, NS.y - NS.top, '#2a1a0c'); R(x0 - 1, NS.top + 1, NS.w + 2, NS.y - NS.top - 1, '#7a5430'); R(x0 - 1, NS.top + 1, NS.w + 2, 1, '#98703f');
+        R(x0 - 1, NS.y, NS.w + 2, NS.legs - NS.y, '#2a1a0c'); R(x0, NS.y, NS.w, NS.legs - NS.y, '#4a2f17'); R(x0, NS.y, 2, NS.legs - NS.y, '#6a4526');
+        R(x0 + 6, NS.legs - 1, 8, 6, '#2a1a0c'); R(x1 - 14, NS.legs - 1, 8, 6, '#2a1a0c');
+        R(x0 + 6, 100, NS.w - 12, 40, '#1e1208'); R(x0 + 6, 100, NS.w - 12, 3, '#000', 0.5);       // el hueco de abajo, con libros
+        ['#6d1f22', '#2b4a6a', '#c9b78a', '#3a5a3a'].forEach((c, k) => { R(x0 + 12 + k * 8, 112 + (k % 2) * 2, 7, 28 - (k % 2) * 2, c); R(x0 + 13 + k * 8, 118, 5, 1, '#e8e4d8', 0.5); });
+        R(x0 + 60, 132, 28, 8, '#7a2a2c'); R(x0 + 60, 132, 28, 1, '#a04448');
+        const d = Math.round(st.pull * NS.DEPTH), fx = x0 + 5, fw = NS.w - 10;
+        R(fx - 1, NS.dy - 1, fw + 2, NS.dh + 2, '#140b04');
+        if (d > 0) {
+          ctx.save(); ctx.beginPath(); ctx.rect(fx, NS.dy, fw, d); ctx.clip();
+          R(fx, NS.dy, fw, d, '#a07a4e'); for (let k = 0; k < 7; k++) R(fx + 3, NS.dy + d - 4 - k * 5, fw - 6, 1, '#8e6a42', 0.6);
+          R(fx, NS.dy, 3, d, '#6a4626'); R(fx + fw - 3, NS.dy, 3, d, '#5a3a1e');
+          for (const it of NIGHT_ITEMS[n]) { const q = nsItem(st, it); drawItem(it.kind, q.x, q.y, R, Pt); }
+          drawHidden(f, st);
+          const g = ctx.createLinearGradient(0, NS.dy, 0, NS.dy + Math.min(d, 18)); g.addColorStop(0, 'rgba(0,0,0,0.75)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g; ctx.fillRect(fx, NS.dy, fw, Math.min(d, 18)); ctx.restore();
+        }
+        const fy = NS.dy + d;
+        R(fx - 1 + jig, fy - 1, fw + 2, NS.dh + 2, '#2a1a0c'); R(fx + jig, fy, fw, NS.dh, '#6a4526'); R(fx + jig, fy, fw, 1, '#8a6232'); R(fx + 4 + jig, fy + 4, fw - 8, NS.dh - 8, '#5e3c1e');
+        if (d > 0) { R(fx + jig, fy - 2, fw, 2, '#85602f'); R(fx - 1, fy + NS.dh + 1, fw + 2, 2, '#000', 0.35); }
+        const kx = x0 + NS.w / 2 + jig, ky = fy + NS.dh / 2;
+        circ(kx, ky + 0.5, 4, '#2a1a0a'); circ(kx, ky, 3.2, '#b8943a'); circ(kx - 1, ky - 1, 1.1, '#e8cf7a');
+      }
+    };
+  }
+
+  // ===== 7. LA CAMA de su madre: desde arriba (cabecero abajo); las almohadas se APARTAN tocándolas y el edredón se RETIRA arrastrando su borde =====
+  const BD = { x: 86, y: 10, w: 148, h: 150, pil: [{ x: 96, y: 116 }, { x: 162, y: 116 }], PW: 62, PH: 24 };
+  const pillowPos = (st, i) => { const u = ease(st.pil[i]), p = BD.pil[i], to = i ? { x: 252, y: 98 } : { x: 6, y: 98 }; return { x: p.x + (to.x - p.x) * u, y: p.y + (to.y - p.y) * u, w: BD.PW, h: BD.PH }; };
+  const duvetEdge = st => 110 - st.fold * 78;                        // el borde de abajo del edredón (sube al retirarlo)
+  const G_BED = {
+    area: { x: 0, y: 4, w: W, h: 160 },
+    help: 'Toca una almohada para apartarla y arrastra el borde del edredón hacia arriba', helpTouch: 'Toca una almohada para apartarla. Arrastra el borde del edredón hacia arriba',
+    init: () => ({ pil: [0, 0], to: [0, 0], fold: 0, drag: null }),
+    place: () => ({ key: { x: 186, y: 124 } }),
+    shows: (st, kind, r) => st.pil[1] > 0.95,
+    down(st, p, e) {
+      for (let i = 1; i >= 0; i--) if (inR(p, pillowPos(st, i))) { st.to[i] = st.to[i] ? 0 : 1; sfx(260, 0.15, 'sawtooth', 0.012, 180); return true; }   // ¡fuf!
+      const ey = duvetEdge(st);
+      if (p.x > BD.x + 4 && p.x < BD.x + BD.w - 4 && Math.abs(p.y - ey) <= 7) { st.drag = { y0: p.y, f0: st.fold }; try { cv.setPointerCapture(e.pointerId); } catch (_) {} return true; }
+      return inR(p, { x: BD.x, y: BD.y, w: BD.w, h: BD.h });
+    },
+    move(st, p) {
+      if (st.drag) { st.fold = clamp(st.drag.f0 + (st.drag.y0 - p.y) / 78, 0, 1); return 'grabbing'; }
+      if (p.x > BD.x + 4 && p.x < BD.x + BD.w - 4 && Math.abs(p.y - duvetEdge(st)) <= 7) return 'grab';
+      return [0, 1].some(i => inR(p, pillowPos(st, i))) ? 'pointer' : '';
+    },
+    up(st) { if (st.drag) { sfx(200, 0.12, 'sawtooth', 0.01, 150); st.drag = null; } },
+    tick(st, t, dt) { for (let i = 0; i < 2; i++) st.pil[i] += clamp(st.to[i] - st.pil[i], -dt * 3, dt * 3); },
+    draw(st, t, f) {
+      const R = PR, Pt = PP, x0 = BD.x, x1 = BD.x + BD.w;
+      R(x0 + 3, BD.y + 3, BD.w, BD.h, '#000', 0.45);
+      R(x0, BD.y, BD.w, BD.h, '#3a2618'); R(x0 + 4, BD.y + 4, BD.w - 8, BD.h - 16, '#e8e2d6');      // marco y sábana bajera
+      for (let k = 0; k < 8; k++) R(x0 + 10 + k * 16, BD.y + 20 + (k % 3) * 30, 12, 1, '#d4ccbe');
+      R(x0 - 4, BD.y + BD.h - 12, BD.w + 8, 14, '#3a2618'); R(x0 - 2, BD.y + BD.h - 11, BD.w + 4, 10, '#a08670'); R(x0 - 2, BD.y + BD.h - 11, BD.w + 4, 1, '#b8a088');   // cabecero tapizado
+      for (let x = x0 + 4; x < x1 - 4; x += 10) R(x, BD.y + BD.h - 7, 3, 2, '#7e6656');
+      drawItem('book', 102, 122, R, Pt);                              // debajo de las almohadas: una novela...
+      drawHidden(f, st);                                             // ...y, a lo mejor, las llaves
+      drawItem('magazine', 104, 54, R, Pt); drawItem('sock', 200, 78, R, Pt);   // debajo del edredón
+      const ey = duvetEdge(st);                                      // el edredón: de los pies hasta su borde, con el pliegue
+      R(x0 + 3, BD.y + 4, BD.w - 6, ey - BD.y - 4, '#d6c2ae');
+      for (let i = 0; i < 160; i++) { const yy = BD.y + 6 + Math.floor(hash(i * 5.7) * Math.max(1, ey - BD.y - 12)); Pt(x0 + 5 + Math.floor(hash(i * 3.1) * (BD.w - 10)), yy, hash(i) > 0.5 ? '#c9b29c' : '#e0cfbc', 0.8); }
+      for (let y = BD.y + 16; y < ey - 8; y += 16) R(x0 + 4, y, BD.w - 8, 1, '#bba48e', 0.7);
+      R(x0 + 3, ey - 6, BD.w - 6, 6, '#f0ece4'); R(x0 + 3, ey - 6, BD.w - 6, 1, '#ffffff'); R(x0 + 3, ey - 1, BD.w - 6, 1, '#b8b0a2');   // el embozo
+      if (st.fold > 0.05) R(x0 + 3, ey, BD.w - 6, 3, '#000', 0.2);
+      R(x0 + 3, BD.y + 4, BD.w - 6, 2, '#5a3a20');                    // el pie de la cama
+      for (let i = 0; i < 2; i++) {                                   // las almohadas
+        const q = pillowPos(st, i);
+        R(q.x + 2, q.y + 2, q.w, q.h, '#000', 0.25);
+        R(q.x, q.y, q.w, q.h, '#c9c4b8'); R(q.x + 1, q.y + 1, q.w - 2, q.h - 2, '#f4f2ec'); R(q.x + 1, q.y + 1, q.w - 2, 1, '#ffffff');
+        R(q.x + 3, q.y + q.h - 4, q.w - 6, 1, '#d4cfc4'); R(q.x + q.w / 2 - 4, q.y + 8, 8, 1, '#e2ded4'); [[0, 0], [q.w - 1, 0], [0, q.h - 1], [q.w - 1, q.h - 1]].forEach(([dx, dy]) => Pt(q.x + dx, q.y + dy, '#a8a296'));
+      }
+    }
+  };
+
+  // ===== 8. EL MUEBLE DEL LAVABO (baño): de frente; las puertas se abren TOCÁNDOLAS y los botes se SACAN AL SUELO
+  // tocándolos (salen en arco y se quedan de pie a un lado del mueble; tocándolos otra vez vuelven a su sitio) =====
+  const SK = { x: 92, w: 136, top: 28, y: 64, legs: 150, doorY: 70, doorH: 74 };
+  const SINK_THINGS = () => [
+    { kind: 'paperRoll', x: 104, y: 78, w: 14, h: 22 }, { kind: 'paperRoll', x: 120, y: 80, w: 14, h: 20 }, { kind: 'sponge', x: 180, y: 90, w: 18, h: 10 },
+    { kind: 'shampoo', x: 104, y: 116, w: 14, h: 26 }, { kind: 'bleach', x: 164, y: 110, w: 22, h: 32, big: true }, { kind: 'shampoo2', x: 196, y: 120, w: 12, h: 22 }
+  ].map((o, i) => Object.assign(o, { u: 0, to: 0, slot: [{ x: 34 }, { x: 52 }, { x: 236 }, { x: 68 }, { x: 254 }, { x: 280 }][i] }));
+  const SINK_FLOOR = 150;                                            // el suelo, a los lados del mueble
+  const sinkPos = o => {                                              // dentro (en su balda) .. fuera (de pie en el suelo), en arco
+    const u = ease(o.u), fx = o.slot.x, fy = SINK_FLOOR - o.h;
+    return { x: o.x + (fx - o.x) * u, y: o.y + (fy - o.y) * u - 22 * Math.sin(Math.PI * u), w: o.w, h: o.h };
+  };
+  const sinkDoorW = o => Math.max(3, Math.round(64 * Math.cos(o * Math.PI / 2 * 0.92)));
+  const G_SINK = {
+    area: { x: SK.x - 8, y: 10, w: SK.w + 16, h: 146 },
+    help: 'Toca las puertas para abrirlas y los botes para sacarlos', helpTouch: 'Toca las puertas para abrirlas y los botes para sacarlos',
+    init: () => ({ open: [0, 0], to: [0, 0], things: SINK_THINGS() }),
+    place: () => ({ key: { x: 168, y: 132 } }),
+    shows: (st, kind, r) => st.open[1] > 0.85 && !st.things.some(o => o.u < 0.6 && overlap(sinkPos(o), r)),
+    down(st, p) {
+      for (let i = 0; i < 2; i++) {                                   // tocar una puerta (por donde está ahora)
+        const w = sinkDoorW(st.open[i]), dr = { x: i ? 224 - w : 96, y: SK.doorY, w, h: SK.doorH };
+        if (inR(p, dr, 1) && (st.open[i] < 0.5 || w < 20)) { st.to[i] = st.to[i] ? 0 : 1; sfx(st.to[i] ? 260 : 120, 0.12, 'sawtooth', 0.015, 200); return true; }
+      }
+      for (let i = st.things.length - 1; i >= 0; i--) {              // un bote: fuera (al suelo) o dentro (si su puerta está abierta)
+        const o = st.things[i], side = o.x + o.w / 2 > 160 ? 1 : 0;
+        if ((o.to || st.open[side] > 0.85) && inR(p, sinkPos(o), 1)) {
+          o.to = o.to ? 0 : 1; o.land = false; sfx(o.big ? 180 : 420, 0.06, 'square', 0.03, o.big ? 120 : 300); return true;
+        }
+      }
+      return inR(p, this.area);
+    },
+    move(st, p) { return st.things.some(o => (o.to || st.open[o.x + o.w / 2 > 160 ? 1 : 0] > 0.85) && inR(p, sinkPos(o), 1)) ? 'pointer' : ''; },
+    tick(st, t, dt) {
+      for (let i = 0; i < 2; i++) st.open[i] += clamp(st.to[i] - st.open[i], -dt * 3.5, dt * 3.5);
+      for (const o of st.things) {
+        o.u += clamp(o.to - o.u, -dt * 2.6, dt * 2.6);
+        if (!o.land && o.u === o.to) { o.land = true; sfx(o.big ? 90 : 160, 0.07, 'square', 0.04, o.big ? 60 : 110); }   // ¡toc!, al dejarlo
+      }
+    },
+    draw(st, t, f) {
+      const R = PR, Pt = PP, x0 = SK.x, x1 = SK.x + SK.w;
+      R(x0 - 2, SK.legs + 2, SK.w + 8, 4, '#000', 0.4);
+      R(x0 - 8, SK.top, SK.w + 16, SK.y - SK.top, '#bcb8ae'); R(x0 - 7, SK.top + 1, SK.w + 14, SK.y - SK.top - 2, '#ecebe6');   // encimera y lavabo
+      ctx.fillStyle = '#c8ccd0'; ctx.beginPath(); ctx.ellipse(160, 46, 40, 13, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#f6f7f8'; ctx.beginPath(); ctx.ellipse(160, 45, 37, 11, 0, 0, Math.PI * 2); ctx.fill(); circ(160, 48, 2, '#8a8e92');
+      R(156, 28, 8, 8, '#a8acb2'); R(158, 30, 4, 10, '#c8ccd2'); R(157, 30, 6, 1, '#e8ecf0');    // grifo
+      R(114, 34, 8, 10, '#5b8fd0'); R(116, 30, 1, 5, '#e8e4dc'); R(118, 29, 1, 6, '#d24a3a');     // vaso con cepillos
+      R(198, 38, 12, 7, '#f0e6c8'); R(199, 39, 10, 1, '#fff8e0');                                    // jabón
+      R(x0 - 1, SK.y, SK.w + 2, SK.legs - SK.y, '#6a6a66'); R(x0, SK.y, SK.w, SK.legs - SK.y, '#e2ded4'); R(x0, SK.y, 2, SK.legs - SK.y, '#f0ece4');
+      R(96, SK.doorY, 128, SK.doorH, '#2a2620'); R(96, SK.doorY, 128, 3, '#000', 0.4);               // por dentro
+      R(96, 104, 128, 3, '#c8c4b8'); R(96, 104, 128, 1, '#e8e4dc');                                  // la balda
+      ctx.strokeStyle = '#9aa0a6'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(160, SK.doorY); ctx.lineTo(160, 84); ctx.quadraticCurveTo(160, 96, 150, 96); ctx.stroke();   // la tubería
+      drawHidden(f, st);
+      const inside = o => o.u === 0 && o.to === 0;                   // los que están en su balda van detrás de las puertas
+      for (const o of st.things) if (inside(o)) drawSinkThing(o.kind, o.x, o.y, o.w, o.h);
+      R(20, SINK_FLOOR, 72, 2, '#000', 0.35); R(228, SINK_FLOOR, 74, 2, '#000', 0.35);           // el suelo a los lados
+      for (let i = 0; i < 2; i++) {
+        const w = sinkDoorW(st.open[i]), dx = i ? 224 - w : 96;
+        R(dx - 1, SK.doorY - 1, w + 2, SK.doorH + 2, '#7a766c'); R(dx, SK.doorY, w, SK.doorH, '#ecebe6'); R(dx, SK.doorY, w, 1, '#ffffff');
+        if (w > 12) { R(dx + 4, SK.doorY + 4, w - 8, SK.doorH - 8, '#e2ded4'); R(dx + 4, SK.doorY + 4, w - 8, 1, '#c8c4b8'); }
+        R(dx, SK.doorY, w, SK.doorH, '#000', st.open[i] * 0.3);
+        const hx = i ? dx + 4 : dx + w - 6; if (w > 8) { R(hx, SK.doorY + 30, 2, 12, '#8a8e94'); Pt(hx, SK.doorY + 30, '#d8dce2'); }
+      }
+      R(x0 + 6, SK.legs - 1, 10, 4, '#6a6a66'); R(x1 - 16, SK.legs - 1, 10, 4, '#6a6a66');
+      for (const o of st.things) if (!inside(o)) {                   // los que están fuera (o volando): delante de todo, con su sombra
+        const q = sinkPos(o), lift = SINK_FLOOR - (q.y + q.h);
+        if (o.u > 0.5) R(q.x + 1, SINK_FLOOR - 1, q.w, 2, '#000', 0.4 * Math.max(0, 1 - lift / 30));
+        drawSinkThing(o.kind, q.x, q.y, q.w, q.h);
+      }
+    }
+  };
+  function drawSinkThing(kind, x, y, w, h) {
+    const R = PR, Pt = PP;
+    if (kind === 'paperRoll') { R(x, y, w, h, '#d8d4cc'); R(x + 1, y, w - 2, h, '#f4f2ee'); R(x + 4, y + 1, w - 8, 3, '#b8b4ac'); R(x + 5, y + 1, w - 10, 1, '#8a867e'); }
+    else if (kind === 'sponge') { R(x, y, w, h, '#e8c040'); R(x, y, w, 3, '#5a9a4a'); for (let k = 0; k < 6; k++) Pt(x + 2 + k * 3, y + 5 + (k % 2) * 2, '#c8a030'); }
+    else if (kind === 'shampoo' || kind === 'shampoo2') { const c = kind === 'shampoo' ? '#c23a62' : '#3a8ac2'; R(x + 3, y, w - 6, 5, '#e8e4dc'); R(x, y + 5, w, h - 5, c); R(x + 1, y + 6, 2, h - 8, '#ffffff', 0.35); R(x + 2, y + 12, w - 4, 6, '#f4f0e6'); }
+    else if (kind === 'bleach') { R(x + 7, y, 8, 5, '#3a6ac2'); R(x, y + 5, w, h - 5, '#f0f0ea'); R(x + 1, y + 6, 3, h - 8, '#ffffff', 0.6); R(x + 3, y + 12, w - 6, 10, '#3a6ac2'); R(x + 5, y + 15, w - 10, 1, '#f0f0ea'); R(x + w - 5, y + 7, 4, 4, '#d8d8d0'); }
+  }
+
+  // la lista de muebles: dónde están, cómo se llaman y su minijuego
+  const FURN = [
+    { id: 'dresser', room: SALA, rect: DRESSER, label: 'Mirar la cómoda', game: G_DRESSER },
+    { id: 'sofa', room: SALA, rect: SOFA, label: 'Mirar el sofá', game: G_SOFA },
+    { id: 'tv', room: SALA, rect: TV, label: 'Mirar el mueble', game: G_TV },
+    { id: 'table', room: SALA, rect: TABLE, label: 'Mirar la mesa', game: G_TABLE },
+    { id: 'night0', room: MOM, rect: MOM_DEF.NIGHT[0], label: 'Mirar la mesita', game: makeNight(0) },
+    { id: 'night1', room: MOM, rect: MOM_DEF.NIGHT[1], label: 'Mirar la mesita', game: makeNight(1) },
+    { id: 'bed', room: MOM, rect: MOM_DEF.BED, label: 'Mirar la cama', game: G_BED },
+    { id: 'sink', room: BATH, rect: { x: 150, y: 62, w: 26, h: 14 }, label: 'Mirar el mueble', game: G_SINK }
+  ];
+  const KEY_SPOTS = FURN.map(f => f.id);
+  const randomKeySpot = () => KEY_SPOTS[Math.floor(Math.random() * KEY_SPOTS.length)];
+  function furnNear() {
+    if (swap || cut || panel || fp || jrAct) return null;
+    let best = null, bd = Infinity;
+    for (const f of FURN) { if (f.room !== room) continue; const d = rectDist(P.x, P.y - 2, f.rect); if (d < 12 && d < bd) { best = f; bd = d; } }
+    return best;
+  }
+  function openFurn(f) {
+    f = f || furnNear(); if (!f) return false;
+    fp = { f, st: fstate[f.id] || (fstate[f.id] = f.game.init()), take: null, closeAt: null };
+    Object.assign(P, { moving: false, phase: 0, tx: null }); keys.clear(); joyEnd(); mark = null;
+    sfx(180, 0.06, 'square', 0.03, 140); return true;
+  }
+  function closeFurn() { if (!fp) return; if (fp.f.game.up) fp.f.game.up(fp.st); fp = null; cv.style.cursor = ''; sfx(140, 0.06, 'square', 0.03, 110); }
+  function furnDown(p, e) {
+    const { f, st } = fp; if (fp.take) return;
+    const pl = f.game.place(st);
+    for (const kind of ['key', 'card']) {                            // ¿lo que se busca, a la vista? se coge
+      const at = pl[kind]; if (!at || !(kind === 'key' ? keyHere(f) : cardHere(f))) continue;
+      const r = { x: at.x, y: at.y, w: 14, h: 8 };
+      if (inR(p, r, 2) && f.game.shows(st, kind, r)) {
+        fp.take = { t: tNow, kind }; sfx(1400, 0.05, 'triangle', 0.04, 1800); setTimeout(() => sfx(1900, 0.06, 'triangle', 0.04, 2200), 70); return;
+      }
+    }
+    if (f.game.down(st, p, e)) return;
+    if (!inR(p, f.game.area, 4)) closeFurn();                        // tocar fuera: salir
+  }
+  function furnMove(p) { if (!fp) return; const c = fp.f.game.move ? fp.f.game.move(fp.st, p) : ''; cv.style.cursor = c || ''; }
+  function furnUp() { if (fp && fp.f.game.up) fp.f.game.up(fp.st); }
+  function furnKey(code) {
+    if (code === 'KeyF' || code === 'Escape') { closeFurn(); return true; }
+    return !!(fp && fp.f.game.key && fp.f.game.key(fp.st, code));
+  }
+  function furnTick(t, dt) {
+    if (!fp) return;
+    const { f, st } = fp; if (f.game.tick) f.game.tick(st, t, dt);
+    const T = fp.take;
+    if (T && !T.done && t - T.t > 0.5) {
+      T.done = true; fp.closeAt = t + 0.6;
+      if (T.kind === 'key') { jr.keyGot = true; completeMission('llaves'); say('¡Mis llaves! Estaban aquí metidas.', 2.6, t + 0.8, () => { addMission('bajar'); saveAt('llaves'); }); }
+      else { jr.card = true; renderTodo(); say('Aquí está la tarjeta de mi madre.', 2.6, t + 0.8); jrDone(t); }
+    }
+    if (fp.closeAt && t >= fp.closeAt) closeFurn();
+  }
+  function drawFurn(t) {
+    const { f, st } = fp;
+    PR(0, 0, W, H, '#000', 0.74);
+    f.game.draw(st, t, f);
+    const PDx = window.PD; if (!PDx) return;
+    const k = textK(), msg = (TOUCH ? f.game.helpTouch : f.game.help) + (TOUCH ? '. Toca fuera para salir' : '.  F: salir');
+    const lines = wrapText(msg, Math.floor((W * RES - 16 * k) / k)), lh = 10 * k;   // en una o dos líneas, que no se salga
+    const w = Math.max(...lines.map(l => PDx.measure(l))) * k, y0 = (H - 4) * RES - lines.length * lh;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = 'rgba(14,9,8,0.85)'; ctx.fillRect(Math.round(W * RES / 2 - w / 2) - 3 * k, y0 - 2 * k, w + 6 * k, lines.length * lh + 2 * k);
+    lines.forEach((l, i) => PDx.drawText(ctx, l, Math.round(W * RES / 2 - PDx.measure(l) * k / 2), y0 + i * lh, '#e8e0d0', k)); ctx.restore();
+  }
+  function drawItem(kind, x, y, R, Pt) {                            // cosas pequeñas de los cajones y de debajo de los muebles
+    if (kind === 'photo') { R(x, y, 14, 10, '#f0ece2'); R(x + 1, y + 1, 12, 7, '#7a8a6a'); R(x + 1, y + 5, 12, 3, '#5a6a4a'); Pt(x + 9, y + 3, '#e9c9a0'); R(x + 1, y + 9, 12, 1, '#d8d2c4'); }
+    else if (kind === 'photo2') { R(x, y, 12, 9, '#e8e2d4'); R(x + 1, y + 1, 10, 6, '#a07858'); Pt(x + 4, y + 3, '#e9c9a0'); Pt(x + 7, y + 3, '#e9c9a0'); R(x + 3, y + 5, 6, 2, '#3a4a6a'); }
+    else if (kind === 'candle') { R(x, y, 7, 7, '#c8c0b0'); R(x + 1, y + 1, 5, 5, '#f4f0e6'); R(x + 3, y + 3, 1, 1, '#2a2018'); }
+    else if (kind === 'scarf') { R(x, y, 26, 9, '#7a2a2c'); for (let k = 2; k < 26; k += 5) R(x + k, y, 2, 9, '#c9b78a'); R(x, y + 8, 26, 1, '#4a1618'); R(x + 24, y + 2, 3, 5, '#7a2a2c'); }
+    else if (kind === 'batteries') { [0, 3, 6].forEach(k => { R(x + k, y, 3, 6, '#1a1a1e'); R(x + k, y, 3, 2, '#c8a040'); Pt(x + k + 1, y + 5, '#8a8a8a'); }); }
+    else if (kind === 'ribbon') { R(x + 1, y, 7, 9, '#2a1a10'); R(x, y + 1, 9, 7, '#2a1a10'); R(x + 1, y + 1, 7, 7, '#c23a32'); R(x + 3, y + 3, 3, 3, '#d8c8a8'); R(x + 4, y + 4, 1, 1, '#6a4a2a'); }
+    else if (kind === 'box') { R(x, y, 16, 11, '#3a2a40'); R(x + 1, y + 1, 14, 9, '#6a4a7a'); R(x + 1, y + 1, 14, 1, '#8a6a9a'); R(x + 7, y + 1, 2, 9, '#d8b048'); }
+    else if (kind === 'coin') { R(x + 1, y, 4, 6, '#8a6a20'); R(x, y + 1, 6, 4, '#8a6a20'); R(x + 1, y + 1, 4, 4, '#d8b048'); Pt(x + 2, y + 2, '#f0d878'); }
+    else if (kind === 'crumbs') { for (let k = 0; k < 9; k++) Pt(x + Math.floor(hash(k * 2.1 + x) * 14), y + Math.floor(hash(k * 3.7 + y) * 8), k % 3 ? '#c8a878' : '#e0c898'); }
+    else if (kind === 'hairpin') { R(x, y, 9, 1, '#2a2a2e'); R(x, y + 2, 8, 1, '#2a2a2e'); Pt(x + 9, y + 1, '#2a2a2e'); }
+    else if (kind === 'glasses') { R(x, y, 18, 8, '#2a2030'); R(x + 1, y + 1, 16, 6, '#5a3a6a'); R(x + 1, y + 1, 16, 1, '#7a5a8a'); R(x + 15, y + 3, 2, 2, '#d8b048'); }
+    else if (kind === 'pills') { R(x, y, 10, 6, '#e8e4dc'); R(x, y, 10, 2, '#d24a3a'); R(x + 2, y + 3, 6, 1, '#8a8a8a'); }
+    else if (kind === 'tissues') { R(x, y, 14, 10, '#7fb0e0'); R(x + 3, y + 2, 8, 4, '#f4f4f0'); R(x + 4, y, 6, 3, '#ffffff'); }
+    else if (kind === 'rosary') { for (let k = 0; k < 14; k++) { const a = k / 14 * Math.PI * 2; Pt(x + 8 + Math.round(Math.cos(a) * 6), y + 5 + Math.round(Math.sin(a) * 4), '#5a3a6a'); } R(x + 7, y + 9, 2, 3, '#c8a040'); R(x + 6, y + 10, 4, 1, '#c8a040'); }
+    else if (kind === 'book') { R(x, y, 22, 14, '#2a1a10'); R(x + 1, y + 1, 20, 12, '#6d1f22'); R(x + 1, y + 1, 20, 1, '#8a3436'); R(x + 4, y + 4, 12, 2, '#c9b78a'); R(x + 20, y + 1, 1, 12, '#e8e4d8'); }
+    else if (kind === 'magazine') { R(x, y, 20, 26, '#e8e4d8'); R(x + 1, y + 1, 18, 6, '#d24a3a'); R(x + 2, y + 9, 16, 9, '#8a9aaa'); R(x + 2, y + 20, 12, 1, '#6a6a6a'); R(x + 2, y + 22, 9, 1, '#6a6a6a'); }
+    else if (kind === 'sock') { R(x, y, 5, 10, '#4a4a52'); R(x, y + 8, 9, 4, '#4a4a52'); R(x, y, 5, 2, '#6a6a72'); }
+    else if (kind === 'card') { R(x, y, 13, 8, '#1a3a6a'); R(x + 1, y + 1, 11, 6, '#2a5a9a'); R(x + 2, y + 2, 3, 2, '#d8b048'); R(x + 2, y + 5, 8, 1, '#c8d4e4'); Pt(x + 10, y + 2, '#e8e4dc'); }
+    else if (kind === 'key') {                                       // el llavero: anilla, una llave dorada y una plateada
+      ctx.strokeStyle = '#8a8a8a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x + 3, y + 3.5, 2.6, 0, Math.PI * 2); ctx.stroke();
+      R(x + 5, y + 2, 7, 2, '#d8b048'); R(x + 11, y + 1, 2, 4, '#d8b048'); Pt(x + 9, y + 4, '#d8b048'); Pt(x + 7, y + 4, '#d8b048'); R(x + 5, y + 2, 7, 1, '#f0d878');
+      R(x + 4, y + 5, 7, 2, '#b8bcc4'); R(x + 10, y + 4, 2, 3, '#b8bcc4'); Pt(x + 8, y + 7, '#b8bcc4'); R(x + 4, y + 5, 7, 1, '#e0e4ea');
+      R(x, y + 6, 2, 2, '#d24a3a');
+    }
+  }
+
+  // ---------- EL ASCENSOR (misión 4) ----------
+  // En el rellano: F junto a la puerta (o tocar el botón) lo llama; se le oye subir desde la planta 0 y, al llegar, la
+  // puerta se abre despacio hacia un lado. Dentro se cierra la de abajo; en la botonera (pared izquierda) se elige piso:
+  // con el 0 baja (unos 5 s, Juanjo vive en el primero) y al llegar se abre la puerta del fondo (norte).
+  const lift = { state: 'idle', t0: 0, floor: 0, pending: false, hum: 0 };
+  // estados: idle → coming → opening → open → (dentro) closing → closed → down → opening2 → arrived
+  const LIFT_T = { come: 4.0, open: 1.4, close: 1.2, ride: 5.0 };
+  const ding = () => { sfx(1320, 0.6, 'sine', 0.05, 1320); setTimeout(() => sfx(1047, 0.8, 'sine', 0.05, 1047), 220); };
+  function liftDoor(t, which) {                                      // 0 cerrada .. 1 abierta: la del rellano ('lnd'), la de abajo de la cabina ('south') o la del fondo ('north')
+    const s = t - lift.t0, st = lift.state, op = () => ease(clamp(s / LIFT_T.open, 0, 1)), cl = () => 1 - ease(clamp(s / LIFT_T.close, 0, 1));
+    if (which === 'lnd') return st === 'opening' ? op() : st === 'open' ? 1 : 0;
+    if (which === 'south') return st === 'open' ? 1 : st === 'closing' ? cl() : 0;
+    if (which === 'north') return st === 'opening2' ? op() : st === 'arrived' ? 1 : 0;
+    if (which === 'lob') return st === 'arrived' ? 1 : st === 'lobClose' ? cl() : 0;
+    return 0;
+  }
+  const LIFT_CALL = { x: 72, y: 66, w: 40, h: 4 };
+  function liftCallNear() { return room === LND && lift.state === 'idle' && !swap && !fp && rectDist(P.x, P.y - 2, LIFT_CALL) < 10; }
+  function callLift() {
+    if (!liftCallNear()) return false;
+    lift.state = 'coming'; lift.t0 = tNow; lift.floor = 0; lift.hum = 0.3;
+    Object.assign(P, { dir: 'up', ang: -Math.PI / 2, moving: false, phase: 0, tx: null }); keys.clear(); mark = null;
+    sfx(900, 0.05, 'square', 0.04, 900);                            // clic del botón
+    return true;
+  }
+  function liftGo() { lift.state = 'down'; lift.t0 = tNow; lift.hum = 0.2; lift.pending = false; sfx(70, 0.3, 'square', 0.06, 50); }
+  function liftTick(t) {
+    const s = t - lift.t0, st = lift.state;
+    if ((st === 'coming' || st === 'down') && s >= lift.hum) {      // el motor zumbando y algún golpe de los cables
+      lift.hum += 0.45; sfx(46 + Math.random() * 8, 0.55, 'sawtooth', 0.022, 50);
+      if (Math.random() < 0.3) setTimeout(() => sfx(150, 0.05, 'square', 0.02, 90), 120);
+    }
+    if (st === 'coming') { if (s >= LIFT_T.come - 0.4) lift.floor = 1; if (s >= LIFT_T.come) { lift.state = 'opening'; lift.t0 = t; ding(); sfx(220, 1.2, 'sawtooth', 0.01, 180); } }
+    else if (st === 'opening' && s >= LIFT_T.open) { lift.state = 'open'; lift.t0 = t; }
+    else if (st === 'closing' && s >= LIFT_T.close) { lift.state = 'closed'; lift.t0 = t; sfx(90, 0.1, 'square', 0.05, 60); if (lift.pending) liftGo(); }
+    else if (st === 'down') { if (s >= LIFT_T.ride - 0.4) lift.floor = 0; if (s >= LIFT_T.ride) { lift.state = 'opening2'; lift.t0 = t; ding(); sfx(220, 1.2, 'sawtooth', 0.01, 180); } }
+    else if (st === 'opening2' && s >= LIFT_T.open) { lift.state = 'arrived'; lift.t0 = t; }
+    else if (st === 'lobClose' && s >= LIFT_T.close) { lift.state = 'gone'; sfx(90, 0.1, 'square', 0.05, 60); }
+  }
+  // cifras pequeñas (3 × 5) para las pantallitas del ascensor
+  const DIG = { '0': '111101101101111', '1': '010110010010111', '2': '111001111100111', '-': '000000111000000' };
+  function digits(str, x, y, s, c) { [...str].forEach((ch, i) => { const m = DIG[ch]; if (m) for (let k = 0; k < 15; k++) if (m[k] === '1') PR(x + i * 4 * s + (k % 3) * s, y + Math.floor(k / 3) * s, s, s, c); }); }
+  function floorDisplay(x, y, moving) {                              // la pantallita: el piso y, si se mueve, la flecha
+    digits(String(lift.floor), x + 5, y, 1, '#ff4a2a');
+    if (moving > 0) { PP(x + 2, y + 1, '#ff4a2a'); PR(x + 1, y + 2, 3, 1, '#ff4a2a'); }        // ▲
+    if (moving < 0) { PR(x + 1, y + 2, 3, 1, '#ff4a2a'); PP(x + 2, y + 3, '#ff4a2a'); }        // ▼
+  }
+  function liftFront(x, y, w, h, o) {                                // puerta de ascensor vista de frente: dos hojas que se recogen hacia la izquierda
+    const vis = Math.round(w * (1 - o));
+    if (o > 0) { PR(x + vis, y, w - vis, h, '#d8d0b8'); PR(x + vis, y, w - vis, 3, '#f2ead6'); PR(x + vis, y + h - 4, w - vis, 4, '#7a7468'); }   // la cabina, con su luz
+    if (vis > 0) {
+      PR(x, y, vis, h, '#a4a8ae'); for (let xx = x + 1; xx < x + vis; xx += 2) PR(xx, y, 1, h, '#b6bac0', 0.6);
+      const half = Math.max(1, Math.floor(vis / 2)); PR(x + half, y, 1, h, '#6a6e74'); PR(x + vis - 1, y, 1, h, '#5a5e64');
+    }
+  }
+  function drawBuilding(t) {
+    if (room === LND) {
+      const L = LND_DEF.LIFT;
+      liftFront(L.x, L.y, L.w, L.h, liftDoor(t, 'lnd'));
+      floorDisplay(L.x + 8, L.y - 6, lift.state === 'coming' ? 1 : 0);
+      if (lift.state === 'coming' || lift.state === 'opening') PR(L.x + L.w + 5, L.y + 6, 3, 3, '#ffa040');   // el botón, encendido
+    } else if (room === ELV) {
+      const D = ELV_DEF, ND = D.NDOOR, o = liftDoor(t, 'south'), vis = Math.round(D.DOOR.w * (1 - o));
+      PR(D.DOOR.x, 130, D.DOOR.w, 6, '#141416');                    // la de abajo (vista desde arriba): se recoge hacia la izquierda
+      if (vis > 0) { PR(D.DOOR.x, 131, vis, 4, '#a4a8ae'); PR(D.DOOR.x, 131, vis, 1, '#c8ccd2'); PR(D.DOOR.x + Math.floor(vis / 2), 131, 1, 4, '#6a6e74'); }
+      const on = liftDoor(t, 'north');                               // la del fondo: al abrirse, se ve la planta 0, a oscuras
+      if (on > 0) { const v = Math.round(ND.w * (1 - on)); PR(ND.x + v, ND.y, ND.w - v, ND.h, '#1a1a1c'); PR(ND.x + v, ND.y + ND.h - 5, ND.w - v, 5, '#2e2e30'); }
+      if (on < 1) liftFront(ND.x, ND.y, Math.round(ND.w * (1 - on)) || 1, ND.h, 0);
+      PR(D.PANEL.x + 1, D.PANEL.y + 1, 2, 3, '#0a0a0c'); digits(String(lift.floor), D.PANEL.x + 1, D.PANEL.y + 1, 0.6, '#ff4a2a');
+    }
+  }
+  // la BOTONERA del ascensor, en grande: una placa de acero estrecha con la pantallita y los botones 2, 1, 0 y -1
+  const LP = { x: 128, y: 10, w: 64, h: 144 };
+  const LIFT_BTNS = [['2', 160, 58], ['1', 160, 82], ['0', 160, 106], ['-1', 160, 130]];
+  const G_LIFT = {
+    area: LP, help: 'Toca el botón del piso al que quieres ir', helpTouch: 'Toca el botón del piso al que quieres ir',
+    init: () => ({ lit: null }),
+    place: () => ({}), shows: () => false,
+    down(st, p) {
+      const btn = LIFT_BTNS.find(([, x, y]) => Math.hypot(p.x - x, p.y - y) <= 10);
+      if (!btn) return inR(p, LP);
+      const id = btn[0]; st.lit = id; sfx(880, 0.06, 'square', 0.04, 880);
+      if (id === '0') {
+        if (lift.state === 'closed' || lift.state === 'idle') liftGo(); else if (lift.state === 'closing') lift.pending = true; else return true;   // (idle: se continuó la partida ya dentro)
+        fp.closeAt = tNow + 0.7;
+      } else if (id === '1') { st.lit = null; }                       // ya está en el primero
+      else { st.lit = null; say('No, tengo que bajar a la calle.', 2.2, tNow); fp.closeAt = tNow + 0.2; }
+      return true;
+    },
+    move(st, p) { return LIFT_BTNS.some(([, x, y]) => Math.hypot(p.x - x, p.y - y) <= 10) ? 'pointer' : ''; },
+    draw(st, t) {
+      const R = PR, Pt = PP, PDx = window.PD;
+      R(LP.x + 3, LP.y + 3, LP.w, LP.h, '#000', 0.45);
+      R(LP.x - 1, LP.y - 1, LP.w + 2, LP.h + 2, '#2e3034'); R(LP.x, LP.y, LP.w, LP.h, '#8e9298');
+      for (let x = LP.x + 1; x < LP.x + LP.w; x += 2) R(x, LP.y, 1, LP.h, '#9ea2a8', 0.6);   // acero cepillado
+      R(LP.x, LP.y, LP.w, 1, '#c0c4ca'); R(LP.x, LP.y, 1, LP.h, '#b0b4ba');
+      [[LP.x + 4, LP.y + 4], [LP.x + LP.w - 7, LP.y + 4], [LP.x + 4, LP.y + LP.h - 7], [LP.x + LP.w - 7, LP.y + LP.h - 7]].forEach(([x, y]) => { R(x, y, 3, 3, '#5a5e64'); Pt(x + 1, y + 1, '#c8ccd2'); });   // tornillos
+      R(LP.x + 14, LP.y + 14, 36, 22, '#2e3034'); R(LP.x + 15, LP.y + 15, 34, 20, '#0a0a0c');   // la pantalla
+      const mv = lift.state === 'down' ? -1 : 0;
+      digits(String(lift.floor), LP.x + 26, LP.y + 18, 3, '#ff4a2a'); for (let k = 0; k < 6; k++) R(LP.x + 16, LP.y + 16 + k * 3, 32, 1, '#000', 0.25);
+      if (mv) { R(LP.x + 19, LP.y + 22, 5, 1, '#ff4a2a'); R(LP.x + 20, LP.y + 23, 3, 1, '#ff4a2a'); Pt(LP.x + 21, LP.y + 24, '#ff4a2a'); }
+      for (const [id, x, y] of LIFT_BTNS) {
+        const on = st.lit === id && (lift.state === 'closing' || lift.state === 'closed' || lift.state === 'down');
+        circ(x + 0.5, y + 1, 10, '#2e3034'); circ(x, y, 9.5, on ? '#ffa040' : '#5a5e64'); circ(x, y, 7.5, '#c0c4ca'); circ(x - 1, y - 1, 6, '#d4d8de'); circ(x, y, 6, '#b4b8be');
+        if (PDx) PDx.drawText(ctx, id, Math.round(x - PDx.measure(id) / 2) + 1, y - 3, '#2a2c30', 1);
+        Pt(x + 13, y - 2, '#5a5e64'); Pt(x + 15, y - 2, '#5a5e64'); Pt(x + 13, y, '#5a5e64');   // braille
+      }
+    }
+  };
+  FURN.push({ id: 'liftpanel', room: ELV, rect: ELV_DEF.PANEL, label: 'Usar la botonera', game: G_LIFT });
+
+  // ---------- LA RECEPCIÓN: la puerta blanca se abre al llegar a ella; detrás, la verja y Daniel ----------
+  // DANIEL: chándal gris, gafas de sol, pelo negro corto y zapatillas blancas
+  const JJ_DAN = makeJJ(Object.assign({}, JJ_PAL, { H: '#16110e', h: '#2a211b', T: '#5e636e', t: '#464a54', D: '#5e636e', R: '#e8e8e8', B: '#5e636e', g: '#3a3a48', W: '#3a3a48', P: '#22262e', K: '#e8e8e8', S: '#d9a47f', s: '#b98060', c: '#d08870' }));
+  const lob = { doorT: null, talk: false };
+  const lobDoor = t => jr.met ? 1 : lob.doorT == null ? 0 : ease(clamp((t - lob.doorT) / 0.7, 0, 1));
+  const vestOpen = () => LOB_DEF.VEST.forEach(r => { if (!LOB.walk.includes(r)) LOB.walk.push(r); });
+  function lobbyTick(t) {
+    if (room !== LOB || swap) return;
+    const WD = LOB_DEF.WDOOR;
+    if (lob.doorT == null && !jr.met && P.moving && P.dir === 'down' && P.y >= 124 && P.x > WD.x + 2 && P.x < WD.x + WD.w - 2) {
+      lob.doorT = t; sfx(180, 0.08, 'square', 0.05, 90); setTimeout(() => sfx(260, 0.3, 'sawtooth', 0.015, 170), 90);   // el picaporte y la puerta
+    }
+    if (lob.doorT != null && t - lob.doorT > 0.4) vestOpen();
+    if (!lob.talk && !jr.met && lob.doorT != null && P.y >= 135) {   // en el portal: Daniel, al otro lado de la verja
+      lob.talk = true; Object.assign(P, { moving: false, phase: 0, tx: null, dir: 'down', ang: Math.PI / 2 }); keys.clear(); joyEnd();
+      const DN = LOB_DEF.DAN;
+      say('Qué pasa, puto gordo, ¿vamos o qué?', 3.0, t + 0.4, null, () => ({ x: DN.x, y: DN.y }));
+      say('¿Tocará, no?', 2.4, t + 0.4, tt => { jr.met = true; completeMission('bajar'); atTime(tt + 0.6, () => saveAt('llaves')); });
+    }
+  }
+  function drawLobby(t) {                                            // el ascensor (abajo a la derecha) y la puerta blanca con cristal
+    const L = LOB_DEF.LIFT, o = liftDoor(t, 'lob'), vis = Math.round(L.w * (1 - o));
+    PR(L.x, 80, L.w, 6, o > 0 ? '#d8d0b8' : '#141416');
+    if (vis > 0) { PR(L.x, 81, vis, 4, '#a4a8ae'); PR(L.x, 81, vis, 1, '#c8ccd2'); PR(L.x + Math.floor(vis / 2), 81, 1, 4, '#6a6e74'); }
+    const WD = LOB_DEF.WDOOR, d = lobDoor(t), th = d * Math.PI / 2 * 0.9, half = WD.w / 2;
+    PR(WD.x, WD.y, WD.w, 6, '#2a2620');
+    for (const [hx, dir] of [[WD.x, 1], [WD.x + WD.w, -1]]) {      // dos hojas blancas con cristal, que se abren hacia dentro
+      const ex = hx + dir * Math.cos(th) * half, ey = WD.y + 3 - Math.sin(th) * half;
+      ctx.lineCap = 'butt'; ctx.strokeStyle = '#6a6a66'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(hx, WD.y + 3); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.strokeStyle = '#ecece8'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(hx, WD.y + 3); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.strokeStyle = '#9ab4c4'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(hx + (ex - hx) * 0.15, WD.y + 3 + (ey - WD.y - 3) * 0.15); ctx.lineTo(hx + (ex - hx) * 0.82, WD.y + 3 + (ey - WD.y - 3) * 0.82); ctx.stroke();
+      PR(Math.round(ex - dir * Math.cos(th) * 3) - 1, Math.round(ey + Math.sin(th) * 3) - 1, 2, 2, '#a8acb2');   // el pomo
+    }
+  }
+  function drawGate(t) {                                             // la VERJA blanca (de frente, como en la foto) y Daniel detrás, en la acera
+    const R = PR, Pt = PP, G = LOB_DEF.GATE, x0 = G.x, x1 = G.x + G.w, top = 139, base = 158, C = '#e8e8e4', S = '#9a9a96', cx = Math.round((x0 + x1) / 2), mid = x0 + 17;
+    for (let x = x0 + 3; x < x1 - 2; x += 4) { R(x, top - 3, 1, 3, C); Pt(x, top - 4, C); Pt(x - 1, top - 2, S); Pt(x + 1, top - 2, S); }   // las puntas de lanza
+    R(x0, top, x1 - x0, 1, C); R(x0, top + 7, x1 - x0, 1, C); R(x0, base - 1, x1 - x0, 1, C);            // travesaños
+    ctx.strokeStyle = C; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, top + 7, 4, Math.PI, 0); ctx.stroke();                     // el arco con el sol
+    for (const a of [-2.7, -2.25, -1.57, -0.9, -0.45]) { ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * 4, top + 7 + Math.sin(a) * 4); ctx.lineTo(cx + Math.cos(a) * 13, top + 7 + Math.sin(a) * 6); ctx.stroke(); }
+    for (let x = x0 + 2; x < x1 - 1; x += 3) R(x, top + 8, 1, base - top - 9, C);                          // barrotes
+    R(x0, 148, x1 - x0, 1, C); R(x0, 152, x1 - x0, 1, C);                                                   // la greca del medio
+    for (let x = x0 + 1; x < x1 - 2; x += 4) { Pt(x, 150, C); Pt(x + 1, 149, C); Pt(x + 2, 150, C); Pt(x + 3, 151, C); }
+    R(x0, top - 1, 2, base - top + 1, C); R(x1 - 2, top - 1, 2, base - top + 1, C); R(mid, top, 2, base - top, C);   // los postes y el de la hoja pequeña
+    R(mid + 3, 144, 1, 4, '#b8b8b4');                                                                        // la cerradura
+    R(x0 + 2, base, x1 - x0 - 2, 1, '#000', 0.3);
+    const DN = LOB_DEF.DAN;                                          // Daniel, en la acera, mirando al portal
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(DN.x - 5, DN.y - 1, 10, 2);
+    ctx.drawImage(JJ_DAN.up.idle, DN.x - 7, DN.y - 21);
+  }
+  function lobReveal(t, lvl) {                                       // de día en la calle; la claridad entra por la verja y por el cristal de la puerta
+    const d = lobDoor(t), L = LOB_DEF.LIFT, o = liftDoor(t, 'lob');
+    dctx.save(); dctx.setTransform(RES, 0, 0, RES, 0, 0);
+    dctx.fillStyle = `rgba(0,0,0,${0.95 * lvl})`; dctx.fillRect(0, 156, 130, 24);
+    dctx.fillStyle = `rgba(0,0,0,${0.7 * lvl})`; dctx.fillRect(20, 134, 60, 24);
+    const g = dctx.createLinearGradient(0, 128, 0, 80); g.addColorStop(0, `rgba(0,0,0,${(0.2 + 0.45 * d) * lvl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    dctx.fillStyle = g; dctx.fillRect(20, 80, 60, 48);
+    if (o > 0) { dctx.fillStyle = `rgba(0,0,0,${0.85 * o})`; dctx.fillRect(L.x, 80, L.w, 6); const g2 = dctx.createLinearGradient(0, 80, 0, 56); g2.addColorStop(0, `rgba(0,0,0,${0.5 * o})`); g2.addColorStop(1, 'rgba(0,0,0,0)'); dctx.fillStyle = g2; dctx.fillRect(L.x - 10, 56, L.w + 20, 24); }
+    dctx.restore();
+  }
+  function lobLights(t, power, lvl) {
+    const d = lobDoor(t), g = ctx.createLinearGradient(0, 158, 0, 80);
+    g.addColorStop(0, `rgba(255,236,200,${0.16 * lvl})`); g.addColorStop(1, 'rgba(255,236,200,0)');
+    ctx.fillStyle = g; ctx.fillRect(20, 80 + (1 - d) * 48, 60, 78 - (1 - d) * 48);
+  }
+
+  // ---------- intentos que no llevan a nada: la escalera (se niega) y la puerta de casa sin llaves ----------
+  let popup = null, stairsCool = 0, doorCool = 0;
+  function blockedChecks(t) {
+    if (swap || !P.moving) return;
+    const SR = LND_DEF.STAIRS;
+    if (room === LND && P.dir === 'up' && P.y <= 76 && P.x > SR.x + 2 && P.x < SR.x + SR.w - 2 && t > stairsCool) {
+      stairsCool = t + 3.2; popup = { t, text: '¿Cómo voy a bajar por las escaleras? ¡Estamos locos o qué!' };
+      sfx(150, 0.18, 'square', 0.08, 110); setTimeout(() => sfx(110, 0.25, 'square', 0.08, 80), 160);   // ¡error!
+      Object.assign(P, { dir: 'left', ang: Math.PI, tx: null, moving: false, phase: 0 }); P.y += 2; keys.clear(); joyEnd();   // se da la vuelta, hacia el ascensor
+    }
+    if (room === HALL && !jr.keyGot && P.dir === 'down' && P.y >= 166 && P.x > 128 && P.x < 150 && t > doorCool) { doorCool = t + 5; say('Sin las llaves no puedo salir de casa.', 2.4, t); }
+  }
+  function drawPopup(t) {                                            // mensaje emergente, arriba en el centro
+    const PDx = window.PD; if (!popup || !PDx) return;
+    const s = t - popup.t, D = 3.0; if (s > D) { popup = null; return; }
+    const a = Math.min(1, s / 0.15, (D - s) / 0.5), k = textK(), lines = wrapText(popup.text, Math.floor(W * RES * 0.7 / k)), lh = 10 * k;
+    const w = Math.max(...lines.map(l => PDx.measure(l))) * k, h = lines.length * lh, x = Math.round(W * RES / 2 - w / 2), y = Math.round(H * RES * 0.16) - Math.round((1 - Math.min(1, s / 0.15)) * 6 * k);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(14,9,8,0.92)'; ctx.fillRect(x - 6 * k, y - 5 * k, w + 12 * k, h + 8 * k);
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(x - 6 * k, y - 5 * k, w + 12 * k, k); ctx.fillRect(x - 6 * k, y + h + 2 * k, w + 12 * k, k);
+    lines.forEach((l, i) => PDx.drawText(ctx, l, Math.round(W * RES / 2 - PDx.measure(l) * k / 2), y + i * lh, '#f0e8d8', k));
+    ctx.restore();
+  }
+  // ---------- luces del edificio (a oscuras): la ventanita de la escalera y la luz de la cabina ----------
+  function lndReveal(t, lvl) {
+    const WN = LND_DEF.WIN, L = LND_DEF.LIFT, o = liftDoor(t, 'lnd');
+    dctx.save(); dctx.setTransform(RES, 0, 0, RES, 0, 0);
+    dctx.fillStyle = `rgba(0,0,0,${0.85 * lvl})`; dctx.fillRect(WN.x, 7, WN.w, 8);
+    const g = dctx.createLinearGradient(0, 16, 0, 72); g.addColorStop(0, `rgba(0,0,0,${0.5 * lvl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    dctx.fillStyle = g; dctx.beginPath(); [[WN.x, 16], [WN.x + WN.w, 16], [WN.x + WN.w + 20, 72], [WN.x - 16, 72]].forEach(([x, y], i) => i ? dctx.lineTo(x, y) : dctx.moveTo(x, y)); dctx.closePath(); dctx.fill();
+    if (o > 0) {                                                     // la luz de la cabina, al abrirse
+      dctx.fillStyle = `rgba(0,0,0,${0.9 * o})`; dctx.fillRect(L.x, L.y, L.w, L.h);
+      const g2 = dctx.createLinearGradient(0, 70, 0, 112); g2.addColorStop(0, `rgba(0,0,0,${0.6 * o})`); g2.addColorStop(1, 'rgba(0,0,0,0)');
+      dctx.fillStyle = g2; dctx.beginPath(); [[L.x, 70], [L.x + L.w, 70], [L.x + L.w + 14, 112], [L.x - 14, 112]].forEach(([x, y], i) => i ? dctx.lineTo(x, y) : dctx.moveTo(x, y)); dctx.closePath(); dctx.fill();
+    }
+    dctx.fillStyle = `rgba(0,0,0,${0.9 * lvl})`; dctx.fillRect(L.x + 8, L.y - 6, 10, 5);         // la pantallita siempre se ve
+    dctx.restore();
+  }
+  function lndLights(t, power, lvl) {
+    const WN = LND_DEF.WIN, g = ctx.createLinearGradient(0, 16, 0, 72);
+    g.addColorStop(0, `rgba(220,232,245,${0.12 * lvl})`); g.addColorStop(1, 'rgba(220,232,245,0)');
+    ctx.fillStyle = g; poly([[WN.x, 16], [WN.x + WN.w, 16], [WN.x + WN.w + 20, 72], [WN.x - 16, 72]]);
+    const o = liftDoor(t, 'lnd'), L = LND_DEF.LIFT;
+    if (o > 0) { ctx.fillStyle = `rgba(255,244,214,${0.12 * o})`; poly([[L.x, 70], [L.x + L.w, 70], [L.x + L.w + 14, 112], [L.x - 14, 112]]); }
+  }
+  function elvLights(t, power, lvl) {                                // el fluorescente de la cabina, frío
+    const g = ctx.createRadialGradient(160, 84, 4, 160, 84, 60); g.addColorStop(0, `rgba(230,240,250,${0.14 * lvl})`); g.addColorStop(1, 'rgba(230,240,250,0)');
+    ctx.fillStyle = g; ctx.fillRect(130, 38, 60, 98);
+  }
+
   // zoom de cámara: se copia lo pintado y se amplía la parte que interesa
   const zoomCv = document.createElement('canvas'); zoomCv.width = W * RES; zoomCv.height = H * RES;
   const zctx = zoomCv.getContext('2d');
@@ -4826,7 +6050,7 @@
   const SAYS = [{ text: 'Vaya, qué momento para que se vaya la luz', hold: 3.2 },
     { text: 'Voy a preguntarle a mi madre', hold: 2.6, then: t => { startBuzz(t); if (window.PDPhone) window.PDPhone.allowMom(); } }];   // ya puede escribirle a su madre
   const SAYS_INTRO = SAYS.length;
-  function say(text, hold, at, then) { if (sayI >= SAYS.length) sayNext = Math.max(sayNext, at); SAYS.push({ text, hold, then }); }
+  function say(text, hold, at, then, who) { if (sayI >= SAYS.length) sayNext = Math.max(sayNext, at); SAYS.push({ text, hold, then, who }); }   // who(): dónde está el que habla (si no es Juanjo)
   // tamaño del píxel de la letra fina (bocadillos y avisos): lo más fino que se siga leyendo bien en esta pantalla
   function textK() { const r = cv.getBoundingClientRect(), screenPx = Math.min(r.width / W, r.height / H) / RES; return clamp(Math.ceil(1.4 / Math.max(0.01, screenPx)), 1, RES); }
   const SAY_AFTER = 1.2, SAY_DT = 0.045, SAY_GAP = 0.8;              // el primero, 1,2 s después del apagón
@@ -4850,7 +6074,7 @@
     // Se dibuja en px reales del lienzo (×RES). k = tamaño de cada píxel de la letra: lo más fino que se siga leyendo bien
     const k = textK();
     const pad = 3 * k, lh = 9 * k, w = Math.max(...sayLines.map(l => PD.measure(l))) * k + pad * 2, h = sayLines.length * lh - 2 * k + pad * 2;
-    const CW = W * RES, px = P.x * RES, head = (P.y - 18) * RES;
+    const sp = S.who ? S.who() : P, CW = W * RES, px = sp.x * RES, head = (sp.y - 18) * RES;
     const bx = clamp(Math.round(px - w / 2), 3, CW - w - 3), by = Math.max(3, Math.round(head - h - 4 * k));
     const tx = clamp(Math.round(px), bx + 3 * k, bx + w - 4 * k), ty = by + h;
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = a;
@@ -4998,6 +6222,130 @@
     const g = ctx.createLinearGradient(150, 26, 200, 120); g.addColorStop(0, `rgba(255,232,190,${0.16 * lvl})`); g.addColorStop(1, `rgba(255,232,190,${0.04 * lvl})`);
     ctx.fillStyle = g; ctx.fillRect(150, 26, 50, 94);
   }
+  // ---------- CUARTO DE JUANJO: la misión 2. Al entrar va al armario, lo abre y se cambia (camiseta azul marino a rayas
+  // y vaqueros oscuros). "Madre mía, esto está hecho un desastre" / "Si esto lo ve mi madre, me castiga seguro". Hace la
+  // cama y recoge la ropa del suelo: "Mucho mejor.". Por último coge la cartera de la mesa, junto al ratón... y las llaves
+  // de casa no están por ningún lado. ----------
+  const jr = { dressed: false, bed: false, clothes: [false, false, false], tidy: false, wallet: false, card: false };
+  let jrAct = null;                                                  // lo que está haciendo ahora: { kind, t0, i }
+  const missionOn = id => missions.some(m => m.id === id && !m.done);
+  const JR_ACTS = [
+    { rect: { x: 192, y: 64, w: 38, h: 16 }, m: 10, label: 'Cambiarse', can: () => !jr.dressed && missionOn('apostar'), kind: 'dress' },
+    { rect: { x: 141, y: 52, w: 34, h: 52 }, m: 9, label: 'Hacer la cama', can: () => jr.dressed && !jr.bed, kind: 'bed' },
+    ...JR_CLOTHES.map((c, i) => ({ rect: c, m: 9, label: 'Recoger la ropa', can: () => jr.dressed && !jr.clothes[i], kind: 'cloth', i })),
+    { rect: JR_DEF.WALLET, m: 10, label: 'Coger la cartera', can: () => jr.tidy && !jr.wallet, kind: 'wallet' }
+  ].map(a => Object.assign(a, { room: JR }));
+  const rectDist = (x, y, r) => Math.hypot(Math.max(r.x - x, 0, x - (r.x + r.w)), Math.max(r.y - y, 0, y - (r.y + r.h)));
+  function jrNear() {
+    if (swap || jrAct || cut || fp) return null;
+    let best = null, bd = Infinity;
+    for (const a of JR_ACTS) { if (a.room !== room || !a.can()) continue; const d = rectDist(P.x, P.y - 2, a.rect); if (d < a.m && d < bd) { best = a; bd = d; } }
+    return best;
+  }
+  function jrStart(a) {
+    jrAct = { kind: a.kind, i: a.i, t0: tNow, done: {} };
+    Object.assign(P, { moving: false, phase: 0, tx: null }); keys.clear(); mark = null;
+    if (a.kind === 'dress') Object.assign(P, { dir: 'up', ang: -Math.PI / 2 });              // de cara al armario
+    return true;
+  }
+  function jrUse() { const a = jrNear(); return a ? jrStart(a) : false; }
+  function jrTap(p) {
+    const a = jrNear(); if (!a) return false;
+    const r = a.rect; return p.x > r.x - 5 && p.x < r.x + r.w + 5 && p.y > r.y - 8 && p.y < r.y + r.h + 5 ? jrStart(a) : false;
+  }
+  function jrDone(t) {                                               // todas las submisiones hechas: misión cumplida
+    if (!jr.wallet || !jr.card || !missionOn('apostar')) return;
+    atTime(t + 1.5, () => { completeMission('apostar'); saveAt('llaves'); });
+  }
+  function jrTidy(t) { if (!jr.tidy && jr.bed && jr.clothes.every(Boolean)) { jr.tidy = true; say('Mucho mejor.', 2.2, t + 0.4); } }
+  function jrTick(t) {                                               // devuelve lo negro que está la pantalla (al cambiarse)
+    const A = jrAct; if (!A) return 0;
+    const s = t - A.t0, GA = window.GameAudio, d = A.done;
+    const once = (k, at, fn) => { if (!d[k] && s >= at) { d[k] = 1; fn(); } };
+    if (A.kind === 'dress') {
+      once('open', 0, () => GA && GA.blip(260, 0.22, 'sawtooth', 0.02, 190));                                   // las puertas del armario
+      [0.9, 1.15, 1.4].forEach((at, i) => once('r' + i, at, () => GA && GA.blip(900 - i * 150, 0.12, 'sawtooth', 0.015, 300)));   // roce de ropa
+      once('swap', 1.2, () => { jr.dressed = true; renderTodo(); });
+      once('close', 2.25, () => GA && GA.blip(120, 0.08, 'square', 0.05, 80));
+      if (s >= 2.4) {
+        jrAct = null;
+        say('Madre mía, esto está hecho un desastre', 3.0, t + 0.4);
+        say('Si esto lo ve mi madre, me castiga seguro', 3.0, t + 0.4);
+      }
+      return s < 0.4 ? 0 : s < 0.8 ? ease((s - 0.4) / 0.4) : s < 1.6 ? 1 : s < 2.0 ? 1 - ease((s - 1.6) / 0.4) : 0;
+    }
+    if (A.kind === 'bed') {
+      once('f', 0, () => GA && GA.blip(200, 0.35, 'sawtooth', 0.015, 110)); once('g', 0.45, () => GA && GA.blip(260, 0.25, 'sawtooth', 0.012, 150));
+      if (s >= 0.9) { jrAct = null; jr.bed = true; renderTodo(); jrTidy(t); }
+    } else if (A.kind === 'cloth') {
+      once('f', 0, () => GA && GA.blip(520, 0.08, 'sawtooth', 0.015, 300));
+      if (s >= 0.35) { jrAct = null; jr.clothes[A.i] = true; renderTodo(); jrTidy(t); }
+    } else if (A.kind === 'drawer') {                                // abre el cajón, rebusca y lo cierra
+      once('f', 0, () => GA && GA.blip(150, 0.12, 'sawtooth', 0.03, 110)); once('g', 0.35, () => GA && GA.blip(700, 0.05, 'square', 0.02, 500));
+      if (s >= 0.8) {
+        jrAct = null;
+        if (A.i === 1) { jr.card = true; renderTodo(); say('Aquí está la tarjeta de mi madre.', 2.6, t + 0.3); jrDone(t); }
+        else { jr.tried = (jr.tried || []).concat(A.i); say('Aquí no está...', 2.0, t + 0.3); }
+      }
+    } else if (A.kind === 'wallet') {
+      once('f', 0, () => GA && GA.blip(700, 0.06, 'square', 0.04, 900));
+      if (s >= 0.4) {
+        jrAct = null; jr.wallet = true; renderTodo();
+        if (jr.card) say('Vale, la cartera ya la tengo.', 2.2, t + 0.5);
+        else say('Vale, la cartera ya la tengo... y la tarjeta de crédito de mi madre, ya la ha vuelto a esconder.', 3.8, t + 0.5);
+        say('Espera... ¿y mis llaves?', 2.4, t + 0.5);
+        say('No están por ningún lado.', 2.6, t + 0.5, () => { jr.keys = true; jr.keySpot = randomKeySpot(); addMission('llaves'); saveAt('llaves'); });   // nueva misión
+        jrDone(t);
+      }
+    }
+    return 0;
+  }
+  function drawJr(t) {
+    const A = jrAct, s = A ? t - A.t0 : 0;
+    const wo = A && A.kind === 'dress' ? (s < 0.4 ? ease(s / 0.4) : s < 2.0 ? 1 : 1 - ease(clamp((s - 2.0) / 0.4, 0, 1))) : 0;
+    if (wo > 0) {                                                    // el armario abierto: dentro, la ropa colgada
+      ctx.save(); ctx.beginPath(); [[180, 31], [214, 59], [230, 59], [230, 77], [214, 77], [180, 49]].forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+      ctx.closePath(); ctx.clip(); ctx.globalAlpha = wo;
+      ctx.fillStyle = '#241c14'; ctx.fillRect(178, 28, 52, 52);
+      ['#1f2b47', '#c23a32', '#8acb7e', '#e8e4dc', '#2b3a58', '#f2d04a', '#5b8fd0', '#d8c8a8', '#6d1f22'].forEach((c, i) => {
+        const x = 183 + i * 5, top = (x < 214 ? 30 + (x - 180) * 28 / 34 : 58) + 4;
+        ctx.fillStyle = '#8a8a8a'; ctx.fillRect(x - 1, top - 1, 5, 1);
+        ctx.fillStyle = c; ctx.fillRect(x, top, 3, 12);
+        if (i === 0 && !jr.dressed) { ctx.fillStyle = '#c9d3e2'; for (let y = top + 1; y < top + 12; y += 2) ctx.fillRect(x, y, 3, 1); }   // la camiseta a rayas
+      });
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgb(240,228,208)'; ctx.fillRect(178, 28, 52, 52); ctx.restore();
+    }
+    const B = JR_DEF.BED, made = jr.bed ? 1 : A && A.kind === 'bed' ? ease(clamp(s / 0.9, 0, 1)) : 0;
+    if (made < 1) { ctx.globalAlpha = 1 - made; ctx.drawImage(bedMessy, B.x, B.y); }
+    if (made > 0) { ctx.globalAlpha = made; ctx.drawImage(bedMade, B.x, B.y); }
+    ctx.globalAlpha = 1;
+    const toHands = (x, y, u) => ({ x: x + (P.x - 3 - x) * u, y: y + (P.y - 12 - y) * u });   // lo que coge va hacia sus manos y desaparece
+    JR_CLOTHES.forEach((c, i) => {
+      if (jr.clothes[i]) return;
+      let p = c, k = 1;
+      if (A && A.kind === 'cloth' && A.i === i) { const u = ease(clamp(s / 0.35, 0, 1)); p = toHands(c.x, c.y, u); k = 1 - u * 0.7; }
+      ctx.drawImage(c.sp, Math.round(p.x), Math.round(p.y), Math.max(1, Math.round(c.sp.width * k)), Math.max(1, Math.round(c.sp.height * k)));
+    });
+    if (!jr.wallet) {
+      const Wl = JR_DEF.WALLET; let p = Wl;
+      if (A && A.kind === 'wallet') p = toHands(Wl.x, Wl.y, ease(clamp(s / 0.4, 0, 1)));
+      ctx.drawImage(walletSp, Math.round(p.x), Math.round(p.y));
+    }
+  }
+  const jrBeam = sway => [[229, JR_DEF.WIN.y + 2], [229, JR_DEF.WIN.y + JR_DEF.WIN.h - 2], [150 + sway, JR_DEF.WIN.y + JR_DEF.WIN.h + 22], [150 + sway, JR_DEF.WIN.y - 14]];
+  function jrReveal(t, lvl) {                                        // la tarde entra por la ventana de la pared derecha
+    const WN = JR_DEF.WIN, sway = Math.sin(t * 0.5) * 2;
+    dctx.save(); dctx.setTransform(RES, 0, 0, RES, 0, 0);
+    dctx.fillStyle = `rgba(0,0,0,${0.7 * lvl})`; dctx.fillRect(226, WN.y, 10, WN.h);
+    const g = dctx.createLinearGradient(229, 0, 150, 0); g.addColorStop(0, `rgba(0,0,0,${0.66 * lvl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    dctx.fillStyle = g; dctx.beginPath(); jrBeam(sway).forEach(([x, y], i) => i ? dctx.lineTo(x, y) : dctx.moveTo(x, y)); dctx.closePath(); dctx.fill();
+    dctx.restore();
+  }
+  function jrLights(t, power, lvl) {
+    const g = ctx.createLinearGradient(229, 0, 150, 0);
+    g.addColorStop(0, `rgba(255,232,190,${0.15 * lvl})`); g.addColorStop(1, 'rgba(255,232,190,0)');
+    ctx.fillStyle = g; poly(jrBeam(Math.sin(t * 0.5) * 2));
+  }
   function bathLights(t, power, lvl) { ctx.fillStyle = `rgba(220,232,240,${0.25 * lvl})`; ctx.fillRect(181, 45, 10, 4); }
 
   // ---------- HISTORIA tras el diferencial: grito, el cuarto de la madre y el baño ----------
@@ -5018,6 +6366,8 @@
     [o, o2, lfo].forEach(n => { n.start(t); n.stop(t + 1.15); });
   }
   function onArrive(rm, t) {                                         // al entrar en una habitación
+    if (rm === LOB && lift.state === 'arrived') { lift.state = 'lobClose'; lift.t0 = t; sfx(200, 0.9, 'sawtooth', 0.012, 140); }   // el ascensor se cierra detrás
+    if (rm === ELV && lift.state === 'open') { lift.state = 'closing'; lift.t0 = t; sfx(200, 0.9, 'sawtooth', 0.012, 140); }   // se cierra la puerta de abajo
     if (rm === MOM && story.scream && !story.smell) { story.smell = true; say('Qué olor tan raro, ¿se ha estropeado el baño?', 3.0, t + 0.5); }
     if (rm === BATH && story.smell && !story.bath) {
       story.bath = true;
@@ -5029,7 +6379,11 @@
   // ---------- MISIONES: lista arriba a la izquierda. Al tocar una, sale debajo una pequeña ayuda ----------
   const MISSIONS = {
     dif: { title: 'Sube el diferencial', help: 'Ve a la entrada, aparta la caja que tapa el cuadro de luz y sube el DIF.' },
-    apostar: { title: 'Prepárate para apostar', help: 'Ve a tu cuarto, cámbiate de ropa y coge la cartera y la tarjeta de crédito de tu madre.' }
+    bajar: { title: 'Baja a la casa de apuestas', help: 'Sal de casa y baja en el ascensor hasta la recepción. Daniel te espera abajo.' },
+    llaves: { title: 'Encuentra las llaves', help: 'Busca en los muebles de la casa: el salón, el cuarto de tu madre y el baño.' },
+    apostar: { title: 'Prepárate para apostar', help: 'Ve a tu cuarto, cámbiate de ropa y coge la cartera y la tarjeta de crédito de tu madre.',
+      subs: [['Vístete', () => jr.dressed], ['Recoge el cuarto', () => jr.clothes.every(Boolean)], ['Haz la cama', () => jr.bed], ['Coge la cartera', () => jr.wallet],
+        ['Busca la tarjeta de crédito de tu madre (prueba en la mesita de noche de tu madre)', () => jr.card]] }
   };
   let missions = [];                                                 // [{ id, done, open }]
   const todoEl = document.getElementById('todo');
@@ -5038,8 +6392,14 @@
     missions.push({ id, done: false, open: false }); renderTodo();
     const GA = window.GameAudio; if (GA) { GA.blip(660, 0.08, 'square', 0.04, 880); setTimeout(() => GA.blip(990, 0.12, 'square', 0.04, 990), 90); }   // nueva misión
   }
+  // la hora tras cada misión: subir el DIF y ver lo del grito lleva un rato; arreglarse y buscarlo todo, más.
+  // Al salir de casa son las 17:45. Empieza a las 16:05 (como el reloj de la pared)
+  const CLOCK_AFTER = { dif: '16:15', apostar: '17:45', llaves: '17:50', bajar: '17:55' };
+  let clockShow = null;                                              // aviso en pantalla de la hora nueva: { t, from, to }
   function completeMission(id) {
     const m = missions.find(x => x.id === id); if (!m || m.done) return;
+    const PH = window.PDPhone;
+    if (CLOCK_AFTER[id] && PH && PH.setTime) { clockShow = { t: tNow + 1.0, from: PH.time, to: CLOCK_AFTER[id] }; PH.setTime(CLOCK_AFTER[id]); }
     m.done = true; m.open = false; renderTodo();
     const GA = window.GameAudio; if (GA) { [523, 659, 784].forEach((f, i) => setTimeout(() => GA.blip(f, 0.1, 'square', 0.04, f), i * 90)); }   // ¡hecho!
     setTimeout(() => { const el = todoEl.querySelector(`[data-id="${id}"]`); if (el) el.classList.add('gone'); }, 2200);           // se desvanece
@@ -5054,7 +6414,7 @@
       if (check) { g.fillStyle = '#7fd07f'; [[1, 3], [2, 4], [3, 5], [4, 4], [5, 3], [6, 2], [7, 1]].forEach(([x, y]) => g.fillRect(x, y, 1, 1)); }
     }
     lines.forEach((l, i) => PD.drawText(g, l, PX, i * 9, color));
-    if (check) { g.fillStyle = color; g.fillRect(PX, 3, c.width - PX, 1); }   // tachada
+    if (check) { g.fillStyle = color; lines.forEach((l, i) => g.fillRect(PX, i * 9 + 3, PD.measure(l), 1)); }   // tachada
     c.style.width = `calc(${c.width} * var(--px))`; c.style.height = `calc(${c.height} * var(--px))`;
     return c;
   }
@@ -5072,15 +6432,34 @@
       btn.type = 'button'; btn.className = 'todo-item' + (m.done ? ' done' : ''); btn.dataset.id = m.id;
       btn.setAttribute('aria-expanded', String(m.open)); btn.setAttribute('aria-label', 'Misión: ' + M.title + (m.done ? ' (completada)' : '. Toca para ver la ayuda'));
       btn.append(textCanvas([window.PD.norm(M.title)], m.done ? '#7fd07f' : '#e8e0d0', m.done));
-      if (m.open && !m.done) { const h = textCanvas(wrapText(M.help, 118), '#b8ac98'); h.className = 'todo-help'; btn.append(h); }
+      if (m.open && !m.done && !M.subs) { const h = textCanvas(wrapText(M.help, 118), '#b8ac98'); h.className = 'todo-help'; btn.append(h); }   // la ayuda, solo en las misiones sin paso a paso
+      if (M.subs && m.open && !m.done) M.subs.forEach(([txt, ok]) => {   // al tocarla: el paso a paso, con su casilla
+        const sc = textCanvas(wrapText(txt, 116), ok() ? '#7fd07f' : '#d8cfbf', ok()); sc.className = 'todo-sub'; btn.append(sc);
+      });
       btn.addEventListener('click', () => { if (m.done) return; m.open = !m.open; const GA = window.GameAudio; if (GA) GA.click(); renderTodo(); });
       todoEl.append(btn);
     }
   }
   // la misión del diferencial aparece cuando mamá dice que vaya a la cajita (al acabar su chat), y se guarda la partida
   document.addEventListener('pd:mom-chat-done', () => { if (!running) return; addMission('dif'); saveAt('dif'); });
+  // el aviso: arriba en el centro, la hora de antes se cambia por la nueva (como un reloj de cifras) y se va
+  function drawClockShow(t) {
+    const PD = window.PD; if (!clockShow || !PD || t < clockShow.t) return;
+    const s = t - clockShow.t, D = 4.2; if (s > D) { clockShow = null; return; }
+    const a = Math.min(1, s / 0.4, (D - s) / 0.6), k = textK() * 2, msg = s < 1.2 ? clockShow.from : clockShow.to;
+    const roll = s >= 1.0 && s < 1.4 ? (s - 1.0) / 0.4 : 0;        // el cambio de cifras: la de antes sube y entra la nueva
+    const w = PD.measure(msg) * k, x = Math.round(W * RES / 2 - w / 2), y = 14 * RES;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(14,9,8,0.82)'; ctx.fillRect(x - 6 * k / 2, y - 4 * k / 2, w + 6 * k, 11 * k);
+    ctx.fillStyle = '#e8e0d0'; ctx.fillRect(x - 6 * k / 2, y + 9 * k, w + 6 * k, Math.max(1, k / 2));
+    ctx.beginPath(); ctx.rect(x - 6 * k / 2, y - 4 * k / 2, w + 6 * k, 11 * k); ctx.clip();
+    if (roll) { PD.drawText(ctx, clockShow.from, x, y - Math.round(roll * 9 * k), '#e8e0d0', k); PD.drawText(ctx, clockShow.to, x, y + Math.round((1 - roll) * 9 * k), '#ffd27a', k); }
+    else PD.drawText(ctx, msg, x, y, s >= 1.4 ? '#ffd27a' : '#e8e0d0', k);
+    ctx.restore();
+    if (roll && !clockShow.ticked) { clockShow.ticked = true; const GA = window.GameAudio; if (GA) { GA.blip(1200, 0.04, 'square', 0.03, 1200); setTimeout(() => GA.blip(1600, 0.05, 'square', 0.03, 1600), 120); } }
+  }
   function saveAt(atName) {
-    if (window.PDSave) window.PDSave.save({ at: atName, player: { x: P.x, y: P.y, dir: P.dir, ang: P.ang, room: room.name }, phone: window.PDPhone ? window.PDPhone.snapshot() : null });
+    if (window.PDSave) window.PDSave.save({ at: atName, jr: Object.assign({}, jr, { clothes: jr.clothes.slice() }), player: { x: P.x, y: P.y, dir: P.dir, ang: P.ang, room: room.name }, phone: window.PDPhone ? window.PDPhone.snapshot() : null });
   }
 
   const FADE_IN = 1.6, TOUCH = matchMedia('(pointer: coarse)').matches;
@@ -5094,12 +6473,16 @@
     const lvl = 0.94 + 0.06 * Math.sin(t * 1.6) - (hash(Math.floor(t * 18)) > 0.97 ? 0.25 : 0);
     const power = powerAt(t);                                            // luz eléctrica (1 = encendida); la del día no depende de ella
     outageSounds(t); autosave(t); fuseTick(t); runLater(t);
+    const jrBlack = jrTick(t); furnTick(t, dt); liftTick(t); blockedChecks(t); lobbyTick(t);                                           // en su cuarto: cambiarse funde a negro un momento
     ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;   // a partir de aquí, en px lógicos
 
     const inSala = room === SALA;
-    ctx.drawImage(inSala ? bg : room === HALL ? hallBg : room === MOM ? momBg : room === BALC ? balcBg : bathBg, 0, 0);
+    ctx.drawImage(inSala ? bg : room === HALL ? hallBg : room === MOM ? momBg : room === BALC ? balcBg : room === JR ? jrBg : room === LND ? lndBg : room === ELV ? elvBg : room === LOB ? lobBg : bathBg, 0, 0);
     drawDoorSwing(t);                                                // la puerta abriéndose o cerrándose al cruzarla
     if (room === MOM) drawCurtains(t);                               // las cortinas de la puerta del balcón, movidas por el aire
+    if (room === JR) drawJr(t);
+    if (room === LND || room === ELV) drawBuilding(t);
+    if (room === LOB) drawLobby(t);              // el edificio: las puertas del ascensor y sus pantallitas                                      // su cuarto: la cama, la ropa del suelo, la cartera y el armario
     if (room === BALC) { trafficTick(t, dt); drawStreet(t); }        // la calle: el coche azul con las cuatro intermitentes y el tráfico
     if (inSala) {                                                    // reflejo del espejo: la luz no deja ver nada dentro
       ctx.save(); ctx.beginPath(); ctx.rect(148, 14, 44, 8); ctx.clip(); ctx.globalCompositeOperation = 'screen';
@@ -5124,6 +6507,7 @@
         drawPuff(P.x + 17, P.y - 1, CUT.fall, cst.s); drawPuff(T.x + HALL_DEF.BOX1.w / 2, T.fy + 4, CUT.land, cst.s);
       }
     } else drawPlayer();
+    if (room === LOB) drawGate(t);                                   // la verja y Daniel, delante (más al sur que Juanjo)
 
     // penumbra y luces: tarde por la ventana, lámpara de techo cálida y la tele, fría y parpadeante
     // OSCURIDAD como capa aparte: las luces que de verdad iluminan (linterna, claridad de la sala en la entrada) la
@@ -5132,12 +6516,12 @@
     const beam = flashOn ? beamLayer(P.x + Math.cos(P.ang) * 5, P.y - 8 + Math.sin(P.ang) * 3, P.ang, 0.96 + 0.04 * Math.sin(t * 23)) : null;
     dctx.globalCompositeOperation = 'source-over'; dctx.clearRect(0, 0, darkCv.width, darkCv.height);
     // cuarto de la madre: entra el día por el balcón abierto (penumbra); baño: sin ventana grande, casi a oscuras
-    dctx.fillStyle = inSala ? `rgba(10,5,4,${0.22 + 0.26 * (1 - power)})` : room === MOM ? `rgba(8,4,4,${0.24 + 0.34 * (1 - power)})`
-      : room === BATH ? `rgba(3,2,2,${0.3 + 0.6 * (1 - power)})` : room === BALC ? 'rgba(8,4,4,0.06)' : `rgba(3,2,2,${0.3 + 0.66 * (1 - power)})`;   // el balcón es fuera: de día
+    dctx.fillStyle = inSala ? `rgba(10,5,4,${0.22 + 0.26 * (1 - power)})` : room === MOM || room === JR ? `rgba(8,4,4,${0.24 + 0.34 * (1 - power)})`
+      : room === ELV ? 'rgba(6,6,8,0.14)' : room === LND || room === LOB ? 'rgba(3,3,4,0.86)' : room === BATH ? `rgba(3,2,2,${0.3 + 0.6 * (1 - power)})` : room === BALC ? 'rgba(8,4,4,0.06)' : `rgba(3,2,2,${0.3 + 0.66 * (1 - power)})`;   // el balcón es fuera: de día
     dctx.fillRect(0, 0, darkCv.width, darkCv.height);
     dctx.globalCompositeOperation = 'destination-out';
     if (beam) { dctx.drawImage(beam, 0, 0); dctx.drawImage(beam, 0, 0); }          // dos veces: cerca del móvil se ve casi como de día
-    if (room === HALL) hallReveal(t, lvl); else if (room === MOM) momReveal(t, lvl); else if (room === BATH) bathReveal(t, lvl);
+    if (room === HALL) hallReveal(t, lvl); else if (room === MOM) momReveal(t, lvl); else if (room === BATH) bathReveal(t, lvl); else if (room === JR) jrReveal(t, lvl); else if (room === LND) lndReveal(t, lvl); else if (room === LOB) lobReveal(t, lvl);
     if (cst && cst.bars > 0) {                                       // mini escena: FOCO DE CIRCO. Todo lo demás a negro y un círculo de luz
       const sp = spotAt(cst), X = sp.x * RES, Y = sp.y * RES, R = SPOT_R * RES;   // de borde marcado que sigue la acción
       dctx.globalCompositeOperation = 'source-over'; dctx.fillStyle = `rgba(0,0,0,${0.97 * cst.bars})`; dctx.fillRect(0, 0, darkCv.width, darkCv.height);
@@ -5157,7 +6541,7 @@
     }
     ctx.save(); ctx.globalCompositeOperation = 'screen';
     const showLights = !(cst && cst.bars > 0.3);                     // con el foco de circo encendido, nada más brilla
-    if (!inSala) { if (showLights) (room === HALL ? hallLights : room === MOM ? momLights : room === BALC ? balcLights : bathLights)(t, power, lvl); }
+    if (!inSala) { if (showLights) (room === HALL ? hallLights : room === MOM ? momLights : room === BALC ? balcLights : room === JR ? jrLights : room === LND ? lndLights : room === ELV ? elvLights : room === LOB ? lobLights : bathLights)(t, power, lvl); }
     else {
     // luz del día de fuera: claridad desde el ventanal que se apaga hacia el centro de la sala
     const fill = ctx.createLinearGradient(26, 0, 190, 0);
@@ -5175,7 +6559,7 @@
     ctx.fillStyle = `rgba(235,240,255,${0.08 * lvl})`; poly([[F.x1, DE.y + 9], [F.x1, DE.y + DE.h - 9], [F.x1 - 22, DE.y + DE.h - 3], [F.x1 - 22, DE.y + 15]]);
     ctx.fillStyle = 'rgba(225,238,245,0.5)';                                                   // los cristales brillan: fuera es de día
     for (let k = 0; k < 4; k++) ctx.fillRect(WALL.x0 + 1, WIN.y + k * PANE + 1, WALL.t - 2, PANE - 2);
-    ctx.fillStyle = 'rgba(255,244,220,0.3)'; ctx.fillRect(DN.x, WALL.y0 + WALL.t + 2, DN.w, F.y0 - WALL.y0 - WALL.t - 3);
+    ctx.fillStyle = 'rgba(255,244,220,0.12)'; ctx.fillRect(DN.x, WALL.y0 + WALL.t + 2, DN.w, F.y0 - WALL.y0 - WALL.t - 3);
     if (power > 0) {                                                                           // lámpara de techo
       const lamp = ctx.createRadialGradient(CEIL_LIGHT.x, CEIL_LIGHT.y, 4, CEIL_LIGHT.x, CEIL_LIGHT.y, 70);
       lamp.addColorStop(0, `rgba(255,214,140,${0.3 * lvl * power})`); lamp.addColorStop(0.5, `rgba(255,200,120,${0.12 * lvl * power})`); lamp.addColorStop(1, 'rgba(255,200,120,0)');
@@ -5207,17 +6591,22 @@
 
     ctx.drawImage(vig, 0, 0);
     for (let i = 0; i < 120; i++) { ctx.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)'; ctx.fillRect((Math.random() * W) | 0, (Math.random() * H) | 0, 1, 1); }
-    drawBubble(t); buzzTick(t);
+    drawBubble(t); buzzTick(t); drawPopup(t);
     // avisos de interacción: una etiqueta pequeña que sale del objeto (debajo; arriba van los bocadillos)
     if (nearBox1()) drawTag(box1Center().x, HALL_DEF.BOX1.fy + HALL_DEF.BOX1.d, TOUCH ? 'Toca para mover' : 'Mover caja');
     else if (nearFuse()) drawTag(HALL_DEF.FUSE.x + HALL_DEF.FUSE.w / 2, HALL_DEF.FUSE.y + HALL_DEF.FUSE.h, TOUCH ? 'Toca para abrir' : 'Abrir cuadro');
+    else if (liftCallNear()) drawTag(LND_DEF.LIFT.x + LND_DEF.LIFT.w / 2, 72, TOUCH ? 'Toca para llamar' : 'Llamar al ascensor');
+    else if (furnNear()) { const f = furnNear(); drawTag(f.rect.x + f.rect.w / 2, f.rect.y + f.rect.h, TOUCH ? 'Toca para mirar' : f.label); }
+    else { const a = jrNear(); if (a) drawTag(a.rect.x + a.rect.w / 2, a.rect.y + a.rect.h, a.label); }
     if (panel) drawFusePanel(t);
+    if (fp) drawFurn(t);
+    drawClockShow(t);                                                // el aviso de la hora, por encima de todo
 
     // ayuda de controles: se va al empezar a moverse
     if (moved && movedAt == null) movedAt = t;
     const helpA = clamp((t - FADE_IN) / 0.6, 0, 1) * (movedAt == null ? 1 : 1 - clamp((t - movedAt - 1.2) / 0.8, 0, 1));
     const PD = window.PD;
-    if (helpA > 0 && PD && inSala) {
+    if (helpA > 0 && PD && inSala && !fp) {
       const msg = PD.norm(TOUCH ? 'Usa el joystick para moverte' : 'Flechas o WASD para moverte'), w = PD.measure(msg);
       const hx = Math.round(194 - w / 2), hy = TV.y - 14;                                        // en el suelo libre, entre las sillas y la pared derecha
       ctx.globalAlpha = helpA * 0.75; ctx.fillStyle = '#000'; ctx.fillRect(hx - 4, hy - 2, w + 8, 11);
@@ -5225,7 +6614,7 @@
     }
 
     if (cst) { const fc = cutFocus(); applyZoom(cst.zoom, fc.x, fc.y, cst.bars); }       // cámara de la mini escena
-    const black = Math.max(1 - ease(clamp(t / FADE_IN, 0, 1)), swapBlack);   // entrada desde negro; fundido al cruzar una puerta
+    const black = Math.max(1 - ease(clamp(t / FADE_IN, 0, 1)), swapBlack, jrBlack);   // entrada desde negro; fundido al cruzar una puerta
     if (black > 0) { ctx.fillStyle = `rgba(0,0,0,${black})`; ctx.fillRect(0, 0, W, H); }
     raf = requestAnimationFrame(frame);
   }
@@ -5234,15 +6623,21 @@
   //  'apagon'  → la luz ya se fue; vuelven los bocadillos y la vibración del móvil
   //  'dif'     → tras el chat con mamá: misión "Sube el diferencial" (caja en su sitio, DIF bajado)
   //  'apostar' → tras el baño: misión "Prepárate para apostar" (caja apartada, DIF subido, sin luz)
+  //  'llaves'  → en su cuarto: ya cambiado, el cuarto recogido y la cartera cogida; las llaves no aparecen
   function start(opts) {
     if (!bg) build();
-    const from = opts && ['apagon', 'dif', 'apostar'].includes(opts.from) ? opts.from : null, resumed = !!from, sp = resumed && opts.player;
+    const from = opts && ['apagon', 'dif', 'apostar', 'llaves'].includes(opts.from) ? opts.from : null, resumed = !!from, sp = resumed && opts.player;
     Object.assign(P, { x: 170, y: 74, dir: 'down', ang: Math.PI / 2, moving: false, phase: 0, tx: null, ty: null, stuck: 0 });   // junto al sofá, donde estaba el móvil
     room = SALA; swap = null; later = [];
     box1 = 'here'; cut = null; if (!HALL.solid.includes(HALL_BOX1)) HALL.solid.push(HALL_BOX1);         // la caja vuelve delante del cuadro de luz
     panel = false; panelCloseAt = null; difUp = false; difTripAt = null; fuse = 'idle'; back = null; brkUp.forEach((_, i) => { brkUp[i] = i !== 9; });   // cuadro de luz como al principio
-    Object.assign(story, { scream: false, smell: false, bath: false }); missions = [];
-    if (from === 'apostar') {                                        // ya se apartó la caja, se subió el DIF y se vio el cuarto de mamá y el baño
+    Object.assign(story, { scream: false, smell: false, bath: false }); missions = []; clockShow = null; fp = null; popup = null; Object.assign(lift, { state: 'idle', floor: 0, pending: false }); for (const k in fstate) delete fstate[k];
+    jrAct = null; const jrDone = from === 'llaves'; Object.assign(jr, { dressed: jrDone, bed: jrDone, clothes: [jrDone, jrDone, jrDone], tidy: jrDone, wallet: jrDone, card: false, keys: false, keyGot: false, keySpot: null, met: false, tried: [] });
+    if (jrDone && opts.jr) Object.assign(jr, opts.jr, { clothes: (opts.jr.clothes || jr.clothes).slice() });
+    if (jrDone && opts.jr && opts.jr.keys === undefined && jr.wallet) jr.keys = true;   // guardadas antes: ya había echado en falta las llaves
+    if (jr.keys && !jr.keySpot) jr.keySpot = randomKeySpot();
+    lob.doorT = null; lob.talk = false; LOB.walk = LOB_DEF.walk.slice(); if (jr.met) vestOpen();   // la recepción: la puerta blanca, como se dejó
+    if (from === 'apostar' || from === 'llaves') {                                        // ya se apartó la caja, se subió el DIF y se vio el cuarto de mamá y el baño
       box1 = 'moved'; HALL.solid = HALL.solid.filter(s => s !== HALL_BOX1); fuse = 'done'; difUp = true;
       Object.assign(story, { scream: true, smell: true, bath: true });
     }
@@ -5254,10 +6649,14 @@
     flashOn = !!(window.PDPhone && window.PDPhone.flashlight);
     keys.clear(); mark = null; moved = false; movedAt = null; dragging = false;
     outAt = resumed ? -10 : OUT_AT; outFx = resumed ? 2 : 0; saved = resumed;
-    SAYS.length = SAYS_INTRO; sayI = from === 'dif' || from === 'apostar' ? SAYS_INTRO : 0;    // tras el chat con mamá ya no se repiten los primeros bocadillos
+    SAYS.length = SAYS_INTRO; sayI = from === 'dif' || from === 'apostar' || from === 'llaves' ? SAYS_INTRO : 0;    // tras el chat con mamá ya no se repiten los primeros bocadillos
     sayNext = resumed ? FADE_IN + 1 : OUT_AT + SAY_AFTER; sayAt = null; stopBuzz();
     cv.hidden = false; running = true; joyEnd(); joyEl.hidden = !TOUCH;
-    if (from === 'dif') addMission('dif'); else if (from === 'apostar') addMission('apostar'); else renderTodo();
+    const PH = window.PDPhone;                                       // partidas guardadas antes de que hubiera hora: la que toca en ese punto
+    if (PH && PH.setTime && PH.time === '16:05') { if (from === 'llaves' && jr.wallet && jr.card) PH.setTime('17:45'); else if (from === 'apostar' || from === 'llaves') PH.setTime('16:15'); }
+    if (from === 'dif') addMission('dif'); else if (from === 'apostar' || (from === 'llaves' && !(jr.wallet && jr.card))) addMission('apostar');
+    if (from === 'llaves' && jr.keys && !jr.keyGot) addMission('llaves');
+    if (from === 'llaves' && jr.keyGot && !jr.met) addMission('bajar'); else renderTodo();
     t0 = performance.now() / 1000; last = performance.now();
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   }
