@@ -172,6 +172,13 @@
   /* INTRO (nueva partida) */
   #newgame { padding: 0; background: #000; }
   #settings { z-index: 60; }   /* ajustes por encima de la intro */
+  #debug { z-index: 70; }      /* submenú debug por encima de ajustes */
+  .debug-list {
+    display: flex; flex-direction: column; align-items: center;
+    gap: calc(var(--px) * 3);
+    max-height: min(58vh, calc(var(--px) * 170));
+    overflow-y: auto; padding: calc(var(--px) * 2) 0;
+  }
   #introCanvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
   [data-layout=portrait] #introCanvas { top: 50%; height: auto; transform: translateY(-50%); object-fit: contain; }   /* formato cine en vertical */
   /* sala vista desde arriba: se ve entera siempre (sin recortes), con bandas negras si sobra pantalla */
@@ -341,7 +348,30 @@
         <button class="btn" id="btnWip" type="button" data-label="(.WIP.)" aria-label="Desbloquear el juego en desarrollo" aria-pressed="false"></button>
         <span id="wipState" data-px="BLOQUEADO" data-color="#a89090"></span>
       </div>
+      <div class="row-actions" id="debugRow" style="margin-top: calc(var(--px) * 5)" hidden>
+        <button class="btn" id="btnDebug" type="button" data-label="DEBUG" aria-label="Menú debug: saltar a una misión"></button>
+      </div>
       <div class="row-actions" style="margin-top: calc(var(--px) * 4)"><button class="btn" id="settingsClose" type="button" data-label="VOLVER" aria-label="Volver"></button></div>
+    </div>
+  </div>
+
+  <!-- Debug: saltar a un punto de la historia / misión -->
+  <div class="overlay" id="debug" role="dialog" aria-modal="true" aria-label="Debug: elegir misión">
+    <div class="panel" style="width: min(94vw, calc(var(--px) * 175))">
+      <h2 data-px="DEBUG" data-scale="2" data-color="#d10a0a"></h2>
+      <div class="vol-label" style="justify-content: center; margin-bottom: calc(var(--px) * 4)">
+        <span data-px="ELEGIR PUNTO" data-color="#a89090"></span>
+      </div>
+      <div class="debug-list" id="debugList">
+        <button class="btn" type="button" data-debug="apagon" data-label="APAGON" aria-label="Saltar al apagón en el salón"></button>
+        <button class="btn" type="button" data-debug="dif" data-label="DIFERENCIAL" aria-label="Saltar a Sube el diferencial"></button>
+        <button class="btn" type="button" data-debug="apostar" data-label="PREPARARSE" aria-label="Saltar a Prepárate para apostar"></button>
+        <button class="btn" type="button" data-debug="llaves" data-label="BUSCA LLAVES" aria-label="Saltar a Encuentra las llaves"></button>
+        <button class="btn" type="button" data-debug="bajar" data-label="CONTESTA DAN" aria-label="Saltar a contestar a Daniel y bajar"></button>
+        <button class="btn" type="button" data-debug="rellano" data-label="RELLANO" aria-label="Saltar al rellano"></button>
+        <button class="btn" type="button" data-debug="calle" data-label="CALLE" aria-label="Saltar a la calle con Daniel"></button>
+      </div>
+      <div class="row-actions" style="margin-top: calc(var(--px) * 4)"><button class="btn" id="debugClose" type="button" data-label="VOLVER" aria-label="Volver a ajustes"></button></div>
     </div>
   </div>
 
@@ -1555,7 +1585,7 @@
   }
   // música SOLO en el menú (también con Ajustes o ¿Salir? encima); al entrar en la partida o en la despedida se corta en el acto
   function updateMusic() {
-    if (!current || ['settings', 'confirm', 'confirmNew'].includes(current.id)) MenuMusic.start(); else MenuMusic.stop(0.15);
+    if (!current || ['settings', 'confirm', 'confirmNew', 'debug'].includes(current.id)) MenuMusic.start(); else MenuMusic.stop(0.15);
   }
   function closePhoneUI() { $('phoneUI').classList.remove('open'); }
   function powerOffPhone() {
@@ -1570,6 +1600,7 @@
     const b = $('phoneUIClose'); if (b) b.focus();
   }
   function closeSettings() {
+    closeDebug();
     $('settings').classList.remove('open');
     if (settingsStacked) {
       settingsStacked = false;
@@ -1606,6 +1637,7 @@
   }
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && $('phoneUI').classList.contains('open')) { powerOffPhone(); return; }
+    if (e.key === 'Escape' && $('debug').classList.contains('open')) { closeDebug(); return; }
     if (e.key === 'Escape' && ($('settings').classList.contains('open'))) { closeSettings(); return; }
     // Escape no cierra la partida (newgame): evita perder progreso por pulsación accidental
     if (e.key === 'Escape' && current && (current.id === 'confirm' || current.id === 'confirmNew')) closeOverlay();
@@ -1616,9 +1648,11 @@
       bs[i].focus();
     }
   });
-  ['settings', 'confirm', 'confirmNew'].forEach(id => $(id).addEventListener('pointerdown', e => {
+  ['settings', 'confirm', 'confirmNew', 'debug'].forEach(id => $(id).addEventListener('pointerdown', e => {
     if (e.target !== $(id)) return;
-    if (id === 'settings') closeSettings(); else closeOverlay();
+    if (id === 'debug') closeDebug();
+    else if (id === 'settings') closeSettings();
+    else closeOverlay();
   }));
   document.querySelectorAll('.btn').forEach(b => {
     b.addEventListener('mouseenter', () => GameAudio.hover());
@@ -1694,6 +1728,7 @@
     $('btnNew').hidden = locked();
     $('btnWip').setAttribute('aria-pressed', String(wipOn));
     renderPx($('wipState'), wipOn ? 'DESBLOQUEADO' : 'BLOQUEADO');
+    applyDebugVis();
     refreshContinue(); applyLayout();
   }
   if (WEB_BUILD) {
@@ -1706,6 +1741,56 @@
     applyWip();
   }
   refreshContinue();
+
+  /* ---------- DEBUG: saltar a un punto de la historia (solo local, o web con WIP) ---------- */
+  function applyDebugVis() { $('debugRow').hidden = WEB_BUILD && !wipOn; }
+  applyDebugVis();
+  const JR_OK = { dressed: true, bed: true, clothes: [true, true, true], tidy: true, wallet: true, card: true, keys: true, keyGot: false, keySpot: null, met: false, tried: [] };
+  function debugPhone(o) {
+    return { flash: false, waScreen: o.wa || 'chat', chatWith: o.who || 'daniel', mom: !!o.mom, clock: o.clock || '16:05', danGo: o.danGo || 'idle' };
+  }
+  function debugJr(extra) { return Object.assign({}, JR_OK, extra || {}, { clothes: (extra && extra.clothes) || JR_OK.clothes.slice() }); }
+  const DEBUG_SAVES = {
+    apagon: () => ({ at: 'apagon', player: { x: 170, y: 74, dir: 'down', ang: Math.PI / 2, room: 'sala' }, phone: debugPhone({ clock: '16:05' }) }),
+    dif: () => ({ at: 'dif', player: { x: 118, y: 152, dir: 'left', ang: Math.PI, room: 'entrada' }, phone: debugPhone({ mom: true, clock: '16:05', who: 'mama', wa: 'list' }) }),
+    apostar: () => ({ at: 'apostar', player: { x: 112, y: 132, dir: 'right', ang: 0, room: 'juanjo' }, phone: debugPhone({ mom: true, clock: '16:15' }) }),
+    llaves: () => ({ at: 'llaves', player: { x: 150, y: 110, dir: 'down', ang: Math.PI / 2, room: 'juanjo' }, jr: debugJr({ keys: true, keyGot: false }), phone: debugPhone({ mom: true, clock: '17:45' }) }),
+    bajar: () => ({ at: 'llaves', player: { x: 139, y: 158, dir: 'down', ang: Math.PI / 2, room: 'entrada' }, jr: debugJr({ keys: true, keyGot: true, card: true }), phone: debugPhone({ mom: true, clock: '17:50', danGo: 'await' }) }),
+    rellano: () => ({ at: 'llaves', player: { x: 58, y: 104, dir: 'right', ang: 0, room: 'rellano' }, jr: debugJr({ keys: true, keyGot: true, card: true }), phone: debugPhone({ mom: true, clock: '17:50', danGo: 'done' }) }),
+    calle: () => ({ at: 'llaves', player: { x: 200, y: 88, dir: 'down', ang: Math.PI / 2, room: 'calle' }, jr: debugJr({ keys: true, keyGot: true, card: true, met: true }), phone: debugPhone({ mom: true, clock: '17:55', danGo: 'done' }) })
+  };
+  function closeDebug() {
+    if (!$('debug').classList.contains('open')) return;
+    $('debug').classList.remove('open');
+    const b = $('btnDebug'); if (b && !b.hidden) b.focus();
+  }
+  function openDebug() {
+    $('debug').classList.add('open');
+    const first = $('debugList').querySelector('button');
+    (first || $('debugClose')).focus();
+  }
+  function debugJump(id) {
+    const build = DEBUG_SAVES[id]; if (!build || !window.PDIntro) return;
+    const save = build();
+    PDSave.save(save);
+    closeDebug();
+    $('settings').classList.remove('open');
+    settingsStacked = false;
+    const wasInGame = current && current.id === 'newgame';
+    if (wasInGame) { if (window.PDIntro) window.PDIntro.stop(); }
+    else openOverlay($('newgame'), $('introSettings'), $('btnDebug'));
+    landscape(true);
+    if (!wasInGame) current = $('newgame');
+    else { current = $('newgame'); menu.inert = true; }
+    window.PDIntro.resume(save);
+    refreshContinue();
+    updateMusic();
+  }
+  $('btnDebug').addEventListener('click', openDebug);
+  $('debugClose').addEventListener('click', closeDebug);
+  $('debugList').querySelectorAll('[data-debug]').forEach(b => {
+    b.addEventListener('click', () => debugJump(b.dataset.debug));
+  });
   $('introMenu').addEventListener('click', () => { GameAudio.click(); closeOverlay(); });
   $('introSettings').addEventListener('click', () => { GameAudio.click(); openSettings($('introSettings')); });
   $('hudPhone').addEventListener('click', () => openPhoneUI());
@@ -2136,6 +2221,9 @@
     const REPLY = 'Daniel me acabo de despertar puto gordo esperate.';
     const REPLY2 = 'Gordo, luego quedamos para las 6 si quieres.';
     const REPLY_OK = 'ok';
+    // tras encontrar las llaves: Daniel escribe otra vez y hay que contestar antes de salir
+    const BAJAR_MSG = '¿Bajas ya o qué?';
+    const BAJAR_REPLY = 'okey, voy';
     // chat con mamá (2ª escena, tras el apagón): el jugador escribe la pregunta y ella contesta con dos mensajes seguidos
     const MOM_ASK = 'Mamá, se ha ido la luz, ¿qué hago?';
     const MOM_REPLIES = ['Juanito, ve a la cajita que hay al lado de la entrada.', 'Si el diferencial está subido, entonces nos la han cortao esos hijos de puta.'];
@@ -2163,6 +2251,8 @@
     // idle → typing → sent → waiting → awaitOk → typing → done
     let unlocked = false, chatSeq = 'idle', chatTyped = 0, chatT0 = 0, firstBubble = null;
     let typeTarget = REPLY, sentReply = false, sentOk = false;
+    // tras las llaves: idle → await (mensaje de Daniel) → typing → done (contestó "okey, voy")
+    let danGo = 'idle', danGoTyped = 0, danGoT0 = 0;
     // mamá: idle → typing → sent → waiting → read → waiting → answer → tray → done (momGot = mensajes suyos ya llegados)
     // answer: Juanito puede contestar; tray: panel de stickers abierto; done: sticker enviado
     // momOk: ya se puede escribir (después del bocadillo "Voy a preguntarle a mi madre")
@@ -2306,6 +2396,7 @@
       flashKey = null; chatReveal = 1; poweringOff = false;
       unlocked = false; chatSeq = 'idle'; chatTyped = 0; chatT0 = 0; firstBubble = null;
       typeTarget = REPLY; sentReply = false; sentOk = false;
+      danGo = 'idle'; danGoTyped = 0; danGoT0 = 0;
       homeMode = false; setFlash(false); chatWith = 'daniel'; waScreen = 'chat'; momFocus = false;
       momOk = false; momSeq = 'idle'; momTyped = 0; momT0 = 0; momGot = 0;
       if (rafId) cancelAnimationFrame(rafId); rafId = 0;
@@ -2428,6 +2519,10 @@
         if (flash) { g.fillStyle = '#2a2210'; [[x + 12, y + 6], [x + 19, y + 4], [x + 26, y + 6]].forEach(([a, b]) => g.fillRect(a, b, 2, 4)); }
       }
       centered(g, APPS[key].label, x + ICON / 2, y + ICON + 6, '#ffffff', 'rgba(0,0,0,0.75)');
+      if (key === 'chat' && danGo === 'await') {                     // aviso de mensaje sin contestar
+        g.fillStyle = '#e11'; g.beginPath(); g.arc(x + ICON - 2, y + 4, 7, 0, Math.PI * 2); g.fill();
+        mTextLo(g, '1', x + ICON - 4, y, '#ffffff');
+      }
     }
     function paintHome(g) {
       statusBar(g, '#14202c');
@@ -2506,10 +2601,15 @@
         if (y + WA_ROW > S.y + S.h - 20) return;
         avatar(g, S.x + 22, y + 18, r.av);
         if (r.who) {
-          const prev = r.who === 'mama' ? momPreview() : r.prev, time = r.who === 'mama' && prev ? HOME_TIME : r.time;
+          const prev = r.who === 'mama' ? momPreview() : r.who === 'daniel' ? danielPreview() : r.prev;
+          const time = r.who === 'mama' && prev ? HOME_TIME : (r.who === 'daniel' && danGo !== 'idle' ? clock : r.time);
           mTextLo(g, r.name, S.x + 44, y + 8, '#121418');
           mTextLo(g, time, S.x + S.w - 8 - mMeasureLo(time), y + 8, '#8a9099');
-          if (prev) mTextLo(g, clipLo(prev, S.w - 64), S.x + 44, y + 22, '#667079'); else scribble(g, S.x + 44, y + 24, 90, '#d5d9de', i + 1);
+          if (prev) mTextLo(g, clipLo(prev, S.w - 64 - (danGo === 'await' && r.who === 'daniel' ? 18 : 0)), S.x + 44, y + 22, '#667079'); else scribble(g, S.x + 44, y + 24, 90, '#d5d9de', i + 1);
+          if (danGo === 'await' && r.who === 'daniel') {             // sin leer: badge verde
+            g.fillStyle = '#25d366'; g.beginPath(); g.arc(S.x + S.w - 14, y + 28, 8, 0, Math.PI * 2); g.fill();
+            mTextLo(g, '1', S.x + S.w - 16, y + 24, '#ffffff');
+          }
           if (r.pin) {                                               // chincheta de "anclado"
             const px = S.x + S.w - 15, py = y + 22;
             g.fillStyle = '#8a9099'; g.fillRect(px, py, 6, 3); g.fillRect(px + 1, py + 3, 4, 2); g.fillRect(px + 2, py + 5, 2, 3);
@@ -2535,6 +2635,11 @@
       if (momSeq === 'done') return 'Tú: Sticker';
       if (momGot) return MOM_REPLIES[momGot - 1];
       return momSeq === 'idle' || momSeq === 'typing' ? null : 'Tú: ' + MOM_ASK;
+    }
+    function danielPreview() {                                       // último mensaje del chat con Daniel
+      if (danGo === 'done') return 'Tú: ' + BAJAR_REPLY;
+      if (danGo !== 'idle') return BAJAR_MSG;
+      return 'Tú: ok';
     }
     // ---------- sticker animado con el que contesta Juanito (hoja de 50 fotogramas de 104 px, 10 por fila, ~10 fps) ----------
     const STK = { src: 104, cols: 10, n: 50, dt: 103 };
@@ -2730,33 +2835,57 @@
       mTextLo(g, FROM, 66, 42, '#ffffff');
       if (homeMode) backChevron(g);
       const now = performance.now();
+      const showReply2 = chatSeq === 'awaitOk' || chatSeq === 'done' || sentOk || (chatSeq === 'typing' && sentReply);
+      // si hay el mensaje de bajar, sube el hilo para que se vean los últimos bocadillos
+      let need = bubbleSize(MSG, 148).bh + 10;
+      if (sentReply) need += bubbleSize(REPLY, 148).bh + 10;
+      if (chatSeq === 'waiting') need += 36;
+      if (showReply2) need += bubbleSize(REPLY2, 148).bh + 10;
+      if (sentOk) need += bubbleSize(REPLY_OK, 148).bh + 10;
+      if (danGo !== 'idle') need += bubbleSize(BAJAR_MSG, 148).bh + 10;
+      if (danGo === 'done') need += bubbleSize(BAJAR_REPLY, 148).bh + 10;
       let y = 82 + Math.floor((1 - chatReveal) * 10);
+      const bottom = COMPOSE.y - 6;
+      if (y + need > bottom) y = bottom - need;
+
+      g.save();
+      g.beginPath(); g.rect(SCREEN.x, 58, SCREEN.w, COMPOSE.y - 60); g.clip();
+
       g.globalAlpha = chatReveal;
       firstBubble = drawInBubble(g, MSG, 28, y, 1);
       g.globalAlpha = 1;
       y = firstBubble.y + firstBubble.h + 10;
-
-      if (chatSeq === 'typing') {
-        paintComposer(g, typeTarget.slice(0, chatTyped));
-      } else stickerIcon(g, 152, 426);                               // como en todos los chats (aquí no se usa); se oculta al escribir
 
       // 1ª respuesta enviada
       if (sentReply) y += paintOutAt(g, REPLY, y, 1) + 10;
 
       if (chatSeq === 'waiting') {
         paintTyping(g, y, now - chatT0);
+        g.restore();
+        stickerIcon(g, 152, 426);
         return;
       }
 
       // mensaje de Daniel (quedamos a las 6)
-      const showReply2 = chatSeq === 'awaitOk' || chatSeq === 'done' || sentOk || (chatSeq === 'typing' && sentReply);
       if (showReply2) {
         const b = drawInBubble(g, REPLY2, 28, y, 1);
         y = b.y + b.h + 10;
       }
 
       // "ok" enviado
-      if (sentOk) paintOutAt(g, REPLY_OK, y, 1);
+      if (sentOk) y += paintOutAt(g, REPLY_OK, y, 1) + 10;
+
+      // mensaje de Daniel tras las llaves + respuesta "okey, voy"
+      if (danGo !== 'idle') {
+        const b = drawInBubble(g, BAJAR_MSG, 28, y, 1);
+        y = b.y + b.h + 10;
+      }
+      if (danGo === 'done') paintOutAt(g, BAJAR_REPLY, y, 1);
+      g.restore();
+
+      if (chatSeq === 'typing') paintComposer(g, typeTarget.slice(0, chatTyped));
+      else if (danGo === 'typing') paintComposer(g, BAJAR_REPLY.slice(0, danGoTyped));
+      else stickerIcon(g, 152, 426);                               // como en todos los chats (aquí no se usa); se oculta al escribir
     }
     function roundRect(g, x, y, w, h, r) {
       g.beginPath();
@@ -2774,6 +2903,33 @@
       else return;
       chatSeq = 'typing'; chatTyped = 0; chatT0 = performance.now();
       runChatSeq();
+    }
+    function startBajarReply() {
+      if (screen !== 'chat' || anim || danGo !== 'await') return;
+      danGo = 'typing'; danGoTyped = 0; danGoT0 = performance.now();
+      runDanGoSeq();
+    }
+    function runDanGoSeq() {
+      if (chatRaf) cancelAnimationFrame(chatRaf);
+      const step = () => {
+        if (poweringOff || screen !== 'chat' || chatWith !== 'daniel' || danGo !== 'typing') return;
+        const now = performance.now(), elapsed = now - danGoT0;
+        let target = 0, acc = 0;
+        for (let i = 0; i < BAJAR_REPLY.length; i++) {
+          acc += typeDelay(i, BAJAR_REPLY[i]);
+          if (elapsed >= acc) target = i + 1; else break;
+        }
+        if (reduce()) target = BAJAR_REPLY.length;
+        danGoTyped = target;
+        frame();
+        if (danGoTyped >= BAJAR_REPLY.length) {
+          danGo = 'done'; frame();
+          document.dispatchEvent(new CustomEvent('pd:dan-bajar-done'));
+          return;
+        }
+        chatRaf = requestAnimationFrame(step);
+      };
+      chatRaf = requestAnimationFrame(step);
     }
     function runChatSeq() {
       if (chatRaf) cancelAnimationFrame(chatRaf);
@@ -2882,6 +3038,13 @@
         if (momSeq === 'typing') for (let i = 0; i < momTyped; i++) acc += typeDelay(i, MOM_ASK[i]);
         momT0 = performance.now() - acc;
         runMomSeq();
+        return;
+      }
+      if (danGo === 'typing') {
+        let acc = 0;
+        for (let i = 0; i < danGoTyped; i++) acc += typeDelay(i, BAJAR_REPLY[i]);
+        danGoT0 = performance.now() - acc;
+        runDanGoSeq();
         return;
       }
       if (chatSeq === 'typing') {
@@ -2999,7 +3162,10 @@
         cv.style.cursor = 'default';
       } else {
         paintScreen(g, 'chat', paintChatText);
-        if (chatWith === 'daniel' && (chatSeq === 'idle' || chatSeq === 'awaitOk') && chatReveal > 0.9) {
+        if (chatWith === 'daniel' && danGo === 'await' && chatReveal > 0.9) {
+          hit(COMPOSE.x, COMPOSE.y, COMPOSE.w, COMPOSE.h, startBajarReply);
+          cv.style.cursor = 'pointer';
+        } else if (chatWith === 'daniel' && (chatSeq === 'idle' || chatSeq === 'awaitOk') && chatReveal > 0.9) {
           hit(COMPOSE.x, COMPOSE.y, COMPOSE.w, COMPOSE.h, startReply);
           cv.style.cursor = 'pointer';
         } else if (chatWith === 'mama' && momSeq === 'idle') {       // antes del bocadillo "Voy a preguntarle a mi madre" solo deja el cursor
@@ -3028,8 +3194,9 @@
                   : chatWith === 'mama' ? (momOk && momSeq === 'idle' ? 'Toca el campo de texto para escribir a Mama'
                     : momSeq === 'answer' ? 'Toca el campo de texto para contestar a Mama'
                       : momSeq === 'tray' ? 'Stickers recientes: toca el primero para enviarlo' : 'Chat con Mama')
-                    : (chatSeq === 'idle' || chatSeq === 'awaitOk') ? 'Toca el campo de texto para responder'
-                      : 'Chat con ' + FROM);
+                    : danGo === 'await' ? 'Toca el campo de texto para contestar a Daniel'
+                      : (chatSeq === 'idle' || chatSeq === 'awaitOk') ? 'Toca el campo de texto para responder'
+                        : 'Chat con ' + FROM);
     }
 
     function canvasPos(e) {
@@ -3085,7 +3252,9 @@
     }
     function enableHome() { homeMode = true; screen = 'home'; ensureAssets(() => {}); }
     // partida guardada: qué se recuerda del móvil y cómo queda al continuar (chat con Daniel ya terminado)
-    function snapshot() { return { flash, waScreen, chatWith, mom: momSeq === 'done', clock }; }   // mom: ya se habló con mamá (y se le mandó el sticker)
+    function snapshot() {
+      return { flash, waScreen, chatWith, mom: momSeq === 'done', clock, danGo: danGo === 'done' ? 'done' : (danGo === 'idle' ? 'idle' : 'await') };
+    }
     function restore(s) {
       unlocked = true; chatSeq = 'done'; sentReply = true; sentOk = true; chatReveal = 1;
       typeTarget = REPLY_OK; chatTyped = REPLY_OK.length;
@@ -3093,11 +3262,20 @@
       setFlash(!!(s && s.flash));
       clock = s && /^\d\d:\d\d$/.test(s.clock) ? s.clock : HOME_TIME;
       if (s && s.mom) { momOk = true; momSeq = 'done'; momGot = MOM_REPLIES.length; }       // la conversación con mamá, terminada
+      danGo = s && s.danGo === 'done' ? 'done' : (s && s.danGo === 'await' ? 'await' : 'idle');
+      danGoTyped = 0; danGoT0 = 0;
       enableHome();
     }
+    function pingBajar() {                                           // Daniel: "¿Bajas ya o qué?" (tras las llaves)
+      if (danGo === 'done') return;
+      danGo = 'await'; danGoTyped = 0; danGoT0 = 0;
+      chatWith = 'daniel'; waScreen = 'chat';                       // al abrir WhatsApp, directo al chat
+      if (uiOpen() && !anim) frame();
+    }
+    function completeBajar() { danGo = 'done'; danGoTyped = BAJAR_REPLY.length; }   // partidas ya fuera de casa
     function setTime(hhmm) { clock = hhmm; if (uiOpen() && !anim) frame(); }
     function allowMom() { if (momOk) return; momOk = true; if (uiOpen() && !anim && screen === 'chat' && chatWith === 'mama') frame(); }
-    return { reset, render, open, bind, powerOff, enableHome, snapshot, restore, allowMom, setTime, get time() { return clock; }, get flashlight() { return flash; } };
+    return { reset, render, open, bind, powerOff, enableHome, snapshot, restore, allowMom, setTime, pingBajar, completeBajar, get bajarDone() { return danGo === 'done'; }, get time() { return clock; }, get flashlight() { return flash; } };
   })();
   window.PDPhone = PhoneApp;
 
@@ -5085,8 +5263,8 @@
   HALL.exits.push({ door: DOORS.hallJ, to: JR, arrive: DOORS.jrW, out: { x: 270 }, path: { x: [88, 101] },   // su cuarto: cuando ya tiene que prepararse
     test: () => story.bath && P.dir === 'right' && P.x >= 259 && P.y > 64 && P.y < 82,
     place: () => ({ y: clamp(P.y - 61 + JR_DEF.DOOR.y, 127, 141), dir: 'right', ang: 0 }) });
-  HALL.exits.push({ door: DOORS.hallExit, to: LND, arrive: DOORS.lndW, out: { y: 175 }, path: { x: [42, 58] },   // salir de casa: solo con las llaves
-    test: () => jr.keyGot && P.dir === 'down' && P.y >= 166 && P.x > 128 && P.x < 150,
+  HALL.exits.push({ door: DOORS.hallExit, to: LND, arrive: DOORS.lndW, out: { y: 175 }, path: { x: [42, 58] },   // salir: llaves + haber contestado a Daniel
+    test: () => jr.keyGot && window.PDPhone && window.PDPhone.bajarDone && P.dir === 'down' && P.y >= 166 && P.x > 128 && P.x < 150,
     place: () => ({ x: 42, y: 104, dir: 'right', ang: 0 }) });
   LND.exits = [
     { door: DOORS.lndW, to: HALL, arrive: DOORS.hallExit, out: { x: 35 }, path: { y: [176, 160] },
@@ -5850,7 +6028,13 @@
     const T = fp.take;
     if (T && !T.done && t - T.t > 0.5) {
       T.done = true; fp.closeAt = t + 0.6;
-      if (T.kind === 'key') { jr.keyGot = true; completeMission('llaves'); say('¡Mis llaves! Estaban aquí metidas.', 2.6, t + 0.8, tt => showNotif('Daniel', '¿Bajas ya o qué?', tt + 0.5, () => { addMission('bajar'); saveAt('llaves'); })); }   // y le escribe Daniel
+      if (T.kind === 'key') {
+        jr.keyGot = true; completeMission('llaves');
+        say('¡Mis llaves! Estaban aquí metidas.', 2.6, t + 0.8, tt => {
+          if (window.PDPhone) window.PDPhone.pingBajar();             // el mensaje queda en WhatsApp
+          showNotif('Daniel', '¿Bajas ya o qué?', tt + 0.5, () => { addMission('bajar'); saveAt('llaves'); });
+        });
+      }
       else { jr.card = true; renderTodo(); say('Aquí está la tarjeta de mi madre.', 2.6, t + 0.8); jrDone(t); }
     }
     if (fp.closeAt && t >= fp.closeAt) closeFurn();
@@ -6289,7 +6473,10 @@
       sfx(150, 0.18, 'square', 0.08, 110); setTimeout(() => sfx(110, 0.25, 'square', 0.08, 80), 160);   // ¡error!
       Object.assign(P, { dir: 'left', ang: Math.PI, tx: null, moving: false, phase: 0 }); P.y += 2; keys.clear(); joyEnd();   // se da la vuelta, hacia el ascensor
     }
-    if (room === HALL && !jr.keyGot && P.dir === 'down' && P.y >= 166 && P.x > 128 && P.x < 150 && t > doorCool) { doorCool = t + 5; say('Sin las llaves no puedo salir de casa.', 2.4, t); }
+    if (room === HALL && P.dir === 'down' && P.y >= 166 && P.x > 128 && P.x < 150 && t > doorCool) {
+      if (!jr.keyGot) { doorCool = t + 5; say('Sin las llaves no puedo salir de casa.', 2.4, t); }
+      else if (!(window.PDPhone && window.PDPhone.bajarDone)) { doorCool = t + 5; say('Antes tengo que contestarle a Daniel.', 2.4, t); }
+    }
   }
   function drawPopup(t) {                                            // mensaje emergente, arriba en el centro
     const PDx = window.PD; if (!popup || !PDx) return;
@@ -6703,7 +6890,7 @@
   // ---------- MISIONES: lista arriba a la izquierda. Al tocar una, sale debajo una pequeña ayuda ----------
   const MISSIONS = {
     dif: { title: 'Sube el diferencial', help: 'Ve a la entrada, aparta la caja que tapa el cuadro de luz y sube el DIF.' },
-    bajar: { title: 'Ve a la casa de apuestas', help: 'Sal de casa, baja en el ascensor y ve con Daniel a la casa de apuestas: está en tu misma calle.' },
+    bajar: { title: 'Ve a la casa de apuestas', help: 'Contesta a Daniel por WhatsApp ("okey, voy"), sal de casa, baja en el ascensor y ve con él a la casa de apuestas.' },
     llaves: { title: 'Encuentra las llaves', help: 'Busca en los muebles de la casa: el salón, el cuarto de tu madre y el baño.' },
     apostar: { title: 'Prepárate para apostar', help: 'Ve a tu cuarto, cámbiate de ropa y coge la cartera y la tarjeta de crédito de tu madre.',
       subs: [['Vístete', () => jr.dressed], ['Recoge el cuarto', () => jr.clothes.every(Boolean)], ['Haz la cama', () => jr.bed], ['Coge la cartera', () => jr.wallet],
@@ -6766,6 +6953,7 @@
   }
   // la misión del diferencial aparece cuando mamá dice que vaya a la cajita (al acabar su chat), y se guarda la partida
   document.addEventListener('pd:mom-chat-done', () => { if (!running) return; addMission('dif'); saveAt('dif'); });
+  document.addEventListener('pd:dan-bajar-done', () => { if (!running) return; saveAt('llaves'); });
   // el aviso: arriba en el centro, la hora de antes se cambia por la nueva (como un reloj de cifras) y se va
   function drawClockShow(t) {
     const PD = window.PD; if (!clockShow || !PD || t < clockShow.t) return;
@@ -6988,7 +7176,11 @@
     if (PH && PH.setTime && PH.time === '16:05') { if (from === 'llaves' && jr.wallet && jr.card) PH.setTime('17:45'); else if (from === 'apostar' || from === 'llaves') PH.setTime('16:15'); }
     if (from === 'dif') addMission('dif'); else if (from === 'apostar' || (from === 'llaves' && !(jr.wallet && jr.card))) addMission('apostar');
     if (from === 'llaves' && jr.keys && !jr.keyGot) addMission('llaves');
-    if (from === 'llaves' && jr.keyGot) addMission('bajar'); else renderTodo();
+    if (from === 'llaves' && jr.keyGot) {
+      addMission('bajar');
+      const outside = ['rellano', 'ascensor', 'portal', 'calle'].includes(room.name);
+      if (PH && !PH.bajarDone) { if (outside) PH.completeBajar(); else PH.pingBajar(); }   // partidas viejas / mensaje pendiente
+    } else renderTodo();
     if (room === STR) Object.assign(dan, { x: P.x + 14, y: P.y + 2, dir: 'down' });   // en la calle, Daniel a su lado
     t0 = performance.now() / 1000; last = performance.now();
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
