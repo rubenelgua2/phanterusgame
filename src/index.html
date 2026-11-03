@@ -369,6 +369,7 @@
         <button class="btn" type="button" data-debug="llaves" data-label="BUSCA LLAVES" aria-label="Saltar a Encuentra las llaves"></button>
         <button class="btn" type="button" data-debug="bajar" data-label="CONTESTA DAN" aria-label="Saltar a contestar a Daniel y bajar"></button>
         <button class="btn" type="button" data-debug="rellano" data-label="RELLANO" aria-label="Saltar al rellano"></button>
+        <button class="btn" type="button" data-debug="portal" data-label="PORTAL" aria-label="Saltar al portal, antes del saludo con Daniel"></button>
         <button class="btn" type="button" data-debug="calle" data-label="CALLE" aria-label="Saltar a la calle con Daniel"></button>
       </div>
       <div class="row-actions" style="margin-top: calc(var(--px) * 4)"><button class="btn" id="debugClose" type="button" data-label="VOLVER" aria-label="Volver a ajustes"></button></div>
@@ -1593,12 +1594,14 @@
     if (window.PDPhone && window.PDPhone.powerOff) window.PDPhone.powerOff(done);
     else done();
   }
-  function openPhoneUI() {
+  function openPhoneUI(opts) {
     // No reset: el chat/progreso del móvil se conserva entre aperturas
-    if (window.PDPhone) window.PDPhone.open();
+    // opts.chat: abrir directo un chat ('daniel' | 'mama'), p. ej. al tocar una notificación
+    if (window.PDPhone) window.PDPhone.open(opts);
     $('phoneUI').classList.add('open');
     const b = $('phoneUIClose'); if (b) b.focus();
   }
+  window.PDOpenPhone = openPhoneUI;
   function closeSettings() {
     closeDebug();
     $('settings').classList.remove('open');
@@ -1757,6 +1760,7 @@
     llaves: () => ({ at: 'llaves', player: { x: 150, y: 110, dir: 'down', ang: Math.PI / 2, room: 'juanjo' }, jr: debugJr({ keys: true, keyGot: false }), phone: debugPhone({ mom: true, clock: '17:45' }) }),
     bajar: () => ({ at: 'llaves', player: { x: 139, y: 158, dir: 'down', ang: Math.PI / 2, room: 'entrada' }, jr: debugJr({ keys: true, keyGot: true, card: true }), phone: debugPhone({ mom: true, clock: '17:50', danGo: 'await' }) }),
     rellano: () => ({ at: 'llaves', player: { x: 58, y: 104, dir: 'right', ang: 0, room: 'rellano' }, jr: debugJr({ keys: true, keyGot: true, card: true }), phone: debugPhone({ mom: true, clock: '17:50', danGo: 'done' }) }),
+    portal: () => ({ at: 'llaves', player: { x: 252, y: 70, dir: 'down', ang: Math.PI / 2, room: 'portal' }, jr: debugJr({ keys: true, keyGot: true, card: true }), phone: debugPhone({ mom: true, clock: '17:50', danGo: 'done' }) }),
     calle: () => ({ at: 'llaves', player: { x: 200, y: 88, dir: 'down', ang: Math.PI / 2, room: 'calle' }, jr: debugJr({ keys: true, keyGot: true, card: true, met: true }), phone: debugPhone({ mom: true, clock: '17:55', danGo: 'done' }) })
   };
   function closeDebug() {
@@ -3238,10 +3242,12 @@
       cv.addEventListener('pointercancel', onUp);
     }
     function render() { ensureAssets(() => frame()); }
-    function open() {
+    function open(opts) {
       poweringOff = false;
-      // 2ª escena: siempre a la pantalla de inicio. Antes: si ya desbloqueó, vuelve al chat con el historial intacto
-      if (homeMode) screen = 'home';
+      // opts.chat: saltar al chat (p. ej. al tocar la notificación). Si no: inicio en homeMode, o el chat si aún es la intro
+      if (opts && (opts.chat === 'daniel' || opts.chat === 'mama')) {
+        chatWith = opts.chat; waScreen = 'chat'; screen = 'chat'; momFocus = false;
+      } else if (homeMode) screen = 'home';
       else if (unlocked) screen = 'chat';
       else if (screen !== 'pin') screen = 'lock';
       pin = '';
@@ -4215,7 +4221,7 @@
   }
 
   // ---------- fondo del CUARTO DE LA MADRE ----------
-  let momBg = null;
+  let momBg = null, momBathSpr = null;                               // sprite de la puerta del baño (ya con sepia) para la animación
   function buildMom() {
     momBg = document.createElement('canvas'); momBg.width = W; momBg.height = H;
     const b = momBg.getContext('2d'), D = MOM_DEF, F = D.floor[0], FC = D.faces[0];
@@ -4284,6 +4290,10 @@
     b.drawImage(balcBg, 0, y0, BALC_DEF.EAST.x, y1 - y0, bx, y0 + by, BALC_DEF.EAST.x, y1 - y0);
     for (let k = 0; k < 4; k++) { b.globalAlpha = 0.22 - k * 0.05; b.fillStyle = '#000'; b.fillRect(D.WX - 1 - k, y0 + by + 6, 1, y1 - y0 - 12); }   // sombra de la casa
     b.globalAlpha = 1;
+    // recorte de la hoja blanca (sin el marco): mismo tono sepia que el fondo, para que al abrir no cambie de color
+    const dx = D.DOOR_BATH.x, dy = FC.y + 2, dw = D.DOOR_BATH.w, dh = FC.h - 2;
+    momBathSpr = document.createElement('canvas'); momBathSpr.width = dw; momBathSpr.height = dh;
+    momBathSpr.getContext('2d').drawImage(momBg, dx, dy, dw, dh, 0, 0, dw, dh);
   }
 
   // ---------- fondo del BALCÓN ----------
@@ -4976,7 +4986,7 @@
     if ((swap && tNow - swap.at < DOOR_T.inside) || cut || panel || jrAct || fp || (lob.talk && !jr.met) || hs) { P.moving = false; if (!swap) P.phase = 0; return; }
     let dx =(keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), dy = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0), k = 1;
     const jm = Math.hypot(joy.x, joy.y);
-    if (dx || dy) P.tx = null;                                      // el teclado manda sobre el joystick y el ratón
+    if (dx || dy) P.tx = null;                                      // el teclado manda sobre el joystick
     else if (jm > JOY_DEAD && !busy()) { dx = joy.x; dy = joy.y; k = Math.min(1, (jm - JOY_DEAD) / (1 - JOY_DEAD) * 1.25); P.tx = null; }   // poco empuje = andar despacio
     else if (P.tx != null) {
       const vx = P.tx - P.x, vy = P.ty - P.y, d = Math.hypot(vx, vy);
@@ -5078,6 +5088,7 @@
     rows => rows.map((r, y) => y >= 10 && y <= 15 ? r.replace(/[DRB]/g, 'T').replace(/T/g, y % 2 ? 'Y' : 'T') : r));
   // pose (mini escenas): rot = inclinación desde los pies (π/2 = tumbado de bruces hacia la derecha); arms = brazos en alto
   function drawPlayer(pose) {
+    if (hsDrawing()) return;                                         // durante el choque de manos lo pinta drawHandshake
     const x = Math.round(P.x), y = Math.round(P.y), set = (jr.dressed ? JJ_OUT : JJ)[P.dir], hold = flashOn && !pose;   // con la linterna, el móvil en la mano
     const fi = Math.floor(P.phase) % 4, img = P.moving ? (hold ? set.holdWalk : set.walk)[fi] : (hold ? set.holdIdle : set.idle);
     const bob = P.moving && fi % 2 === 1 ? -1 : 0;                                            // al pasar una pierna por delante de la otra, sube
@@ -5119,17 +5130,12 @@
     const r = cv.getBoundingClientRect(), s = Math.min(r.width / W, r.height / H);
     return { x: (e.clientX - r.left - (r.width - W * s) / 2) / s, y: (e.clientY - r.top - (r.height - H * s) / 2) / s };
   }
-  let dragging = false, mark = null;
-  function aim(e) {
-    const p = toRoom(e); p.x += camX; p.y += camY;
-    const bx = boxOf(room.walk);
-    P.tx = clamp(p.x, bx.x0 + 4, bx.x1 - 4); P.ty = clamp(p.y, bx.y0 + 4, bx.y1 - 1);
-    mark = { x: P.tx, y: P.ty, t: performance.now() }; moved = true;
-  }
+  let mark = null;                                                   // (antes: marca de destino al clicar; el clic ya no mueve)
   cv.addEventListener('pointerdown', e => {
     const tp = toRoom(e), B = HALL_DEF.BOX1;
     if (panel && running) { panelTap(tp); e.preventDefault(); return; }
     if (fp && running) { furnDown(tp, e); e.preventDefault(); return; }   // un mueble abierto: su minijuego, coger algo o salir   // con el cuadro abierto: interruptores o cerrar
+    if (running && notifHit(tp) && openNotifPhone()) { e.preventDefault(); return; }   // tocar la notificación: abre el chat
     if (busy()) return;
     tp.x += camX; tp.y += camY;                                      // de aquí en adelante, en el mundo (con la cámara)
     // tocar (o clicar) la caja 1 o el cuadro de luz estando al lado
@@ -5138,13 +5144,13 @@
     if (jrTap(tp)) { e.preventDefault(); return; }
     { const f = furnNear(); if (f && inBox(tp, f.rect, 3) && openFurn(f)) { e.preventDefault(); return; } }   // tocar un mueble al lado
     if (liftCallNear() && inBox(tp, { x: 70, y: 48, w: 44, h: 26 }, 2) && callLift()) { e.preventDefault(); return; }   // el botón del ascensor                  // en su cuarto: el armario, la cama, la ropa, la cartera
-    if (e.pointerType !== 'mouse') return;                         // con el dedo ya no se va tocando: para eso está el joystick
-    dragging = true; aim(e);
-    try { cv.setPointerCapture(e.pointerId); } catch (_) {}
-    e.preventDefault();
+    // con teclado/ratón el clic NO mueve: solo interacciones (muebles, botones…). En táctil, el joystick.
   });
-  cv.addEventListener('pointermove', e => { if (fp) furnMove(toRoom(e)); else if (dragging) aim(e); });
-  ['pointerup', 'pointercancel'].forEach(ev => cv.addEventListener(ev, () => { dragging = false; furnUp(); }));
+  cv.addEventListener('pointermove', e => {
+    if (fp) furnMove(toRoom(e));
+    else cv.style.cursor = (running && notifHit(toRoom(e))) ? 'pointer' : '';
+  });
+  ['pointerup', 'pointercancel'].forEach(ev => cv.addEventListener(ev, () => { furnUp(); }));
 
   // joystick (solo en pantallas táctiles): la bola sigue al pulgar dentro del círculo; joy = dirección y fuerza (0..1)
   const joyEl = document.getElementById('joystick'), knob = joyEl.querySelector('.joy-knob');
@@ -5202,18 +5208,18 @@
   // lado con la puerta abierta, da unos pasos hacia dentro y la puerta se cierra detrás de él.
   // Tipos de puerta: 'v2' doble en una pared de los lados (hojas finas con cristal, siempre se pintan), 'front' en la pared
   // del fondo (vista de frente: la hoja se estrecha al girar hacia dentro), 'h1' sencilla en una pared de abajo (hoja que gira).
-  const DOOR_T = { open: 0.32, out: 0.62, inside: 0.98, close: 1.32 };   // abierta, cruzando (negro), dentro (ya se mueve), cerrada
+  const DOOR_T = { open: 0.42, out: 0.72, inside: 1.08, close: 1.48 };   // abierta, cruzando (negro), dentro (ya se mueve), cerrada — un poco más pausada
   const DOORS = {
     salaE: { kind: 'v2', x: 297, hole: 294, y0: DOOR_E.y, y1: DOOR_E.y + DOOR_E.h, dir: -1, beyond: '#0a0604' },
     hallW: { kind: 'v2', x: 51, hole: 48, y0: HALL_DEF.DOOR_W.y, y1: HALL_DEF.DOOR_W.y + HALL_DEF.DOOR_W.h, dir: 1, beyond: '#b9a57a' },
     hallMom: { kind: 'front', x: 63, y: 71, w: 26, h: 13, beyond: '#4a3a30' },
     momS: { kind: 'h1', x: 236, y: 150, w: 24, beyond: '#0a0604' },
-    momBath: { kind: 'front', x: 235, y: 31, w: 24, h: 19, beyond: '#3a3836' },
+    momBath: { kind: 'front', x: 236, y: 32, w: 22, h: 18, beyond: '#3a3836', light: true },   // hoja blanca (mismo rect que frontDoor + sepia)
     momBalc: { kind: 'v2', x: 57, hole: 54, y0: MOM_DEF.BALC.y, y1: MOM_DEF.BALC.y + MOM_DEF.BALC.h, dir: 1, beyond: GRANITE.base[0], fixed: 0.9 },   // la del balcón: abierta siempre
     balcE: { kind: 'hole' },                                       // en el balcón, el hueco de esa misma puerta (las hojas quedan dentro del cuarto)
     balcS: { kind: 'h1', x: 164, y: 120, w: 26, beyond: '#4a3a2c', glass: true },   // puerta de cristal del balcón al salón...
     salaN: { kind: 'front', x: 33, y: 9, w: 19, h: 21, beyond: GRANITE.base[0], glass: true },  // ...y la misma vista desde el salón
-    bathS: { kind: 'h1', x: 150, y: 120, w: 22, beyond: '#4a3a30' },
+    bathS: { kind: 'h1', x: 150, y: 120, w: 22, beyond: '#4a3a30' },   // madera, como bottomDoor del baño
     hallJ: { kind: 'v1', x: 269, hole: 266, y0: 61, y1: 81, dir: -1, beyond: '#5a4630' },   // la del cuarto de Juanjo (pared derecha de la entrada)...
     hallExit: { kind: 'h1', x: 126, y: 170, w: 26, beyond: '#141416' },   // la puerta de la calle (de casa al rellano)...
     lndW: { kind: 'v1', x: 37, hole: 34, y0: 90, y1: 112, dir: 1, beyond: '#2a2a2e' },   // ...y la misma, desde el rellano
@@ -5314,16 +5320,31 @@
         ctx.fillStyle = '#c8a040'; ctx.fillRect(Math.round(ex - d.dir * Math.sin(th) * 3) - 1, Math.round(ey - Math.cos(th) * 3) - 1, 2, 2);   // pomo
       } else if (a > 0 && d.kind === 'front') {                     // en la pared del fondo: el hueco y la hoja estrechándose hacia la bisagra
         ctx.fillRect(d.x, d.y, d.w, d.h);
-        const pw = Math.max(1, Math.round(d.w * Math.cos(th)));
-        ctx.fillStyle = d.glass ? '#7c6244' : '#2a1a0c'; ctx.fillRect(d.x, d.y, pw + 1, d.h);
-        ctx.fillStyle = d.glass ? '#a9c2cc' : '#6e4a26'; ctx.fillRect(d.x + (d.glass ? 1 : 0), d.y + 1, Math.max(1, pw - (d.glass ? 2 : 0)), d.h - 2);
-        ctx.fillStyle = d.glass ? '#e2eef2' : '#8a5c34'; ctx.fillRect(d.x, d.y + 1, pw, 1);
-        if (pw > 5) { ctx.fillStyle = '#b8943a'; ctx.fillRect(d.x + pw - 3, d.y + Math.floor(d.h / 2), 2, 1); }
+        // curva suave: al principio casi no se nota; el canto aparece al ir abriendo
+        const c = Math.cos(th), pw = Math.max(1, Math.round(d.w * c));
+        if (d.light && momBathSpr) {                                 // misma hoja del fondo (sepia): sin salto de tono
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(momBathSpr, 0, 0, d.w, d.h, d.x, d.y, pw, d.h);
+          if (c < 0.995) {
+            const thick = Math.max(1, Math.min(3, Math.round((1 - c) * 4)));
+            ctx.fillStyle = '#5a4e3e'; ctx.fillRect(d.x + pw, d.y, thick, d.h);   // canto de la hoja
+            ctx.fillStyle = `rgba(0,0,0,${(0.12 + (1 - c) * 0.28).toFixed(2)})`;
+            ctx.fillRect(d.x + pw + thick, d.y, Math.min(4, d.w - pw - thick), d.h);   // sombra en el hueco
+          }
+        } else {
+          const edge = d.glass ? '#7c6244' : '#2a1a0c';
+          const face = d.glass ? '#a9c2cc' : '#6e4a26';
+          const hi = d.glass ? '#e2eef2' : '#8a5c34';
+          ctx.fillStyle = edge; ctx.fillRect(d.x, d.y, pw + 1, d.h);
+          ctx.fillStyle = face; ctx.fillRect(d.x + (d.glass ? 1 : 0), d.y + 1, Math.max(1, pw - (d.glass ? 2 : 0)), d.h - 2);
+          ctx.fillStyle = hi; ctx.fillRect(d.x, d.y + 1, pw, 1);
+          if (pw > 5) { ctx.fillStyle = '#b8943a'; ctx.fillRect(d.x + pw - 3, d.y + Math.floor(d.h / 2), 2, 1); }
+        }
       } else if (a > 0 && d.kind === 'h1') {                        // en una pared de abajo: el hueco y la hoja girando hacia dentro (arriba)
         ctx.fillRect(d.x, d.y, d.w, 6);
         const ex = d.x + Math.cos(th) * d.w, ey = d.y + 3 - Math.sin(th) * d.w;
-        ctx.strokeStyle = '#2a1a0c'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(d.x, d.y + 3); ctx.lineTo(ex, ey); ctx.stroke();
-        ctx.strokeStyle = d.glass ? '#a9c2cc' : '#7a5430'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(d.x, d.y + 3); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.strokeStyle = d.light ? '#5a5854' : '#2a1a0c'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(d.x, d.y + 3); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.strokeStyle = d.glass ? '#a9c2cc' : d.light ? '#e2ddd2' : '#7a5430'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(d.x, d.y + 3); ctx.lineTo(ex, ey); ctx.stroke();
         ctx.fillStyle = '#c8a040'; ctx.fillRect(Math.round(ex - Math.cos(th) * 3) - 1, Math.round(ey + Math.sin(th) * 3) - 1, 2, 2);
       }
     }
@@ -6215,6 +6236,16 @@
     });
   });
   const lob = { doorT: null, talk: false };
+  // saludo con Daniel (tiempos y estado; el dibujo está más abajo)
+  // verja → Daniel se aparta → Juanjo sale por el hueco (sin cruzar el marco) → se miran → PLAS!
+  const HS = { gate: 0.55, side: 1.1, walk: 2.15, face: 2.5, wind: 2.95, slap: 3.3, hold: 3.85, laugh: 4.55, black: 4.85, swap: 5.65, end: 6.4 };
+  const HS_SPOT = {                                                  // hueco abierto de la verja ≈ x 44..70 (marco fijo en x≈41)
+    jGate: { x: 54, y: 186 }, jOut: { x: 54, y: 218 },              // Juanjo: adelante por el centro del hueco
+    dHome: { x: 50, y: 226 }, dAside: { x: 70, y: 218 }              // Daniel: se corre a la derecha y deja sitio
+  };
+  let hs = null;                                                     // { t0, fx, shake, danX, danY, danDir, danPhase, danMoving }
+  const hsDrawing = () => !!(hs && room === LOB && (tNow - hs.t0) >= HS.face);
+  const hsPastGate = () => !!(hs && room === LOB && !hsDrawing() && P.y > 206);   // ya en la acera: se pinta delante de la verja
   const lobDoor = t => jr.met ? 1 : lob.doorT == null ? 0 : ease(clamp((t - lob.doorT) / 0.7, 0, 1));
   const vestOpen = () => LOB_DEF.VEST.forEach(r => { if (!LOB.walk.includes(r)) LOB.walk.push(r); });
   function lobbyTick(t) {
@@ -6264,9 +6295,21 @@
     R(x0, top - 1, 2, base - top + 1, C); R(x1 - 2, top - 1, 2, base - top + 1, C); R(mid, top, 2, base - top, C);
     R(x0 + 2, base, x1 - x0 - 2, 1, '#000', 0.3);
     if (jr.met && !hs) return;                                       // Daniel ya está en la calle
-    const DN = LOB_DEF.DAN, facing = hs && tNow - hs.t0 >= HS.walk ? JJ_DAN.left.idle : JJ_DAN.down.idle;
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(DN.x - 5, DN.y - 1, 10, 2);
-    ctx.drawImage(facing, DN.x - 7, DN.y - 21);
+    if (hsDrawing()) return;                                         // el saludo lo pinta entero
+    const drawDan = (x, y, dir, moving, phase) => {
+      const set = JJ_DAN[dir] || JJ_DAN.down, fi = ((Math.floor(phase || 0) % 4) + 4) % 4;
+      const img = moving ? set.walk[fi] : set.idle, bob = moving && fi % 2 === 1 ? -1 : 0;
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(Math.round(x) - 5, Math.round(y) - 1, 10, 2);
+      ctx.drawImage(img, Math.round(x) - 7, Math.round(y) - 21 + bob);
+    };
+    if (hs) {                                                        // salida: orden por y (Juanjo / Daniel)
+      const acts = [{ y: hs.danY, f: () => drawDan(hs.danX, hs.danY, hs.danDir, hs.danMoving, hs.danPhase) }];
+      if (hsPastGate()) acts.push({ y: P.y, f: () => drawPlayer() });
+      acts.sort((a, b) => a.y - b.y).forEach(a => a.f());
+      return;
+    }
+    const DN = LOB_DEF.DAN;
+    drawDan(DN.x, DN.y, 'down', false, 0);
   }
   function lobReveal(t, lvl) {                                       // de día en la calle; la claridad entra por la verja y por el cristal de la puerta
     const d = lobDoor(t), L = LOB_DEF.LIFT, o = liftDoor(t, 'lob');
@@ -6284,23 +6327,104 @@
     ctx.fillStyle = g; ctx.fillRect(20, 80 + (1 - d) * 96, 60, 126 - (1 - d) * 96);
   }
 
-  // ---------- EL SALUDO: Juanjo sale por la verja y chocan los cinco con Daniel; luego, a la calle ----------
-  const HS = { gate: 0.6, walk: 1.8, up: 2.3, hit: 2.35, hold: 2.9, down: 3.2, black: 3.4, swap: 4.2, end: 5.0 };
-  let hs = null;                                                     // { t0, fx: {} }
+  // ---------- EL SALUDO: Juanjo sale, chocan los cinco (pixel art, con PLAS! y temblor) y a la calle ----------
   const hsGate = t => jr.met && !hs ? 1 : hs ? ease(clamp((t - hs.t0) / HS.gate, 0, 1)) : 0;
-  function startHandshake(t) { hs = { t0: t, fx: {} }; sfx(300, 0.08, 'square', 0.04, 220); setTimeout(() => sfx(420, 0.4, 'sawtooth', 0.012, 260), 80); }   // la verja chirría
-  function hsTick(t, dt) {                                           // devuelve lo negro que está la pantalla
-    if (!hs) return 0;
-    const s = t - hs.t0, DN = LOB_DEF.DAN, fx = hs.fx;
-    if (room === LOB) {
-      if (s >= HS.gate && s < HS.walk) {                             // Juanjo sale y se pone a su lado
-        const u = (s - HS.gate) / (HS.walk - HS.gate);
-        Object.assign(P, { x: 48 + (DN.x - 12 - 48) * u, y: 186 + (DN.y - 2 - 186) * u, dir: 'down', moving: true }); P.phase += dt * STEP_RATE;
-      }
-      if (s >= HS.walk && !fx.face) { fx.face = 1; Object.assign(P, { x: DN.x - 12, y: DN.y - 2, dir: 'right', ang: 0, moving: false, phase: 0 }); }
-      if (s >= HS.hit && !fx.hit) { fx.hit = 1; sfx(1800, 0.06, 'square', 0.06, 900); sfx(220, 0.12, 'square', 0.06, 120); }   // ¡plas!
+  function startHandshake(t) {
+    const D0 = HS_SPOT.dHome;
+    hs = { t0: t, fx: {}, shake: 0, j0x: P.x, j0y: P.y, danX: D0.x, danY: D0.y, danDir: 'down', danPhase: 0, danMoving: false };
+    sfx(300, 0.08, 'square', 0.04, 220); setTimeout(() => sfx(420, 0.4, 'sawtooth', 0.012, 260), 80);   // la verja chirría
+  }
+  function pixFat(x0, y0, x1, y1, col, th) {                         // línea gruesa a base de píxeles (estilo 8-bit)
+    x0 |= 0; y0 |= 0; x1 |= 0; y1 |= 0; th = th || 2;
+    const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy, x = x0, y = y0;
+    ctx.fillStyle = col;
+    for (;;) {
+      ctx.fillRect(x - (th >> 1), y - (th >> 1), th, th);
+      if (x === x1 && y === y1) break;
+      const e2 = err * 2;
+      if (e2 > -dy) { err -= dy; x += sx; }
+      if (e2 < dx) { err += dx; y += sy; }
     }
-    if (s >= HS.swap && !fx.swap) {                                  // a negro: ya en la calle, los dos delante del portal
+  }
+  function coverHangArm(ox, oy, faceRight, sleeve) {                 // tapa el brazo colgando del sprite (si no, se ven dos)
+    const ax = faceRight ? ox + 4 : ox + 6;
+    ctx.fillStyle = sleeve;
+    ctx.fillRect(ax, oy + 12, 4, 1);                                 // contorno superior
+    ctx.fillRect(ax, oy + 13, 4, 3);                                 // mano/brazo colgando → manga
+    ctx.fillRect(ax + (faceRight ? 1 : 0), oy + 16, 3, 1);           // contorno inferior
+  }
+  function drawHiFiveArm(sx, sy, hx, hy, u, sleeve, skin, faceRight) { // brazo a arco: hombro → codo → mano
+    if (u <= 0.02) return;
+    const t = u * u * (3 - 2 * u);                                   // smoothstep
+    const side = faceRight ? 1 : -1;
+    // la mano sube en arco (antes hacia arriba, luego al choque), no en línea recta
+    const handX = Math.round(sx + (hx - sx) * t);
+    const handY = Math.round(sy + (hy - sy) * Math.sin(t * Math.PI * 0.5) - Math.sin(t * Math.PI) * 2);
+    // codo hacia fuera y un poco abajo: se dobla al subir y se estira al chocar
+    const bend = Math.sin(t * Math.PI) * 3.5;
+    const ex = Math.round(sx + (handX - sx) * 0.48 + side * bend * 0.35);
+    const ey = Math.round(sy + (handY - sy) * 0.42 + (1 - t) * 2 + bend * 0.15);
+    pixFat(sx, sy, ex, ey, '#140c0a', 3); pixFat(sx, sy, ex, ey, sleeve, 2);
+    pixFat(ex, ey, handX, handY, '#140c0a', 3); pixFat(ex, ey, handX, handY, skin, 2);
+    if (t > 0.55) {
+      const open = t > 0.92 ? 0 : 1;                                  // al chocar, palma plana
+      ctx.fillStyle = '#140c0a'; ctx.fillRect(handX - 2, handY - 2, 5, 5);
+      ctx.fillStyle = skin; ctx.fillRect(handX - 1, handY - 1, 3, 3);
+      ctx.fillRect(handX + side * (open ? -2 : 0), handY - open, 1, 2 + open);   // pulgar
+    }
+  }
+  function drawPlasBurst(mx, my, k) {                                 // estrella pixel + chispas al chocar
+    const a = 1 - k, rays = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]];
+    rays.forEach(([dx, dy], i) => {
+      const r = 3 + ((k * 9) | 0) + (i & 1);
+      ctx.fillStyle = `rgba(255,248,200,${a})`; ctx.fillRect(mx + dx * r, my + dy * r, 2, 2);
+      if (k < 0.55) { ctx.fillStyle = `rgba(255,180,60,${a})`; ctx.fillRect(mx + dx * (r - 2), my + dy * (r - 2), 1, 1); }
+    });
+    ctx.fillStyle = `rgba(255,255,255,${a})`;
+    ctx.fillRect(mx - 1, my - 3, 3, 7); ctx.fillRect(mx - 3, my - 1, 7, 3);
+  }
+  function hsTick(t, dt) {                                           // avance del saludo; devuelve lo negro de la pantalla
+    if (!hs) return 0;
+    const s = t - hs.t0, S = HS_SPOT, fx = hs.fx;
+    hs.shake = (s >= HS.slap && s < HS.slap + 0.3) ? Math.round(Math.sin((s - HS.slap) * 75) * 3 * (1 - (s - HS.slap) / 0.3)) : 0;
+    if (room === LOB) {
+      if (s < HS.gate) {                                             // la verja abre; Juanjo se centra en el hueco
+        const u = ease(s / HS.gate);
+        Object.assign(P, {
+          x: hs.j0x + (S.jGate.x - hs.j0x) * u, y: hs.j0y + (S.jGate.y - hs.j0y) * u,
+          dir: 'down', ang: Math.PI / 2, moving: Math.hypot(S.jGate.x - hs.j0x, S.jGate.y - hs.j0y) > 2
+        });
+        if (P.moving) P.phase += dt * STEP_RATE; else P.phase = 0;
+        hs.danX = S.dHome.x; hs.danY = S.dHome.y; hs.danDir = 'down'; hs.danMoving = false;
+      } else if (s < HS.side) {                                      // Daniel se aparta a la derecha y deja hueco
+        const u = ease((s - HS.gate) / (HS.side - HS.gate));
+        Object.assign(P, { x: S.jGate.x, y: S.jGate.y, dir: 'down', ang: Math.PI / 2, moving: false, phase: 0 });
+        hs.danX = S.dHome.x + (S.dAside.x - S.dHome.x) * u;
+        hs.danY = S.dHome.y + (S.dAside.y - S.dHome.y) * u;
+        hs.danDir = 'right'; hs.danMoving = true; hs.danPhase += dt * STEP_RATE;
+      } else if (s < HS.walk) {                                      // Juanjo camina hacia adelante por el hueco (sin cruzar el marco)
+        const u = ease((s - HS.side) / (HS.walk - HS.side));
+        Object.assign(P, {
+          x: S.jGate.x, y: S.jGate.y + (S.jOut.y - S.jGate.y) * u,
+          dir: 'down', ang: Math.PI / 2, moving: true
+        });
+        P.phase += dt * STEP_RATE;
+        hs.danX = S.dAside.x; hs.danY = S.dAside.y; hs.danDir = 'left'; hs.danMoving = false; hs.danPhase = 0;
+      } else if (!fx.face) {
+        fx.face = 1;
+        Object.assign(P, { x: S.jOut.x, y: S.jOut.y, dir: 'right', ang: 0, moving: false, phase: 0 });
+        hs.danX = S.dAside.x; hs.danY = S.dAside.y; hs.danDir = 'left'; hs.danMoving = false;
+      }
+      if (s >= HS.slap && !fx.hit) {                                 // ¡PLAS!
+        fx.hit = 1; sfx(1800, 0.07, 'square', 0.07, 900); sfx(220, 0.14, 'square', 0.07, 110);
+        setTimeout(() => sfx(1500, 0.05, 'triangle', 0.04, 2000), 35);
+      }
+      if (s >= HS.laugh && !fx.ha) {                                 // risita tonta
+        fx.ha = 1; sfx(480, 0.07, 'square', 0.04, 640); setTimeout(() => sfx(600, 0.08, 'square', 0.04, 760), 85);
+      }
+    }
+    if (s >= HS.swap && !fx.swap) {                                  // a negro → calle, los dos delante del portal
       fx.swap = 1; room = STR; camRoom = null;
       Object.assign(P, { x: 200, y: 88, dir: 'down', ang: Math.PI / 2, moving: false, phase: 0, tx: null });
       dan.x = 220; dan.y = 90; dan.dir = 'down'; trail.length = 0;
@@ -6309,22 +6433,59 @@
     if (s >= HS.end) { hs = null; return 0; }
     return s < HS.black ? 0 : s < HS.swap ? ease((s - HS.black) / (HS.swap - HS.black)) : 1 - ease((s - HS.swap) / (HS.end - HS.swap));
   }
-  function drawHandshake(t) {                                        // los brazos en alto y el choque, con su chispa
+  function drawHandshake(t) {                                        // cabeceo → un brazo cada uno (el del sprite se tapa) → PLAS! → rebote
     if (!hs || room !== LOB) return;
-    const s = t - hs.t0; if (s < HS.walk) return;
-    const DN = LOB_DEF.DAN, u = s < HS.up ? ease((s - HS.walk) / (HS.up - HS.walk)) : s < HS.hold ? 1 : s < HS.down ? 1 - ease((s - HS.hold) / (HS.down - HS.hold)) : 0;
-    if (u <= 0) return;
-    const mx = (P.x + DN.x) / 2, my = P.y - 26, arm = (sx, sy, sleeve) => {
-      const hx = sx + (mx - sx) * u, hy = sy + (my - sy) * u;
-      ctx.strokeStyle = 'rgba(20,12,10,0.9)'; ctx.lineWidth = 3.2; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(hx, hy); ctx.stroke();
-      ctx.strokeStyle = sleeve; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + (hx - sx) * 0.5, sy + (hy - sy) * 0.5); ctx.stroke();
-      ctx.strokeStyle = JJ_PAL.S; ctx.beginPath(); ctx.moveTo(sx + (hx - sx) * 0.5, sy + (hy - sy) * 0.5); ctx.lineTo(hx, hy); ctx.stroke();
-    };
-    ctx.lineCap = 'round'; arm(P.x + 4, P.y - 13, '#1f2b47'); arm(DN.x - 4, DN.y - 13, '#1a1a20'); ctx.lineCap = 'butt';
-    if (s >= HS.hit && s < HS.hit + 0.35) {                          // la chispa del choque
-      const k = (s - HS.hit) / 0.35;
-      ctx.strokeStyle = `rgba(255,248,220,${1 - k})`; ctx.lineWidth = 1;
-      for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2, r0 = 2 + k * 3, r1 = 5 + k * 6; ctx.beginPath(); ctx.moveTo(mx + Math.cos(a) * r0, my + Math.sin(a) * r0); ctx.lineTo(mx + Math.cos(a) * r1, my + Math.sin(a) * r1); ctx.stroke(); }
+    const s = t - hs.t0; if (s < HS.face) return;
+    const sh = hs.shake || 0;
+    const jx = Math.round(P.x) + sh, jy = Math.round(P.y), dx = Math.round(hs.danX) - sh, dy = Math.round(hs.danY);
+    let jBob = 0, dBob = 0, leanJ = 0, leanD = 0, armU = 0;
+    if (s < HS.wind) {                                               // se miran y cabecean
+      const u = (s - HS.face) / (HS.wind - HS.face);
+      jBob = Math.round(Math.sin(u * Math.PI * 2) * 1);
+      dBob = Math.round(Math.sin(u * Math.PI * 2 + 0.5) * 1);
+    } else if (s < HS.slap) {                                        // anticipación: se agachan y levantan el brazo
+      const u = ease((s - HS.wind) / (HS.slap - HS.wind));
+      armU = u; leanJ = Math.round(u * 2); leanD = -Math.round(u * 2);
+      jBob = -Math.round(u); dBob = -Math.round(u);
+    } else if (s < HS.hold) {                                        // impacto: aplastados un instante
+      armU = 1; leanJ = 1; leanD = -1;
+      const k = (s - HS.slap) / (HS.hold - HS.slap);
+      jBob = Math.round((k < 0.25 ? -2 : -1) * (1 - k * 0.5)); dBob = jBob;
+    } else if (s < HS.laugh) {                                       // bajan el brazo rebotando (suave, no a cero)
+      const u = ease((s - HS.hold) / (HS.laugh - HS.hold));
+      armU = 1 - u * 0.78;                                           // se queda un poco levantado
+      jBob = -Math.round(Math.abs(Math.sin((s - HS.hold) * 12)) * 2);
+      dBob = -Math.round(Math.abs(Math.sin((s - HS.hold) * 12 + 0.9)) * 2);
+    } else {                                                         // se ríen; el brazo ya casi abajo (vuelve el del sprite)
+      armU = Math.max(0, 0.18 - (s - HS.laugh) * 0.25);
+      jBob = -Math.round(Math.abs(Math.sin((s - HS.laugh) * 11)));
+      dBob = -Math.round(Math.abs(Math.sin((s - HS.laugh) * 11 + 1.1)));
+    }
+    const jOx = jx - 7 + leanJ, jOy = jy - 21 + jBob, dOx = dx - 7 + leanD, dOy = dy - 21 + dBob;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(jx - 5 + leanJ, jy - 1, 10, 2); ctx.fillRect(dx - 5 + leanD, dy - 1, 10, 2);
+    ctx.drawImage(JJ_OUT.right.idle, jOx, jOy);
+    ctx.drawImage(JJ_DAN.left.idle, dOx, dOy);
+    if (armU > 0.04) {                                               // un solo brazo: tapa el colgante y dibuja el del choque
+      coverHangArm(jOx, jOy, true, '#1f2b47');
+      coverHangArm(dOx, dOy, false, '#1a1a20');
+      const mx = Math.round((jx + dx) / 2), my = Math.min(jy, dy) - 28 + Math.round(jBob * 0.25);
+      // hombro del lado que mira al otro (Juanjo a la derecha, Daniel a la izquierda)
+      drawHiFiveArm(jx + 2 + leanJ, jy - 11 + jBob, mx - 1, my, armU, '#1f2b47', JJ_PAL.S, true);
+      drawHiFiveArm(dx - 2 + leanD, dy - 11 + dBob, mx + 1, my, armU, '#1a1a20', '#e0b090', false);
+      if (s >= HS.slap && s < HS.hold + 0.2) drawPlasBurst(mx, my, clamp((s - HS.slap) / 0.42, 0, 1));
+      if (s >= HS.slap && s < HS.laugh) {                             // cartelito "PLAS!"
+        const PDx = window.PD;
+        if (PDx) {
+          const fade = s < HS.slap + 0.12 ? (s - HS.slap) / 0.12 : s > HS.hold ? Math.max(0, 1 - (s - HS.hold) / (HS.laugh - HS.hold)) : 1;
+          const hop = s < HS.slap + 0.22 ? Math.round((1 - (s - HS.slap) / 0.22) * -5) : 0;
+          const label = PDx.norm('PLAS!'), tw = PDx.measure(label);
+          ctx.globalAlpha = fade;
+          PDx.drawText(ctx, label, mx - (tw >> 1) + 1, my - 12 + hop + 1, '#140c0a');
+          PDx.drawText(ctx, label, mx - (tw >> 1), my - 12 + hop, '#fff3a0');
+          ctx.globalAlpha = 1;
+        }
+      }
     }
   }
 
@@ -6343,39 +6504,103 @@
     if (dan.moving) { const st = Math.min(d, SPEED * dt); dan.x += dx / d * st; dan.y += dy / d * st; dan.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'); dan.phase += dt * STEP_RATE; }
     else dan.phase = 0;
   }
-  // la gente de la acera (a la izquierda, junto a la casa vieja): sin gafas, cada uno con su ropa
-  const npcLook = (pal, hairLong) => makeJJ(Object.assign({}, JJ_PAL, pal), rows => {
-    const front = rows[5].includes('Gg') && rows[5].includes('gG');
-    return rows.map((r, y) => {
-      if (y === 4) r = r.replace(/G/g, 'h');
-      if (y === 5) r = r.replace(/G/g, 'S').replace(/g/g, 'E').replace(/W/g, 'S');
-      if (y === 7) r = r.replace('WWWW', 'SMMS').replace('WWW', 'SMS').replace(/W/g, 'S');
-      if (y === 8) r = r.replace(/M/g, 'S');
-      if (y >= 10 && y <= 15) r = r.replace(/[DRBX]/g, 'T');
-      if (hairLong && front && y >= 3 && y <= 9) r = 'H' + r.slice(1, 11) + 'H';   // melena por los lados
-      return r;
+  // peatones: cruzan toda la calle en una dirección y salen de escena (máx. 6). Variedad de cuerpos y ropa.
+  const npcLook = (pal, opts = {}) => {
+    if (opts === true) opts = { hairLong: true };
+    const { hairLong, thin, skirt } = opts;
+    return makeJJ(Object.assign({}, JJ_PAL, pal), rows => {
+      const front = rows[5].includes('Gg') && rows[5].includes('gG');
+      const side = rows[12] && rows[12][0] === '.';
+      return rows.map((r, y) => {
+        if (y === 4) r = r.replace(/G/g, 'h');
+        if (y === 5) r = r.replace(/G/g, 'S').replace(/g/g, 'E').replace(/W/g, 'S');
+        if (y === 7) r = r.replace('WWWW', 'SMMS').replace('WWW', 'SMS').replace(/W/g, 'S');
+        if (y === 8) r = r.replace(/M/g, 'S');
+        if (y >= 10 && y <= 15) r = r.replace(/[DRBX]/g, 'T');
+        if (hairLong && front && y >= 3 && y <= 9) r = 'H' + r.slice(1, 11) + 'H';
+        if (hairLong && side && y >= 3 && y <= 10) {                 // melena también de perfil
+          const a = [...r];
+          if (y <= 8 && a[10] === '.') a[10] = 'H';
+          if (y >= 5 && y <= 9 && a[11] === '.') a[11] = 'H';
+          r = a.join('');
+        }
+        if (thin) {                                                  // cuerpo más estrecho
+          const a = [...r];
+          if (y >= 10 && y <= 15) {
+            if (front) { if ('STX'.includes(a[0])) a[0] = '.'; if ('STX'.includes(a[11])) a[11] = '.'; if (a[1] === 'T') a[1] = '.'; if (a[10] === 'T') a[10] = '.'; }
+            if (side) { if (a[1] === 'T') a[1] = '.'; if (a[2] === 'T' && y <= 12) a[2] = '.'; }
+          }
+          if (y >= 16 && y <= 19) {
+            if (front) { if ('PK'.includes(a[2])) a[2] = '.'; if ('PK'.includes(a[9])) a[9] = '.'; }
+            if (side) { if ('PK'.includes(a[2])) a[2] = '.'; if ('PK'.includes(a[8])) a[8] = '.'; }
+          }
+          r = a.join('');
+        }
+        if (skirt && y >= 15 && y <= 17) {                           // falda en vez de pantalón estrecho
+          if (y === 15) r = side ? '..TTTTTTTT..' : '.TTTTTTTTTT.';
+          if (y === 16) r = side ? '.TPPPPPPPT..' : '.TPPPPPPPPT.';
+          if (y === 17) r = side ? '..PPPPPP....' : '..PP....PP..';
+        }
+        return r;
+      });
     });
-  });
-  const NPCS = [
-    { set: npcLook({ H: '#c8c4bc', h: '#a8a49c', T: '#3a6a4a', t: '#2a5038', P: '#5a5048', K: '#2a2420', E: '#2a1a14', M: '#9a5a4a' }), x: 56, y: 96, dir: 'down' },   // un señor mayor, parado junto a la señal
-    { set: npcLook({ H: '#3a2a1e', h: '#4a3828', T: '#c8ccc8', t: '#a8aca8', P: '#1e1e22', K: '#f0f0ec', E: '#2a1a14', M: '#b0605a' }, true), x: 96, y: 104, dir: 'right', walk: [66, 140], v: 18 },   // una chica que pasea
-    { set: npcLook({ H: '#c23a32', h: '#a02a24', T: '#2b4a6a', t: '#1e3450', P: '#3a5a8a', K: '#2a2420', E: '#2a1a14', M: '#9a5a4a' }), x: 120, y: 84, dir: 'left' }   // un chaval con gorra roja, mirando el móvil
+  };
+  const NPC_BANDS = [84, 96, 106];                                   // tres bandas en la acera
+  const NPC_MAX = 6, NPC_EDGE = 18;
+  const NPC_KINDS = [                                                // catálogo de aspectos (se reutilizan al respawnear)
+    npcLook({ H: '#c8c4bc', h: '#a8a49c', T: '#3a6a4a', t: '#2a5038', P: '#5a5048', K: '#2a2420', E: '#2a1a14', M: '#9a5a4a' }),   // señor mayor
+    npcLook({ H: '#3a2a1e', h: '#4a3828', T: '#c8ccc8', t: '#a8aca8', P: '#1e1e22', K: '#f0f0ec', E: '#2a1a14', M: '#b0605a' }, { hairLong: true, thin: true }),   // chica delgada, melena
+    npcLook({ H: '#c23a32', h: '#a02a24', T: '#2b4a6a', t: '#1e3450', P: '#3a5a8a', K: '#2a2420', E: '#2a1a14', M: '#9a5a4a' }),   // chaval gorra roja
+    npcLook({ H: '#d8c090', h: '#c0a878', T: '#d878a0', t: '#b85880', P: '#d878a0', K: '#c8a070', E: '#2a1a14', M: '#c07070' }, { hairLong: true, thin: true, skirt: true }),   // mujer rubia con falda
+    npcLook({ H: '#1c1512', h: '#3a2c22', T: '#2a2a30', t: '#1a1a20', P: '#3a3a42', K: '#1a1a18', E: '#2a1a14', M: '#8a5a4a' }, { thin: true }),   // tío delgado de negro
+    npcLook({ H: '#5a3020', h: '#6a4030', T: '#e8a040', t: '#c88030', P: '#4a3a2c', K: '#e8e4dc', E: '#2a1a14', M: '#a86858' }, { hairLong: true, skirt: true })   // mujer abrigo mostaza
   ];
-  function npcTick(dt) {
+  let NPCS = [], nextNpcAt = 0;
+  function spawnNpc(fromEdge) {
+    if (NPCS.length >= NPC_MAX) return;
+    const used = new Set(NPCS.map(n => n.kind));
+    let ki = Math.floor(Math.random() * NPC_KINDS.length);
+    for (let k = 0; k < NPC_KINDS.length; k++) { const j = (ki + k) % NPC_KINDS.length; if (!used.has(j)) { ki = j; break; } }
+    const dir = fromEdge || (Math.random() < 0.5 ? 'right' : 'left');
+    const y = NPC_BANDS[Math.floor(Math.random() * NPC_BANDS.length)];
+    // no amontonarse en la misma banda al entrar
+    if (NPCS.some(n => n.y === y && Math.abs(n.x - (dir === 'right' ? -NPC_EDGE : STR_DEF.w + NPC_EDGE)) < 50)) return;
+    NPCS.push({
+      kind: ki, set: NPC_KINDS[ki], dir, y, v: 13 + Math.random() * 11, phase: Math.random() * 4,
+      x: dir === 'right' ? -NPC_EDGE : STR_DEF.w + NPC_EDGE
+    });
+  }
+  function seedNpcs() {                                              // unos ya a mitad de calle al llegar
+    NPCS = [];
+    for (let i = 0; i < 5; i++) {
+      const ki = i % NPC_KINDS.length, dir = i & 1 ? 'right' : 'left';
+      NPCS.push({
+        kind: ki, set: NPC_KINDS[ki], dir, y: NPC_BANDS[i % NPC_BANDS.length],
+        x: 50 + (i + 0.5) * ((STR_DEF.w - 100) / 5), v: 14 + (i % 3) * 4, phase: i * 1.3
+      });
+    }
+    nextNpcAt = 2;
+  }
+  seedNpcs();
+  function npcTick(t, dt) {
+    if (room !== STR || dt <= 0) return;
     for (const n of NPCS) {
-      if (!n.walk) continue;
-      if (dt <= 0) continue;
-      n.x += (n.dir === 'right' ? 1 : -1) * n.v * dt; n.phase = (n.phase || 0) + dt * STEP_RATE * 0.7;
-      if (n.x > n.walk[1]) n.dir = 'left'; if (n.x < n.walk[0]) n.dir = 'right';
+      n.x += (n.dir === 'right' ? 1 : -1) * n.v * dt;
+      n.phase = (n.phase || 0) + dt * STEP_RATE * 0.7;
+    }
+    NPCS = NPCS.filter(n => n.x > -NPC_EDGE - 12 && n.x < STR_DEF.w + NPC_EDGE + 12);   // fuera → desaparecen
+    if (t >= nextNpcAt && NPCS.length < NPC_MAX) {
+      spawnNpc();
+      nextNpcAt = t + 1.4 + Math.random() * 2.8;
     }
   }
   function drawActor(set, x, y, dir, moving, phase) {
-    const s = set[dir], fi = ((Math.floor(phase || 0) % 4) + 4) % 4, img = moving ? s.walk[fi] : s.idle, bob = moving && fi % 2 === 1 ? -1 : 0;
+    const s = set[dir] || set.down, fi = ((Math.floor(phase || 0) % 4) + 4) % 4, img = moving ? s.walk[fi] : s.idle, bob = moving && fi % 2 === 1 ? -1 : 0;
     ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(Math.round(x) - 5, Math.round(y) - 1, 10, 2);
     ctx.drawImage(img, Math.round(x) - 7, Math.round(y) - 21 + bob);
   }
   function streetActors(front) {                                     // de detrás a delante, según su y
-    const list = NPCS.map(n => ({ y: n.y, f: () => drawActor(n.set, n.x, n.y, n.dir, !!n.walk, n.phase) }));
+    const list = NPCS.map(n => ({ y: n.y, f: () => drawActor(n.set, n.x, n.y, n.dir, true, n.phase) }));
     list.push({ y: dan.y, f: () => drawActor(JJ_DAN, dan.x, dan.y, dan.dir, dan.moving, dan.phase) });
     list.filter(a => front ? a.y > P.y : a.y <= P.y).sort((a, b) => a.y - b.y).forEach(a => a.f());
   }
@@ -6418,46 +6643,78 @@
     ctx.fillStyle = g; ctx.fillRect(0, 0, STR_DEF.w, H);
   }
 
-  // ---------- NOTIFICACIÓN DEL MÓVIL: el móvil sube desde abajo a la derecha (donde está su icono), vibra y se ve el
-  // aviso de WhatsApp en la pantalla de bloqueo; luego vuelve a bajar ----------
-  let notif = null;                                                  // { t, from, text, then }
+  // ---------- NOTIFICACIÓN DEL MÓVIL: el mismo chasis que al abrir el teléfono (phone-home.png), sube desde abajo,
+  // vibra y muestra el aviso de WhatsApp en la pantalla de bloqueo; luego vuelve a bajar ----------
+  let notif = null, notifPhoneImg = null;                             // { t, from, text, then }
+  (function () { const im = new Image(); im.onload = () => { notifPhoneImg = im; }; im.src = 'assets/phone-home.png?v=hd2'; })();
   const NOTIF = { rise: 0.5, card: 0.7, down: 4.4, end: 4.9 };
-  function showNotif(from, text, at, then) { notif = { t: at, from, text, then, fx: {} }; }
-  function drawNotif(t) {
-    const PDx = window.PD; if (!notif || !PDx || t < notif.t) return;
-    const s = t - notif.t, fx = notif.fx;
-    if (s >= NOTIF.end) { const then = notif.then; notif = null; if (then) then(t); return; }
-    const once = (k, at, fn) => { if (!fx[k] && s >= at) { fx[k] = 1; fn(); } };
-    once('b1', 0.3, () => { sfx(65, 0.09, 'square', 0.06); setTimeout(() => sfx(65, 0.09, 'square', 0.06), 150); if (TOUCH && navigator.vibrate) try { navigator.vibrate([90, 60, 90]); } catch (_) {} });   // vibra
-    once('ding', NOTIF.card, () => { sfx(988, 0.12, 'sine', 0.05, 988); setTimeout(() => sfx(1319, 0.18, 'sine', 0.05, 1319), 110); });   // el tono de WhatsApp
-    once('b2', 1.6, () => { sfx(65, 0.09, 'square', 0.06); setTimeout(() => sfx(65, 0.09, 'square', 0.06), 150); });
+  const NOTIF_SRC = 240, NOTIF_SC = RES / 3;                        // el png es 240×480; en lógica 80×160 (×RES = tamaño real del sprite)
+  let notifBox = null;                                               // hitbox lógica del móvil de la notificación (para clic)
+  function showNotif(from, text, at, then) { notif = { t: at, from, text, then, fx: {} }; notifBox = null; }
+  function notifLayout(t) {                                          // posición/tamaño actuales del móvil (o null si no hay)
+    if (!notif || t < notif.t) return null;
+    const s = t - notif.t; if (s < 0 || s >= NOTIF.end) return null;
     const rise = s < NOTIF.rise ? ease(s / NOTIF.rise) : s < NOTIF.down ? 1 : 1 - ease((s - NOTIF.down) / (NOTIF.end - NOTIF.down));
     const shake = (s > 0.3 && s < 0.6) || (s > 1.6 && s < 1.9) ? Math.round(Math.sin(s * 90)) : 0;
-    const PW = 84, PH = 120, x = W - PW - 8 + shake, y = Math.round(H + 4 - rise * (PH - 6));
-    const R = (xx, yy, w, h, c, a) => { ctx.globalAlpha = a == null ? 1 : a; ctx.fillStyle = c; ctx.fillRect(xx, yy, w, h); ctx.globalAlpha = 1; };
-    ctx.save(); ctx.setTransform(RES, 0, 0, RES, 0, 0);
-    R(x + 3, y + 3, PW, PH, '#000', 0.4);                                                            // sombra
-    R(x - 1, y - 1, PW + 2, PH + 2, '#060608'); R(x, y, PW, PH, '#1c1c22'); R(x, y, PW, 1, '#4a4a54'); R(x, y, 1, PH, '#3a3a44');   // el cuerpo
-    const sx = x + 3, sy = y + 8, sw = PW - 6, sh = PH - 14;
-    const g = ctx.createLinearGradient(0, sy, 0, sy + sh); g.addColorStop(0, '#3a5a8a'); g.addColorStop(1, '#1a2236'); ctx.fillStyle = g; ctx.fillRect(sx, sy, sw, sh);   // el fondo de la pantalla de bloqueo
-    for (let i = 0; i < 18; i++) R(sx + hash(i * 3.3) * sw, sy + hash(i * 5.1) * sh, 1, 1, '#ffffff', 0.25);
-    R(x + PW / 2 - 7, y + 3, 14, 2, '#3a3a42'); R(x + PW / 2 + 9, y + 3, 2, 2, '#2a3a5a');        // altavoz y cámara
-    ctx.restore();
-    // los textos, en px reales (la letra fina): la hora grande y la tarjeta de la notificación
-    const k = textK(), X = v => Math.round(v * RES), PH_ = window.PDPhone;
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const time = PH_ && PH_.time ? PH_.time : '17:50', big = k * 2, tw = PDx.measure(time) * big;
-    PDx.drawText(ctx, time, X(sx + sw / 2) - Math.round(tw / 2), X(sy + 8), '#f4f4f0', big);
+    const PW = NOTIF_SRC / 3, PH = NOTIF_SRC * 2 / 3;
+    return { s, rise, shake, PW, PH, x: W - PW - 6 + shake, y: Math.round(H + 6 - rise * (PH - 12)) };
+  }
+  function notifHit(p, t) {                                          // ¿el clic/toque cae sobre el móvil de la notificación?
+    const L = notifLayout(t == null ? tNow : t); if (!L || L.rise < 0.15) return false;
+    return p.x >= L.x && p.x < L.x + L.PW && p.y >= Math.max(0, L.y) && p.y < Math.min(H, L.y + L.PH);
+  }
+  function openNotifPhone() {                                        // clic en la notificación → se va y abre el chat
+    if (!notif) return false;
+    const then = notif.then; notif = null; notifBox = null;
+    if (then) then(tNow);
+    const GA = window.GameAudio; if (GA) GA.click();
+    if (window.PDOpenPhone) window.PDOpenPhone({ chat: 'daniel' });
+    else if (window.PDPhone) { window.PDPhone.open({ chat: 'daniel' }); const el = document.getElementById('phoneUI'); if (el) el.classList.add('open'); }
+    return true;
+  }
+  function drawNotif(t) {
+    const PDx = window.PD; if (!notif || !PDx || t < notif.t) return;
+    const L = notifLayout(t); if (!L) { const then = notif.then; notif = null; notifBox = null; if (then) then(t); return; }
+    const s = L.s, fx = notif.fx;
+    const once = (k, at, fn) => { if (!fx[k] && s >= at) { fx[k] = 1; fn(); } };
+    once('b1', 0.3, () => { sfx(65, 0.09, 'square', 0.06); setTimeout(() => sfx(65, 0.09, 'square', 0.06), 150); if (TOUCH && navigator.vibrate) try { navigator.vibrate([90, 60, 90]); } catch (_) {} });
+    once('ding', NOTIF.card, () => { sfx(988, 0.12, 'sine', 0.05, 988); setTimeout(() => sfx(1319, 0.18, 'sine', 0.05, 1319), 110); });
+    once('b2', 1.6, () => { sfx(65, 0.09, 'square', 0.06); setTimeout(() => sfx(65, 0.09, 'square', 0.06), 150); });
+    const { PW, PH, x, y } = L; notifBox = { x, y, w: PW, h: PH };
+    const Sc = NOTIF_SC, ox = Math.round(x * RES), oy = Math.round(y * RES);
+    const p = (sx, sy) => [ox + Math.round(sx * Sc), oy + Math.round(sy * Sc)];   // coords del png → px reales del canvas
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = 0.4; ctx.fillStyle = '#000'; ctx.fillRect(ox + Math.round(3 * Sc), oy + Math.round(4 * Sc), Math.round(NOTIF_SRC * Sc), Math.round(NOTIF_SRC * 2 * Sc)); ctx.globalAlpha = 1;
+    if (notifPhoneImg) ctx.drawImage(notifPhoneImg, ox, oy, Math.round(NOTIF_SRC * Sc), Math.round(NOTIF_SRC * 2 * Sc));
+    else {                                                           // por si aún no cargó el sprite
+      ctx.fillStyle = '#16161a'; ctx.fillRect(ox, oy, Math.round(NOTIF_SRC * Sc), Math.round(NOTIF_SRC * 2 * Sc));
+      ctx.fillStyle = '#bdd6ed'; ctx.fillRect(...p(20, 22), Math.round(200 * Sc), Math.round(432 * Sc));
+    }
+    // hora (como en la pantalla de bloqueo del móvil real)
+    const PH_ = window.PDPhone, time = PH_ && PH_.time ? PH_.time : '17:50';
+    const tk = Math.max(2, Math.round(3 * Sc)), [tx0, ty0] = p(120, 96);
+    const tw = PDx.measure(time) * tk;
+    PDx.drawText(ctx, time, tx0 - Math.round(tw / 2) + Math.round(Sc), ty0 + Math.round(Sc), '#140c0a', tk);
+    PDx.drawText(ctx, time, tx0 - Math.round(tw / 2), ty0, '#1a1a1e', tk);
+    // tarjeta de WhatsApp (misma composición que phone-lock.png)
     const cu = s < NOTIF.card ? 0 : ease(clamp((s - NOTIF.card) / 0.35, 0, 1));
     if (cu > 0) {
-      const cx0 = X(sx + 2), cw = X(sw - 4), lines = wrapText(notif.text, Math.floor((cw - 6 * k) / k)), lh = 9 * k;
-      const ch = 22 * k + lines.length * lh + 2 * k, cy0 = X(sy + 34) - Math.round((1 - cu) * 10 * k);
+      const fk = Math.max(1, Math.round(Sc));
+      const [bx, by0] = p(34, 192), bw = Math.round(172 * Sc), bh = Math.round(72 * Sc);
+      const by = by0 - Math.round((1 - cu) * 8 * Sc);
       ctx.globalAlpha = cu;
-      ctx.fillStyle = 'rgba(244,244,240,0.95)'; ctx.fillRect(cx0, cy0, cw, ch); ctx.fillRect(cx0 + k, cy0 - k, cw - 2 * k, ch + 2 * k);   // la tarjeta, de esquinas romas
-      ctx.fillStyle = '#25d366'; ctx.fillRect(cx0 + 3 * k, cy0 + 3 * k, 6 * k, 6 * k); ctx.fillStyle = '#ffffff'; ctx.fillRect(cx0 + 5 * k, cy0 + 5 * k, 2 * k, 2 * k);   // el icono de WhatsApp
-      PDx.drawText(ctx, PDx.norm('WhatsApp'), cx0 + 11 * k, cy0 + 4 * k, '#7a7e86', k);
-      PDx.drawText(ctx, PDx.norm(notif.from), cx0 + 3 * k, cy0 + 13 * k, '#141418', k);
-      lines.forEach((l, i) => PDx.drawText(ctx, l, cx0 + 3 * k, cy0 + 22 * k + i * lh, '#3a3e48', k));
+      ctx.fillStyle = '#000'; ctx.fillRect(bx + Math.round(2 * Sc), by + Math.round(2 * Sc), bw, bh);   // sombra
+      ctx.fillStyle = '#f4f4f0'; ctx.fillRect(bx, by, bw, bh);
+      ctx.fillRect(bx + Math.round(Sc), by - Math.round(Sc), bw - Math.round(2 * Sc), bh + Math.round(2 * Sc));
+      // icono WhatsApp (círculo verde + punto)
+      const [ix, iy] = [bx + Math.round(14 * Sc), by + Math.round(24 * Sc)], ir = Math.round(12 * Sc);
+      ctx.fillStyle = '#25d366'; ctx.beginPath(); ctx.arc(ix, iy, ir, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#f4f4f0'; ctx.beginPath(); ctx.arc(ix, iy, Math.round(5 * Sc), 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#d8d8d4'; ctx.fillRect(bx + Math.round(32 * Sc), by + Math.round(10 * Sc), Math.round(Sc), bh - Math.round(20 * Sc));
+      const tx = bx + Math.round(40 * Sc), maxW = Math.floor((bw - Math.round(48 * Sc)) / fk);
+      PDx.drawText(ctx, PDx.norm('WhatsApp'), tx, by + Math.round(8 * Sc), '#7a7e86', fk);
+      PDx.drawText(ctx, PDx.norm(notif.from), tx, by + Math.round(20 * Sc), '#141418', fk);
+      wrapText(notif.text, maxW).forEach((l, i) => PDx.drawText(ctx, l, tx, by + Math.round(34 * Sc) + i * (fk * 9), '#3a3e48', fk));
       ctx.globalAlpha = 1;
     }
     ctx.restore();
@@ -6986,7 +7243,7 @@
     const power = powerAt(t);                                            // luz eléctrica (1 = encendida); la del día no depende de ella
     outageSounds(t); autosave(t); fuseTick(t); runLater(t);
     const jrBlack = jrTick(t); furnTick(t, dt); liftTick(t); blockedChecks(t); lobbyTick(t);
-    const hsBlack = hsTick(t, dt); danTick(dt); npcTick(dt); streetEdges(t);   // el saludo y la calle                                           // en su cuarto: cambiarse funde a negro un momento
+    const hsBlack = hsTick(t, dt); danTick(dt); npcTick(t, dt); streetEdges(t);   // el saludo y la calle                                           // en su cuarto: cambiarse funde a negro un momento
     camTick(dt);
     ctx.setTransform(RES, 0, 0, RES, -Math.round(camX * RES), -Math.round(camY * RES)); ctx.imageSmoothingEnabled = false;   // en px lógicos del mundo (con la cámara)   // a partir de aquí, en px lógicos
 
@@ -7008,11 +7265,6 @@
       ctx.restore();
     }
 
-    if (mark) {                                                      // marca de destino al tocar
-      const a = 1 - (now - mark.t) / 600;
-      if (a > 0) { ctx.fillStyle = `rgba(232,224,208,${a * 0.8})`; const mx = Math.round(mark.x), my = Math.round(mark.y); ctx.fillRect(mx - 3, my, 2, 1); ctx.fillRect(mx + 2, my, 2, 1); ctx.fillRect(mx, my - 2, 1, 1); ctx.fillRect(mx, my + 2, 1, 1); }
-      else mark = null;
-    }
     const cst = cutTick(t);
     if (room === HALL) {                                             // la caja 1 delante o detrás del personaje según dónde esté cada uno
       const front = !!cst || (box1 === 'here' && P.y < HALL_BOX1.y + HALL_BOX1.h + 2);
@@ -7023,10 +7275,10 @@
       }
     } else {
       if (room === STR) streetActors(false);                         // en la calle: la gente y Daniel, de detrás a delante
-      drawPlayer();
+      if (!hsPastGate()) drawPlayer();                               // si ya pasó la verja, se pinta con Daniel (orden por y)
       if (room === STR) { streetActors(true); streetTraffic(t, dt); }
     }
-    if (room === LOB) { drawGate(t); drawHandshake(t); }             // la verja y Daniel, delante (más al sur que Juanjo); el saludo
+    if (room === LOB) { drawGate(t); drawHandshake(t); }             // la verja y Daniel; el saludo
 
     // penumbra y luces: tarde por la ventana, lámpara de techo cálida y la tele, fría y parpadeante
     // OSCURIDAD como capa aparte: las luces que de verdad iluminan (linterna, claridad de la sala en la entrada) la
@@ -7167,7 +7419,7 @@
       Object.assign(P, { x: sp.x, y: sp.y, dir: ['up', 'down', 'left', 'right'].includes(sp.dir) ? sp.dir : 'down', ang: isFinite(sp.ang) ? sp.ang : Math.PI / 2 });
     }
     flashOn = !!(window.PDPhone && window.PDPhone.flashlight);
-    keys.clear(); mark = null; moved = false; movedAt = null; dragging = false;
+    keys.clear(); mark = null; moved = false; movedAt = null;
     outAt = resumed ? -10 : OUT_AT; outFx = resumed ? 2 : 0; saved = resumed;
     SAYS.length = SAYS_INTRO; sayI = from === 'dif' || from === 'apostar' || from === 'llaves' ? SAYS_INTRO : 0;    // tras el chat con mamá ya no se repiten los primeros bocadillos
     sayNext = resumed ? FADE_IN + 1 : OUT_AT + SAY_AFTER; sayAt = null; stopBuzz();
@@ -7185,7 +7437,7 @@
     t0 = performance.now() / 1000; last = performance.now();
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   }
-  function stop() { running = false; cancelAnimationFrame(raf); cv.hidden = true; keys.clear(); dragging = false; stopBuzz(); joyEnd(); joyEl.hidden = true; if (todoEl) todoEl.hidden = true; }
+  function stop() { running = false; cancelAnimationFrame(raf); cv.hidden = true; keys.clear(); stopBuzz(); joyEnd(); joyEl.hidden = true; if (todoEl) todoEl.hidden = true; }
   window.PDRoom = { start, stop, get running() { return running; }, get player() { return { x: P.x, y: P.y, dir: P.dir, room: room.name }; } };
 })();
 </script>
