@@ -5891,8 +5891,31 @@
   FURN.push({ id: 'liftpanel', room: ELV, rect: ELV_DEF.PANEL, label: 'Usar la botonera', game: G_LIFT });
 
   // ---------- LA RECEPCIÓN: la puerta blanca se abre al llegar a ella; detrás, la verja y Daniel ----------
-  // DANIEL: chándal gris, gafas de sol, pelo negro corto y zapatillas blancas
-  const JJ_DAN = makeJJ(Object.assign({}, JJ_PAL, { H: '#16110e', h: '#2a211b', T: '#5e636e', t: '#464a54', D: '#5e636e', R: '#e8e8e8', B: '#5e636e', g: '#3a3a48', W: '#3a3a48', P: '#22262e', K: '#e8e8e8', S: '#d9a47f', s: '#b98060', c: '#d08870' }));
+  // DANIEL (a partir de su foto): cara redonda, pelo oscuro muy corto, sin gafas, cejas marcadas y una sonrisa de lado;
+  // corpulento, con la chaqueta acolchada negra abierta, camiseta clara debajo, pantalón marrón y zapatos oscuros.
+  // Se parte del mismo cuerpo que Juanjo y se le cambian la cara y la ropa
+  const JJ_DAN = makeJJ(Object.assign({}, JJ_PAL, {
+    H: '#1c1512', h: '#3a2c22', S: '#e0b090', s: '#c08a68', c: '#d89c84', E: '#24160f', M: '#a86a5a',
+    J: '#1a1a20', Q: '#2c2c36', j: '#0c0c10', Y: '#e6dfcf', P: '#4a3a2c', K: '#141212'
+  }), rows => {
+    const front = rows[5].includes('Gg') && rows[5].includes('gG'), back = !rows[4].includes('S');
+    return rows.map((r, y) => {
+      if (y === 3 && front) return r.replace(/H/g, 'S');              // pelo muy corto: la frente despejada, sin patillas
+      if (y === 4) return r.replace(/G/g, 'h');                       // sin gafas: en su sitio, las cejas
+      if (y === 5) return r.replace(/G/g, 'S').replace(/g/g, 'E').replace(/W/g, 'S');   // los ojos
+      if (y === 7) return r.replace('WWWW', 'SSMM').replace('WWW', 'SMS').replace(/W/g, 'S');   // sonrisa pequeña, de lado
+      if (y === 8) return r.replace(/M/g, 'S');
+      if (y >= 10 && y <= 15) {                                       // la chaqueta (acolchada: franjas) abierta, con la camiseta en medio
+        return [...r].map((ch, x) => {
+          if ('TDRBX'.includes(ch)) return front && x >= 4 && x <= 7 ? 'Y' : y % 2 ? 'Q' : 'J';
+          if (ch === 't') return front && x >= 4 && x <= 7 ? 'Y' : 'j';
+          if (ch === 'S' && y >= 11 && y <= 14 && (back || front ? (x === 0 || x === 11) : true)) return y % 2 ? 'Q' : 'J';   // mangas largas
+          return ch;
+        }).join('');
+      }
+      return r;
+    });
+  });
   const lob = { doorT: null, talk: false };
   const lobDoor = t => jr.met ? 1 : lob.doorT == null ? 0 : ease(clamp((t - lob.doorT) / 0.7, 0, 1));
   const vestOpen = () => LOB_DEF.VEST.forEach(r => { if (!LOB.walk.includes(r)) LOB.walk.push(r); });
@@ -5936,9 +5959,9 @@
     R(x0, top - 1, 2, base - top + 1, C); R(x1 - 2, top - 1, 2, base - top + 1, C); R(mid, top, 2, base - top, C);   // los postes y el de la hoja pequeña
     R(mid + 3, 144, 1, 4, '#b8b8b4');                                                                        // la cerradura
     R(x0 + 2, base, x1 - x0 - 2, 1, '#000', 0.3);
-    const DN = LOB_DEF.DAN;                                          // Daniel, en la acera, mirando al portal
+    const DN = LOB_DEF.DAN;                                          // Daniel, en la acera, de cara (esperando a Juanjo)
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(DN.x - 5, DN.y - 1, 10, 2);
-    ctx.drawImage(JJ_DAN.up.idle, DN.x - 7, DN.y - 21);
+    ctx.drawImage(JJ_DAN.down.idle, DN.x - 7, DN.y - 21);
   }
   function lobReveal(t, lvl) {                                       // de día en la calle; la claridad entra por la verja y por el cristal de la puerta
     const d = lobDoor(t), L = LOB_DEF.LIFT, o = liftDoor(t, 'lob');
