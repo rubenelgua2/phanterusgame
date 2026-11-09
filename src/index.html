@@ -5375,7 +5375,7 @@
       else return;
       e.preventDefault(); return;
     }
-    if (e.code === 'KeyF' && !busy()) { if (moveBox1() || openFuse() || jrUse() || openFurn() || callLift() || openSlot()) e.preventDefault(); return; }   // F: apartar la caja o abrir el cuadro (si está al lado)
+    if (e.code === 'KeyF' && !busy()) { if (moveBox1() || openFuse() || jrUse() || openFurn() || callLift() || barActUse() || openSlot()) e.preventDefault(); return; }   // F: apartar la caja o abrir el cuadro (si está al lado)
     const k = KEYMAP[e.code]; if (!k || busy()) return;
     keys.add(k); moved = true; e.preventDefault();
   });
@@ -5401,6 +5401,7 @@
     if (jrTap(tp)) { e.preventDefault(); return; }
     { const f = furnNear(); if (f && inBox(tp, f.rect, 3) && openFurn(f)) { e.preventDefault(); return; } }   // tocar un mueble al lado
     if (liftCallNear() && inBox(tp, { x: 70, y: 48, w: 44, h: 26 }, 2) && callLift()) { e.preventDefault(); return; }
+    if (barActTap(tp)) { e.preventDefault(); return; }   // en el bar: el camarero, la máquina de tabaco
     if (slotNear() && inBox(tp, { x: BAR_DEF.SLOT.x - 2, y: BAR_DEF.MACH_Y - 8, w: BAR_DEF.SLOT.w + 8, h: BAR_DEF.MACH_F - BAR_DEF.MACH_Y + 8 }, 2) && openSlot()) { e.preventDefault(); return; }   // tocar la tragaperras   // el botón del ascensor                  // en su cuarto: el armario, la cama, la ropa, la cartera
     // con teclado/ratón el clic NO mueve: solo interacciones (muebles, botones…). En táctil, el joystick.
   });
@@ -6761,6 +6762,7 @@
     if (trail.length > 400) trail.shift();
     let tx = dan.x, ty = dan.y;
     for (let i = trail.length - 1; i >= 0; i--) { if (Math.hypot(P.x - trail[i].x, P.y - trail[i].y) >= 16) { tx = trail[i].x; ty = trail[i].y; break; } }
+    if (dan.goto) { tx = dan.goto.x; ty = dan.goto.y; }                // va a un sitio concreto (la máquina de tabaco)
     const dx = tx - dan.x, dy = ty - dan.y, d = Math.hypot(dx, dy);
     dan.moving = d > 0.6;
     if (dan.moving) { const st = Math.min(d, SPEED * dt); dan.x += dx / d * st; dan.y += dy / d * st; dan.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'); dan.phase += dt * STEP_RATE; }
@@ -6919,6 +6921,7 @@
         Object.assign(dan, { x: 178, y: 213, dir: 'up', moving: false }); trail.length = 0;
         if (missionOn('bajar')) completeMission('bajar');
         saveAt('llaves');
+        if (!jr.tabacoDone) atTime(t + 3.8, () => say('Espera, antes necesito tabaco. Dile al camarero que encienda la máquina.', 3.4, tNow + 0.1, tt => { addMission('bar'); saveAt('llaves'); }, () => ({ x: dan.x, y: dan.y })));
       } else {                                                       // la derecha (la zona de apuestas), más adelante: vuelve a la acera
         Object.assign(P, { x: Dr.x + Dr.w / 2, y: 86, dir: 'down', ang: Math.PI / 2, moving: false, phase: 0, tx: null });
         Object.assign(dan, { x: P.x + 14, y: 88 }); trail.length = 0;
@@ -7065,6 +7068,7 @@
   function drawBarLife(t) {
     const SL = BAR_DEF.SLOT, y0 = BAR_DEF.MACH_Y;                     // la tragaperras: su pantalla y sus botones parpadean
     if (Math.sin(t * 5) > 0) PR(SL.x + 3, y0 + 2, SL.w - 6, 8, '#ffd84a', 0.22);
+    drawTabacoLights(t);
     for (let k = 0; k < 5; k++) if (Math.sin(t * 6 + k) > 0.3) PR(SL.x + 2 + k * 5, y0 + 27, 4, 3, '#ffffff', 0.5);
   }
   // las MESAS del bar: bajas, de madera, para comer o tomar algo, con cuatro sillas rojas (dos a cada lado), platos,
@@ -7125,6 +7129,14 @@
   const BAR_SPOTS = [{ x: 158, act: 'pour' }, { x: 170, act: 'pour' }, { x: 214, act: 'wipe' }, { x: 298, act: 'pour' }, { x: 250, act: 'look' }, { x: 336, act: 'wipe' }, { x: 368, act: 'coffee' }, { x: 196, act: 'look' }, { x: 226, act: 'idle' }, { x: 274, act: 'shelf' }, { x: 186, act: 'shelf' }, { x: 344, act: 'idle' }];
   function barmanTick(t, dt) {
     const B = barMan;
+    if (B.force) {                                                   // le han pedido algo: va y lo hace
+      const F = B.force, d = F.x - B.x;
+      if (Math.abs(d) > 0.5) { B.x += Math.sign(d) * Math.min(Math.abs(d), 30 * dt); B.dir = d > 0 ? 'right' : 'left'; B.moving = true; B.act = 'look'; B.phase += dt * STEP_RATE * 0.75; return; }
+      B.moving = false; B.phase = 0; B.dir = 'left';
+      if (!F.at) F.at = t;
+      if (t - F.at > 1.0) { const f = F.then; B.force = null; B.t = 0; B.dur = 2; B.tx = B.x; f(t); }
+      return;
+    }
     if (B.moving) {
       const d = B.tx - B.x, st = Math.sign(d) * Math.min(Math.abs(d), 26 * dt);
       B.x += st; B.dir = d > 0 ? 'right' : 'left'; B.phase += dt * STEP_RATE * 0.75;
@@ -7160,15 +7172,105 @@
     const list = BAR_DEF.TABLES.map(T => ({ y: T.y + 2, f: () => drawTableSet(T, false) })).concat(BAR_DEF.TABLES.map(T => ({ y: T.y + 10, f: () => drawTableSet(T, true) })));
     list.push({ y: BAR_DEF.PILLAR.y + BAR_DEF.PILLAR.s, f: drawPillar });
     list.push({ y: barMan.y, f: drawBarman });
+    if (slotGuyOn()) list.push({ y: slotGuy.y, f: () => drawSlotGuy(tNow) });
     list.push({ y: dan.y, f: () => drawActor(JJ_DAN, dan.x, dan.y, dan.dir, dan.moving, dan.phase) });
     list.filter(a => front ? a.y > P.y : a.y <= P.y).sort((a, b) => a.y - b.y).forEach(a => a.f());
   }
   function barTick(t, dt) {
     if (room !== BAR) return;
     barmanTick(t, dt);                                               // el camarero, a lo suyo
+    barMissionTick(t, dt);
     const D2 = BAR_DEF.DOOR2;
     if (!swap && P.moving && P.dir === 'down' && P.y >= 113 && P.x > D2.x && P.x < D2.x + D2.w && t > edgeCool) {
       edgeCool = t + 3; popup = { t, text: 'La zona de apuestas, muy pronto.' }; sfx(150, 0.18, 'square', 0.06, 110);
+    }
+  }
+  // ---------- EN EL BAR: la misión «Antes de apostar» (el tabaco de Daniel) y el señor que juega a la tragaperras ----------
+  // Daniel quiere tabaco: hay que pedirle al camarero que active la máquina (lo hace con el mando, desde la barra); la
+  // máquina enciende sus luces y, al acercarse a ella, Daniel se compra un paquete de Marlboro. Mientras dura la misión,
+  // un señor mayor está pegado a la tragaperras (ocupada); al acabarla, se va.
+  const SLOT_GUY = npcLook({ H: '#9a9a96', h: '#7a7a76', T: '#6a4a2a', t: '#5a3a1e', P: '#2a2a3a', K: '#1a1515', E: '#2a1a14', M: '#a86a5a' });   // chaqueta marrón, pelo canoso
+  const slotGuy = { x: 116, y: 82, state: 'gone', shout: null, next: 0, step: 0, phase: 0, dir: 'up' };
+  const SLOT_GUY_SOLID = { x: 111, y: 78, w: 0, h: 6 }; BAR.solid.push(SLOT_GUY_SOLID);
+  const GUY_LINES = ['¡VAMOS, VAMOS!', '¡OTRA VEZ NO...!', 'ESTA ME DEBE UNA', '¡ESO ES, PAGA!', 'UNA MAS Y ME VOY'];
+  const slotGuyOn = () => room === BAR && slotGuy.state !== 'gone';
+  let tabacoScene = null, tabacoFx = null;                           // tabacoFx: { t } la máquina vendiendo (luces y el paquete cayendo)
+  const BAR_ACTS = [
+    { rect: { x: 150, y: 58, w: 236, h: 6 }, m: 8, label: 'Hablar con el camarero', can: () => missionOn('bar') && !jr.tabaco, run: talkBarman },
+    { rect: { x: 68, y: 64, w: 30, h: 10 }, m: 10, label: 'Comprar tabaco', can: () => jr.tabaco && !jr.tabacoDone, run: buyTabaco },
+    { rect: { x: 104, y: 64, w: 26, h: 10 }, m: 10, label: 'Tragaperras ocupada', can: () => slotGuy.state === 'play', run: t => say('Está ocupada. Este señor no la suelta.', 2.4, t + 0.1) }
+  ];
+  function barActNear() {
+    if (room !== BAR || swap || fp || slotUI || walletUI || tabacoScene) return null;
+    let best = null, bd = Infinity;
+    for (const a of BAR_ACTS) { if (!a.can()) continue; const d = rectDist(P.x, P.y - 2, a.rect); if (d < a.m && d < bd) { best = a; bd = d; } }
+    return best;
+  }
+  function barActUse() { const a = barActNear(); if (!a) return false; Object.assign(P, { moving: false, phase: 0, tx: null }); keys.clear(); joyEnd(); a.run(tNow); return true; }
+  function barActTap(p) { const a = barActNear(); if (!a) return false; const r = a.rect; return p.x > r.x - 6 && p.x < r.x + r.w + 6 && p.y > r.y - 16 && p.y < r.y + r.h + 8 ? barActUse() : false; }
+  function barActTag() { const a = barActNear(); if (!a) return false; const r = a.rect; drawTag(clamp(P.x, r.x + 8, r.x + r.w - 8), r.y + r.h, TOUCH ? (a.run === talkBarman ? 'Toca para hablar' : 'Toca') : a.label); return true; }
+  const barmanWho = () => ({ x: barMan.x, y: barMan.y - 4 }), danWho = () => ({ x: dan.x, y: dan.y });
+  function talkBarman(t) {
+    tabacoScene = { kind: 'talk' };
+    Object.assign(P, { dir: 'up', ang: -Math.PI / 2 });
+    say('Perdona, ¿me activas la máquina de tabaco?', 2.6, t + 0.1);
+    say('Claro, ahora mismo.', 2.0, t, () => {
+      barMan.force = { x: 156, then: tt => {                         // va hacia ese lado de la barra y le da al mando
+        jr.tabaco = 1; sfx(1200, 0.08, 'square', 0.04, 1600); setTimeout(() => sfx(1600, 0.12, 'square', 0.04, 1600), 130);
+        say('Ya la tienes encendida.', 2.0, tt + 0.3, () => { tabacoScene = null; saveAt('llaves'); }, barmanWho);
+      } };
+    }, barmanWho);
+  }
+  function buyTabaco(t) {
+    tabacoScene = { kind: 'buy', t0: t, paid: 0 };
+    dan.goto = { x: clamp(P.x >= 83 ? P.x - 12 : P.x + 12, 72, 96), y: Math.max(76, P.y), face: 'up' };   // a la máquina, al lado de Juanjo
+    say('Trae, que lo pago yo.', 2.0, t + 0.2, null, danWho);
+  }
+  function barMissionTick(t, dt) {
+    if (room !== BAR) return;
+    // el señor de la tragaperras: juega mientras dura la misión; al acabarla, se levanta y se va por la puerta
+    if (slotGuy.state === 'gone' && missionOn('bar')) Object.assign(slotGuy, { state: 'play', x: 116, y: 82, dir: 'up' });
+    if (slotGuy.state === 'play') {
+      if (t > slotGuy.next && !tabacoScene && !(sayAt != null)) { slotGuy.next = t + 4 + Math.random() * 5; slotGuy.shout = { t, text: GUY_LINES[Math.floor(Math.random() * GUY_LINES.length)] }; sfx(700 + Math.random() * 300, 0.05, 'square', 0.02, 900); }
+      if (!missionOn('bar')) Object.assign(slotGuy, { state: 'leave', step: 0, shout: { t, text: 'BAH, ME VOY' } });
+    }
+    if (slotGuy.state === 'leave') {                                 // a la puerta de la calle
+      const path = [{ x: 124, y: 96 }, { x: 178, y: 200 }, { x: 178, y: 226 }], g = path[slotGuy.step];
+      const dx = g.x - slotGuy.x, dy = g.y - slotGuy.y, d = Math.hypot(dx, dy), st = Math.min(d, SPEED * 0.8 * dt);
+      if (d < 0.6) { if (++slotGuy.step >= path.length) slotGuy.state = 'gone'; }
+      else { slotGuy.x += dx / d * st; slotGuy.y += dy / d * st; slotGuy.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'); slotGuy.phase += dt * STEP_RATE; }
+    }
+    SLOT_GUY_SOLID.w = slotGuy.state === 'play' ? 10 : 0;
+    // Daniel comprando: llega a la máquina, mete el dinero, la máquina se ilumina y cae el paquete
+    const S = tabacoScene;
+    if (S && S.kind === 'buy' && dan.goto && Math.hypot(dan.x - dan.goto.x, dan.y - dan.goto.y) < 1 && !S.paid) {
+      S.paid = t; dan.dir = 'up'; tabacoFx = { t };
+      for (let i = 0; i < 4; i++) setTimeout(() => sfx(2000 + i * 150, 0.04, 'triangle', 0.03, 2500), i * 160);   // las monedas
+      atTime(t + 1.4, () => { sfx(140, 0.12, 'square', 0.06, 70); });   // ¡clonc!, el paquete
+      atTime(t + 2.4, () => say('Un Marlboro, como siempre.', 2.4, tNow + 0.1, tt => {
+        jr.tabacoDone = true; dan.goto = null; tabacoScene = null; tabacoFx = null; renderTodo();
+        atTime(tt + 0.6, () => { completeMission('bar'); saveAt('llaves'); });
+      }, danWho));
+    }
+  }
+  function drawSlotGuy(t) {                                          // el señor, de espaldas, dándole a los botones
+    const g = slotGuy; if (!slotGuyOn()) return;
+    const press = g.state === 'play' && Math.sin(t * 7) > 0.6;
+    drawActor(SLOT_GUY, g.x, g.y, g.dir, g.state === 'leave', g.phase);
+    if (press) { PR(g.x + 3, g.y - 17, 2, 4, '#5a3a1e'); PR(g.x + 3, g.y - 19, 2, 2, '#a86a5a'); }   // la mano, dándole al botón
+    if (g.shout && t - g.shout.t < 2) { const PDx = window.PD; if (PDx) { const s = PDx.norm(g.shout.text), w = PDx.measure(s); PR(g.x - w / 2 - 2, g.y - 32, w + 4, 9, '#000', 0.7); PDx.drawText(ctx, s, Math.round(g.x - w / 2), g.y - 31, '#ffd84a'); } }
+  }
+  function drawTabacoLights(t) {                                     // la máquina de tabaco: apagada hasta que el camarero la activa
+    const TB = BAR_DEF.TOBACCO, y0 = BAR_DEF.MACH_Y;
+    if (!jr.tabaco) { PR(TB.x + 2, y0 + 2, TB.w - 4, 32, '#000', 0.55); PR(TB.x + 4, y0 + 30, 9, 2, '#0a1a0a'); return; }   // apagada: escaparate y pantalla a oscuras
+    PR(TB.x + 2, y0 + 2, TB.w - 4, 6, '#6ab0ff', 0.12 + 0.1 * Math.sin(t * 4));   // el rótulo, encendido
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) {        // los botones de cada cajetilla, parpadeando
+      const on = tabacoFx ? Math.floor(t * 10 + c + r) % 2 : Math.sin(t * 3 + c * 0.9 + r * 1.7) > 0.2;
+      if (on) PR(TB.x + 3 + c * 5, y0 + 14 + r * 6, 4, 1, '#ffffff', 0.85);
+    }
+    if (tabacoFx) {
+      const e = t - tabacoFx.t; PR(TB.x + 4, y0 + 30, 9, 2, Math.floor(t * 6) % 2 ? '#ffffff' : '#4aff6a');
+      if (e > 1.4) { PR(TB.x + 8, y0 + 35, 10, 4, '#f4f4f0'); PR(TB.x + 8, y0 + 35, 10, 2, '#c8202a'); PR(TB.x + 11, y0 + 36, 4, 1, '#ffffff'); }   // el paquete, rojo y blanco, en el cajetín
     }
   }
   function barLights(t, power, lvl) {                                // la luz roja del neón, el letrero y el resplandor de la tele
@@ -7291,7 +7393,7 @@
   };
   const inC = (p, c, pad) => Math.hypot(p.x - c.cx, p.y - c.cy) <= c.r + (pad || 0);
   function slotNear() {
-    if (room !== BAR || swap || fp || panel || slotUI || walletUI) return false;
+    if (room !== BAR || swap || fp || panel || slotUI || walletUI || slotGuyOn() || tabacoScene) return false;
     const S = BAR_DEF.SLOT; return P.x > S.x - 6 && P.x < S.x + S.w + 6 && P.y < BAR_DEF.MACH_F + 14;
   }
   function openSlot() {
@@ -8323,6 +8425,8 @@
     dif: { title: 'Sube el diferencial', help: 'Ve a la entrada, aparta la caja que tapa el cuadro de luz y sube el DIF.' },
     bajar: { title: 'Ve a la casa de apuestas', help: 'Contesta a Daniel por WhatsApp ("okey, voy"), sal de casa, baja en el ascensor y ve con él a la casa de apuestas.' },
     llaves: { title: 'Encuentra las llaves', help: 'Busca en los muebles de la casa: el salón, el cuarto de tu madre y el baño.' },
+    bar: { title: 'Antes de apostar', help: 'Daniel quiere tabaco: pídele al camarero que active la máquina y acércate a ella.',
+      subs: [['Ayuda a Daniel a comprar un paquete de tabaco (habla con el camarero)', () => !!jr.tabacoDone]] },
     apostar: { title: 'Prepárate para apostar', help: 'Ve a tu cuarto, cámbiate de ropa y coge la cartera y la tarjeta de crédito de tu madre.',
       subs: [['Vístete', () => jr.dressed], ['Recoge el cuarto', () => jr.clothes.every(Boolean)], ['Haz la cama', () => jr.bed], ['Coge la cartera', () => jr.wallet],
         ['Busca la tarjeta de crédito de tu madre (prueba en la mesita de noche de tu madre)', () => jr.card]] }
@@ -8336,7 +8440,7 @@
   }
   // la hora tras cada misión: subir el DIF y ver lo del grito lleva un rato; arreglarse y buscarlo todo, más.
   // Al salir de casa son las 17:45. Empieza a las 16:05 (como el reloj de la pared)
-  const CLOCK_AFTER = { dif: '16:15', apostar: '17:45', llaves: '17:50', bajar: '17:55' };
+  const CLOCK_AFTER = { dif: '16:15', apostar: '17:45', llaves: '17:50', bajar: '17:55', bar: '18:00' };
   let clockShow = null;                                              // aviso en pantalla de la hora nueva: { t, from, to }
   function completeMission(id) {
     const m = missions.find(x => x.id === id); if (!m || m.done) return;
@@ -8542,6 +8646,7 @@
     if (nearBox1()) drawTag(box1Center().x, HALL_DEF.BOX1.fy + HALL_DEF.BOX1.d, TOUCH ? 'Toca para mover' : 'Mover caja');
     else if (nearFuse()) drawTag(HALL_DEF.FUSE.x + HALL_DEF.FUSE.w / 2, HALL_DEF.FUSE.y + HALL_DEF.FUSE.h, TOUCH ? 'Toca para abrir' : 'Abrir cuadro');
     else if (liftCallNear()) drawTag(LND_DEF.LIFT.x + LND_DEF.LIFT.w / 2, 72, TOUCH ? 'Toca para llamar' : 'Llamar al ascensor');
+    else if (barActTag()) {}
     else if (slotNear()) drawTag(BAR_DEF.SLOT.x + BAR_DEF.SLOT.w / 2, BAR_DEF.MACH_F, TOUCH ? 'Toca para jugar' : 'Jugar a la tragaperras');
     else if (furnNear()) { const f = furnNear(); drawTag(f.rect.x + f.rect.w / 2, f.rect.y + f.rect.h, TOUCH ? 'Toca para mirar' : f.label); }
     else { const a = jrNear(); if (a) drawTag(a.rect.x + a.rect.w / 2, a.rect.y + a.rect.h, a.label); }
@@ -8580,8 +8685,8 @@
     room = SALA; swap = null; later = [];
     box1 = 'here'; cut = null; if (!HALL.solid.includes(HALL_BOX1)) HALL.solid.push(HALL_BOX1);         // la caja vuelve delante del cuadro de luz
     panel = false; panelCloseAt = null; difUp = false; difTripAt = null; fuse = 'idle'; back = null; brkUp.forEach((_, i) => { brkUp[i] = i !== 9; });   // cuadro de luz como al principio
-    Object.assign(story, { scream: false, smell: false, bath: false }); missions = []; clockShow = null; fp = null; popup = null; Object.assign(lift, { state: 'idle', floor: 0, pending: false }); for (const k in fstate) delete fstate[k];
-    jrAct = null; const jrDone = from === 'llaves'; Object.assign(jr, { dressed: jrDone, bed: jrDone, clothes: [jrDone, jrDone, jrDone], tidy: jrDone, wallet: jrDone, purse: jrDone ? { 500: 1 } : {}, card: false, keys: false, keyGot: false, keySpot: null, met: false, tried: [] });
+    Object.assign(story, { scream: false, smell: false, bath: false }); missions = []; tabacoScene = null; tabacoFx = null; slotGuy.state = 'gone'; dan.goto = null; clockShow = null; fp = null; popup = null; Object.assign(lift, { state: 'idle', floor: 0, pending: false }); for (const k in fstate) delete fstate[k];
+    jrAct = null; const jrDone = from === 'llaves'; Object.assign(jr, { dressed: jrDone, bed: jrDone, clothes: [jrDone, jrDone, jrDone], tidy: jrDone, wallet: jrDone, purse: jrDone ? { 500: 1 } : {}, tabaco: 0, tabacoDone: false, card: false, keys: false, keyGot: false, keySpot: null, met: false, tried: [] });
     if (jrDone && opts.jr) Object.assign(jr, opts.jr, { clothes: (opts.jr.clothes || jr.clothes).slice() });
     if (jrDone && opts.jr && opts.jr.keys === undefined && jr.wallet) jr.keys = true;
     if (jrDone && opts.jr && opts.jr.purse == null) { jr.purse = null; purse(); }   // partidas de antes: el dinero, a billetes y monedas   // guardadas antes: ya había echado en falta las llaves
@@ -8608,8 +8713,8 @@
     if (from === 'dif') addMission('dif'); else if (from === 'apostar' || (from === 'llaves' && !(jr.wallet && jr.card))) addMission('apostar');
     if (from === 'llaves' && jr.keys && !jr.keyGot) addMission('llaves');
     if (from === 'llaves' && jr.keyGot) {
-      addMission('bajar');
-      const outside = ['rellano', 'ascensor', 'portal', 'calle'].includes(room.name);
+      if (room === BAR) { if (!jr.tabacoDone) addMission('bar'); } else addMission('bajar');   // en el bar: la misión del tabaco
+      const outside = ['rellano', 'ascensor', 'portal', 'calle', 'bar'].includes(room.name);
       if (PH && !PH.bajarDone) { if (outside) PH.completeBajar(); else PH.pingBajar(); }   // partidas viejas / mensaje pendiente
     } else renderTodo();
     if (room === STR || room === BAR) Object.assign(dan, { x: P.x + 14, y: P.y + 2, dir: 'down' });   // en la calle, Daniel a su lado
