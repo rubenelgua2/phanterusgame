@@ -211,6 +211,9 @@
     padding: calc(var(--px) * 1.5); line-height: 0;
   }
   .intro-hud-phone canvas { display: block; width: calc(12 * var(--px)); height: calc(18 * var(--px)); }
+  .intro-hud-phone.hud-wallet { right: calc(var(--px) * 23 + env(safe-area-inset-right)); }
+  .intro-hud-phone.hud-wallet canvas { width: calc(16 * var(--px)); }
+  #hudPhone[hidden] ~ #hudWallet { display: none; }
   /* el móvil vibra: tiembla un momento y para, una y otra vez, hasta que se abre */
   .intro-hud-phone.buzzing { animation: hudbuzz 1.8s infinite; }
   @keyframes hudbuzz {
@@ -417,6 +420,7 @@
       <button type="button" class="intro-icon-btn" id="introMenu" aria-label="Menú principal"></button>
     </div>
     <button class="btn intro-hud-phone" id="hudPhone" type="button" aria-label="Abrir teléfono" hidden></button>
+    <button class="btn intro-hud-phone hud-wallet" id="hudWallet" type="button" aria-label="Abrir cartera" hidden></button>
     <div class="todo" id="todo" aria-label="Misiones" hidden></div>
     <div class="joystick" id="joystick" role="application" aria-label="Joystick para mover al personaje" hidden><div class="joy-knob"></div></div>
     <div id="phoneUI" role="dialog" aria-modal="true" aria-label="Teléfono">
@@ -5358,10 +5362,12 @@
 
   // ---------- controles: flechas/WASD; con ratón, clic (o arrastrar) adonde ir; en móvil, joystick ----------
   const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
-  const busy = () => !running || panel || fp || slotUI || document.getElementById('settings').classList.contains('open') || document.getElementById('phoneUI').classList.contains('open');
+  const busy = () => !running || panel || fp || slotUI || walletUI || document.getElementById('settings').classList.contains('open') || document.getElementById('phoneUI').classList.contains('open');
   addEventListener('keydown', e => {
     if (fp && running) { if (furnKey(e.code)) e.preventDefault(); return; }   // un mueble abierto
     if (slotUI && running) { if (slotKey(e.code)) e.preventDefault(); return; }   // la tragaperras abierta
+    if (walletUI && running) { if (['Escape', 'KeyQ', 'KeyF'].includes(e.code)) walletUI = null; e.preventDefault(); return; }   // la cartera abierta
+    if (e.code === 'KeyQ' && !busy() && jr.wallet) { openWallet(); e.preventDefault(); return; }
     if (panel && running) {                                          // cuadro de luz abierto: W/S (o flechas) el DIF; F o Escape, cerrar
       if (e.code === 'KeyF' || e.code === 'Escape') closeFuse();
       else if (e.code === 'KeyW' || e.code === 'ArrowUp') setDif(true);
@@ -5384,7 +5390,8 @@
     const tp = toRoom(e), B = HALL_DEF.BOX1;
     if (panel && running) { panelTap(tp); e.preventDefault(); return; }
     if (fp && running) { furnDown(tp, e); e.preventDefault(); return; }
-    if (slotUI && running) { slotDown(tp); e.preventDefault(); return; }   // la tragaperras: botones   // un mueble abierto: su minijuego, coger algo o salir   // con el cuadro abierto: interruptores o cerrar
+    if (slotUI && running) { slotDown(tp); e.preventDefault(); return; }   // la tragaperras: botones
+    if (walletUI && running) { walletDown(tp); e.preventDefault(); return; }   // la cartera abierta   // un mueble abierto: su minijuego, coger algo o salir   // con el cuadro abierto: interruptores o cerrar
     if (running && notifHit(tp) && openNotifPhone()) { e.preventDefault(); return; }   // tocar la notificación: abre el chat
     if (busy()) return;
     tp.x += camX; tp.y += camY;                                      // de aquí en adelante, en el mundo (con la cámara)
@@ -5399,10 +5406,10 @@
   });
   cv.addEventListener('pointermove', e => {
     if (fp) furnMove(toRoom(e));
-    else if (slotUI) { slotUI.hover = slotHit(toRoom(e)); cv.style.cursor = slotUI.hover ? 'pointer' : ''; }
+    else if (slotUI) { const p = toRoom(e); slotMove(p); slotUI.hover = slotHit(p); cv.style.cursor = slotUI.drag ? 'grabbing' : slotUI.hover ? 'pointer' : ''; }
     else cv.style.cursor = (running && notifHit(toRoom(e))) ? 'pointer' : '';
   });
-  ['pointerup', 'pointercancel'].forEach(ev => cv.addEventListener(ev, () => { furnUp(); }));
+  ['pointerup', 'pointercancel'].forEach(ev => cv.addEventListener(ev, e => { furnUp(); if (slotUI) slotUp(toRoom(e)); }));
 
   // joystick (solo en pantallas táctiles): la bola sigue al pulgar dentro del círculo; joy = dirección y fuerza (0..1)
   const joyEl = document.getElementById('joystick'), knob = joyEl.querySelector('.joy-knob');
@@ -7256,39 +7263,80 @@
     res.total = Math.round(res.total * 100) / 100;
     return res;
   }
-  // ---------- LA TRAGAPERRAS DEL BAR: el menú (dos juegos) y cada juego a pantalla completa ----------
-  // El dinero es el de la cartera (jr.cash, en céntimos: 5 € al cogerla). Se guarda al levantarse de la máquina.
-  // Tras un premio (fuera de los giros gratis) se puede COBRAR o ARRIESGAR: a la CARTA (roja o negra, x2) o en la ESCALERA.
-  let slotUI = null;
+  // ---------- EL DINERO: la cartera lleva billetes y monedas de verdad (jr.purse: { céntimos: cuántos }) ----------
+  const COIN_V = [200, 100, 50, 20, 10, 5, 2, 1], BILL_V = [5000, 2000, 1000, 500], COIN_OK = [200, 100, 50, 20, 10];
+  function purseAdd(c, bills) { const P0 = jr.purse || (jr.purse = {}); for (const v of (bills ? BILL_V : []).concat(COIN_V)) while (c >= v) { P0[v] = (P0[v] || 0) + 1; c -= v; } }
+  function purse() {                                                 // (partidas viejas: el dinero suelto se pasa a la cartera)
+    if (!jr.purse) { const c = jr.cash != null ? jr.cash : (jr.wallet ? 500 : 0); jr.purse = {}; purseAdd(c, true); delete jr.cash; }
+    return jr.purse;
+  }
+  const purseTotal = () => Object.entries(purse()).reduce((a, [v, n]) => a + v * n, 0);
+  function purseTake(v) { const P0 = purse(); if (!P0[v]) return false; if (--P0[v] <= 0) delete P0[v]; return true; }
+  const isBill = v => v >= 500;
+
+  // ---------- LA TRAGAPERRAS DEL BAR: una máquina de verdad ----------
+  // Arriba la PANTALLA (el selector de juegos, el juego y el riesgo); abajo el PANEL: la ranura de BILLETES, la de MONEDAS,
+  // la BANDEJA, el visor (crédito, apuesta, cartera), APUESTA, CARTERA, el botón verde COBRO, el naranja JUEGO y el rojo
+  // GIRAR. Se juega con el CRÉDITO que metes (billetes o monedas de la cartera); COBRO lo devuelve en monedas a la cartera.
+  let slotUI = null, walletUI = null;
+  const SCR_H = 128;                                                 // alto de la pantalla; debajo, el panel
   const slGeo = G => G.ways ? { x: 80, y: 28, cw: 40, ch: 24, n: 4 } : { x: 80, y: 28, cw: 32, ch: 24, n: 5 };
   const slMoney = c => (c / 100).toFixed(2).replace('.', ',') + ' €';
-  const slCash = () => (jr.cash == null ? (jr.wallet ? 500 : 0) : jr.cash);
+  const slCash = () => purseTotal();
   const GAMBLE_MAX = 5;                                              // como mucho 5 aciertos seguidos
+  const MP = {                                                       // el panel: zonas y botones
+    bill: { x: 3, y: 133, w: 46, h: 22 }, coin: { x: 58, y: 131, w: 22, h: 24 }, tray: { x: 6, y: 160, w: 76, h: 16 },
+    led: { x: 90, y: 131, w: 98, h: 31 }, apuesta: { x: 90, y: 165, w: 47, h: 12 }, cartera: { x: 141, y: 165, w: 47, h: 12 },
+    cobro: { x: 194, y: 137, w: 40, h: 30 }, juego: { cx: 254, cy: 155, r: 12 }, girar: { cx: 292, cy: 151, r: 18 }
+  };
+  const inC = (p, c, pad) => Math.hypot(p.x - c.cx, p.y - c.cy) <= c.r + (pad || 0);
   function slotNear() {
-    if (room !== BAR || swap || fp || panel || slotUI) return false;
+    if (room !== BAR || swap || fp || panel || slotUI || walletUI) return false;
     const S = BAR_DEF.SLOT; return P.x > S.x - 6 && P.x < S.x + S.w + 6 && P.y < BAR_DEF.MACH_F + 14;
   }
   function openSlot() {
     if (!slotNear()) return false;
-    if (jr.cash == null) jr.cash = slCash();
-    slotUI = { scr: 'menu', bet: 0, info: false, hover: null };
+    purse();
+    slotUI = { scr: 'menu', sel: 0, bet: 0, credit: 0, info: false, hover: null, wallet: false, drag: null, fly: [], tray: null, press: null, items: [] };
     Object.assign(P, { moving: false, phase: 0, tx: null }); keys.clear(); joyEnd();
     sfx(520, 0.08, 'square', 0.04, 780); return true;
   }
-  function slotCollect() {                                           // cobrar lo que esté pendiente (o en juego en el riesgo)
+  function slotCollect() {                                           // lo pendiente (o lo que había en el riesgo) pasa al crédito
     const U = slotUI; if (!U) return;
     const amt = U.gam ? U.gam.amt : U.pend || 0;
-    if (amt > 0) { jr.cash = slCash() + amt; U.win = amt; U.got = { t: tNow, amt }; slotJingle(3); }   // se ve: +X € junto al saldo
+    if (amt > 0) { U.credit += amt; U.win = amt; U.got = { t: tNow, amt }; slotJingle(3); }
     U.pend = 0; U.gam = null;
   }
-  function closeSlot() { if (!slotUI || slotUI.spin) return; slotCollect(); slotUI = null; cv.style.cursor = ''; sfx(300, 0.08, 'square', 0.04, 180); saveAt('llaves'); }
-  function slotMenu() { const U = slotUI; if (U.spin || U.fs) return; slotCollect(); U.scr = 'menu'; U.G = null; sfx(300, 0.06, 'square', 0.03, 200); }
+  function slotCashout() {                                           // COBRO: todo el crédito, en monedas, a la bandeja y de ahí a la cartera
+    const U = slotUI; if (!U) return;
+    slotCollect(); for (const f of U.fly) U.credit += f.v; U.fly = [];
+    const amt = U.credit; if (amt <= 0) { sfx(140, 0.12, 'square', 0.04, 100); return; }
+    U.credit = 0; purseAdd(amt, false);
+    const coins = []; let c = amt; for (const v of COIN_V) while (c >= v && coins.length < 60) { coins.push(v); c -= v; }
+    U.tray = { t: tNow, amt, coins };
+    for (let i = 0; i < Math.min(16, coins.length); i++) setTimeout(() => sfx(1800 + Math.random() * 900, 0.04, 'triangle', 0.03, 2400), i * 70);   // clinc, clinc...
+  }
+  function closeSlot() {
+    const U = slotUI; if (!U || U.spin || U.fs) return;
+    slotCashout(); slotUI = null; cv.style.cursor = ''; sfx(300, 0.08, 'square', 0.04, 180); saveAt('llaves');
+  }
+  function slotMenu() { const U = slotUI; if (U.spin || U.fs || U.banner || U.gam) return; slotCollect(); U.sel = U.G && U.G.id === 'nilo' ? 1 : 0; U.scr = 'menu'; U.G = null; sfx(300, 0.06, 'square', 0.03, 200); }
   function slotEnter(id) {
     const G = SLOT_GAMES[id];
     Object.assign(slotUI, { scr: id, G, L: slGeo(G), pos: G.strips.map((s, r) => (r * 7) % s.length), res: null, spin: null, win: 0, pend: 0, gam: null, shownAt: 0, fs: null, lvlShown: 0, banner: null, info: false, coins: [] });
     sfx(660, 0.08, 'square', 0.04, 990);
   }
   const slBet = () => Math.round(SLOT_BETS[slotUI.bet] * 100);
+  // --- meter dinero: el billete por su ranura, las monedas por la suya ---
+  function slotInsert(v, from, t) {
+    const U = slotUI, bill = isBill(v);
+    if (!bill && !COIN_OK.includes(v)) { U.msg = { t, text: 'NO ACEPTA MONEDAS DE ' + slMoney(v) }; sfx(200, 0.15, 'square', 0.04, 120); return false; }
+    if (!purseTake(v)) return false;
+    const z = bill ? MP.bill : MP.coin;
+    U.fly.push({ v, bill, x0: from.x, y0: from.y, x1: z.x + z.w / 2, y1: bill ? z.y + 6 : z.y + 8, t0: t, dur: bill ? 0.9 : 0.35 });
+    if (bill) sfx(90, 0.8, 'sawtooth', 0.025, 140);                  // el motor que se traga el billete
+    return true;
+  }
   function slotStart(t) {
     const U = slotUI; if (!U || !U.G) return;
     if (U.spin) {                                                    // FAST SPIN: volver a pulsar girar para los rodillos que faltan, casi de golpe
@@ -7298,11 +7346,11 @@
       sfx(500, 0.06, 'square', 0.03, 300); return;
     }
     if (U.banner || U.gam) return;
-    if (U.pend) slotCollect();                                       // girar con un premio pendiente: se cobra
+    if (U.pend) slotCollect();                                       // girar con un premio pendiente: se cobra al crédito
     const bet = slBet(), free = U.fs && U.fs.left > 0, NR = U.L.n;
     if (!free) {
-      if (slCash() < bet) { U.msg = { t, text: 'SALDO INSUFICIENTE' }; sfx(140, 0.2, 'square', 0.05, 90); return; }
-      jr.cash = slCash() - bet;
+      if (U.credit < bet) { U.msg = { t, text: U.credit > 0 ? 'CREDITO INSUFICIENTE: BAJA LA APUESTA' : 'METE DINERO: BILLETES O MONEDAS' }; sfx(140, 0.2, 'square', 0.05, 90); return; }
+      U.credit -= bet;
     } else U.fs.left--;
     const res = slotSpin(U.G, bet / 100, U.fs);
     const anticip = U.G.scatter ? res.grid.slice(0, 3).reduce((a, c) => a + c.filter(s => s === U.G.scatter).length, 0) >= 2 : false;
@@ -7311,7 +7359,10 @@
     sfx(220, 0.12, 'sawtooth', 0.03, 440);
   }
   function slotTick(t, dt) {
-    const U = slotUI; if (!U || !U.G) return;
+    const U = slotUI; if (!U) return;
+    U.fly = U.fly.filter(f => { if (t - f.t0 < f.dur) return true; U.credit += f.v; sfx(f.bill ? 600 : 2100, 0.06, 'triangle', 0.04, f.bill ? 900 : 2600); return false; });   // ya dentro: suma al crédito
+    if (U.tray && t - U.tray.t > 3) U.tray = null;
+    if (!U.G) return;
     for (const c of U.coins) { c.x += c.vx * dt; c.y += c.vy * dt; c.vy += 160 * dt; }
     U.coins = U.coins.filter(c => c.y < 200);
     if (U.spin) {
@@ -7330,17 +7381,7 @@
       else { const tot = U.fs.won; U.fs = null; U.lvlShown = 0; U.banner = { text: 'PREMIO DE LOS GIROS', sub: slMoney(tot), until: t + 2.6 }; slotJingle(tot >= slBet() * 10 ? 6 : 3); }
     }
     const Gm = U.gam;                                                // el riesgo
-    if (Gm && Gm.mode === 'ladder' && !Gm.done && t > Gm.next) {
-      const st = Gm.stop;
-      if (st && st.left <= 0) {                                      // ya ha frenado: cae donde toca
-        Gm.lit = st.up ? 1 : 0; Gm.stop = null;
-        if (st.up) { Gm.amt *= 2; Gm.wins++; slotJingle(4); } else { Gm.amt = 0; sfx(160, 0.4, 'sawtooth', 0.05, 60); }
-        Gm.done = t + 1.8;
-      } else {
-        Gm.lit = 1 - Gm.lit; sfx(Gm.lit ? 880 : 440, 0.05, 'square', 0.025, Gm.lit ? 880 : 440);
-        if (st) { st.left--; Gm.next = t + 0.3; } else Gm.next = t + 0.14 + Math.random() * 0.08;   // rápido y algo irregular: difícil de clavar
-      }
-    }
+    if (Gm && Gm.mode === 'ladder' && !Gm.done && t > Gm.next) { Gm.lit = 1 - Gm.lit; sfx(Gm.lit ? 880 : 440, 0.05, 'square', 0.025, Gm.lit ? 880 : 440); Gm.next = t + 0.14 + Math.random() * 0.08; }   // rápido y algo irregular
     if (Gm && Gm.done && t > Gm.done) {
       if (Gm.amt <= 0) { U.gam = null; U.pend = 0; U.win = 0; }
       else if (Gm.wins >= GAMBLE_MAX) slotCollect();
@@ -7352,7 +7393,7 @@
     if (U.fs) U.lvlShown = U.fs.lvl;
     const won = Math.round(res.total * 100); U.win = won;
     if (won > 0) {
-      if (U.fs || res.newFs) { jr.cash = slCash() + won; if (U.fs) U.fs.won += won; }   // en los giros gratis se cobra solo
+      if (U.fs || res.newFs) { U.credit += won; if (U.fs) U.fs.won += won; }   // en los giros gratis va directo al crédito
       else U.pend = won;                                             // si no: cobrar o arriesgar
       const big = won >= slBet() * 10 && !U.fs; slotJingle(big ? 7 : Math.min(5, 2 + res.wins.length));
       if (big) { U.banner = { text: '¡GRAN PREMIO!', sub: slMoney(won), until: t + 3.2 }; for (let i = 0; i < 40; i++) U.coins.push({ x: 160 + (Math.random() - 0.5) * 60, y: 90, vx: (Math.random() - 0.5) * 220, vy: -80 - Math.random() * 160 }); }
@@ -7364,13 +7405,13 @@
       U.banner = { text: first ? '¡12 GIROS GRATIS!' : '¡+12 GIROS GRATIS!', sub: first ? 'CADA ESCARABAJO MEJORA UN SIMBOLO' : '', until: t + 2.6 };
       slotJingle(6);
     }
-    if (slCash() < SLOT_BETS[0] * 100 && !U.fs && won === 0) U.msg = { t, text: 'TE HAS QUEDADO SIN DINERO' };
+    if (U.credit < slBet() && !U.fs && won === 0) U.msg = { t, text: U.credit + slCash() < SLOT_BETS[0] * 100 ? 'TE HAS QUEDADO SIN DINERO' : 'METE MAS DINERO O BAJA LA APUESTA' };
   }
   function slotJingle(n) { for (let i = 0; i < n; i++) setTimeout(() => sfx(523 * Math.pow(1.26, i % 4), 0.09, 'square', 0.035, 523 * Math.pow(1.26, i % 4) * 1.5), i * 90); }
-  // --- el riesgo: carta roja/negra (x2) o la escalera (la luz salta entre el escalón de arriba y el cero) ---
+  // --- el riesgo: carta roja/negra (x2) o la escalera (la luz salta entre el escalón de arriba y NADA; de habilidad) ---
   function gambleStart(mode, t) {
     const U = slotUI; if (!U.pend || U.spin || U.banner) return;
-    U.gam = { mode, amt: U.pend, wins: 0, hist: [], card: null, done: 0, lit: 0, next: t + 0.3, stop: null }; U.pend = 0;
+    U.gam = { mode, amt: U.pend, wins: 0, hist: [], card: null, done: 0, lit: 0, next: t + 0.3 }; U.pend = 0;
     sfx(440, 0.08, 'square', 0.04, 660);
   }
   function gambleCard(red, t) {
@@ -7380,61 +7421,103 @@
     if (isRed === red) { Gm.amt *= 2; Gm.wins++; slotJingle(4); } else { Gm.amt = 0; sfx(160, 0.4, 'sawtooth', 0.05, 60); }
     Gm.done = t + 1.8;
   }
-  function gambleLadder(t) {                                         // de habilidad: se queda lo que esté encendido al pulsar
+  function gambleLadder(t) {                                         // se queda lo que esté encendido al pulsar
     const Gm = slotUI.gam; if (!Gm || Gm.mode !== 'ladder' || Gm.done) return;
     if (Gm.lit) { Gm.amt *= 2; Gm.wins++; slotJingle(4); } else { Gm.amt = 0; sfx(160, 0.4, 'sawtooth', 0.05, 60); }
     Gm.done = t + 1.8;
   }
-  // --- los botones (px de pantalla) ---
+  // --- los botones de la máquina ---
+  function pressFx(id) { slotUI.press = { id, t: tNow }; sfx(id === 'girar' ? 260 : id === 'juego' ? 420 : 340, 0.05, 'square', 0.04, 200); }
+  function btnRed(t) {                                               // ROJO: entrar al juego elegido / girar / parar la escalera / saltar el cartel
+    const U = slotUI; pressFx('girar');
+    if (U.wallet) U.wallet = false;
+    if (U.scr === 'menu') { slotEnter(U.sel ? 'nilo' : 'frutas'); return; }
+    if (U.info) { U.info = false; return; }
+    if (U.gam) { if (U.gam.mode === 'ladder') gambleLadder(t); return; }
+    if (U.banner) { U.banner.until = Math.min(U.banner.until, t + 0.2); return; }
+    slotStart(t);
+  }
+  function btnOrange() {                                             // NARANJA: el seleccionador de juegos
+    const U = slotUI; pressFx('juego');
+    if (U.scr === 'menu') { U.sel = 1 - U.sel; return; }
+    slotMenu();
+  }
+  function btnGreen() {                                              // VERDE: cobro (en el riesgo, se planta)
+    const U = slotUI; pressFx('cobro');
+    if (U.gam) { if (!U.gam.done) slotCollect(); return; }
+    if (U.spin || U.fs || U.banner) return;
+    slotCashout();
+  }
+  function betCycle() { const U = slotUI; if (U.spin || U.fs || U.gam) return; pressFx('apuesta'); U.bet = (U.bet + 1) % SLOT_BETS.length; }
+  // --- la pantalla (táctil) y el panel ---
   const SL_BTN = {
-    back: { x: 6, y: 5, w: 34, h: 12 }, info: { x: 280, y: 5, w: 34, h: 12 },
-    minus: { x: 100, y: 152, w: 14, h: 14 }, plus: { x: 156, y: 152, w: 14, h: 14 }, spin: { x: 250, y: 132, w: 62, h: 42 },
-    card0: { x: 36, y: 34, w: 116, h: 104 }, card1: { x: 168, y: 34, w: 116, h: 104 }, exit: { x: 130, y: 160, w: 60, h: 14 },
+    back: { x: 4, y: 4, w: 36, h: 12 }, info: { x: 280, y: 4, w: 36, h: 12 },
+    card0: { x: 36, y: 27, w: 116, h: 84 }, card1: { x: 168, y: 27, w: 116, h: 84 },
     cobrar: { x: 82, y: 114, w: 48, h: 12 }, carta: { x: 134, y: 114, w: 48, h: 12 }, escal: { x: 186, y: 114, w: 56, h: 12 },
-    rojo: { x: 56, y: 132, w: 60, h: 18 }, negro: { x: 204, y: 132, w: 60, h: 18 }, gcob: { x: 130, y: 158, w: 60, h: 14 },
-    parar: { x: 84, y: 150, w: 72, h: 22 }, lcob: { x: 164, y: 150, w: 72, h: 22 }
+    rojo: { x: 56, y: 104, w: 60, h: 16 }, negro: { x: 204, y: 104, w: 60, h: 16 }
   };
   const slIn = (p, b) => p.x >= b.x && p.x < b.x + b.w && p.y >= b.y && p.y < b.y + b.h;
   function slotHit(p) {
     const U = slotUI; if (!U) return null;
+    if (U.wallet) { const it = U.items.find(i => slIn(p, i)); if (it) return it.close ? 'wclose' : 'witem'; }
+    if (inC(p, MP.girar, 2)) return 'girar'; if (inC(p, MP.juego, 2)) return 'juego';
+    for (const k of ['cobro', 'apuesta', 'cartera']) if (slIn(p, MP[k])) return k;
+    if (p.y >= SCR_H) return null;
     const pick = ks => ks.find(k => slIn(p, SL_BTN[k])) || null;
-    if (U.scr === 'menu') return pick(['card0', 'card1', 'exit']);
     if (U.info) return 'closeInfo';
-    if (U.gam) return U.gam.done || U.gam.stop ? null : U.gam.mode === 'card' ? pick(['rojo', 'negro', 'gcob']) : pick(['parar', 'lcob']);
+    if (U.scr === 'menu') return pick(['card0', 'card1', 'back']);
+    if (U.gam) return U.gam.done ? null : U.gam.mode === 'card' ? pick(['rojo', 'negro']) : null;
     if (U.pend && !U.spin && !U.banner) { const k = pick(['cobrar', 'carta', 'escal']); if (k) return k; }
-    return pick(['back', 'info', 'minus', 'plus', 'spin']);
+    return pick(['back', 'info']);
   }
   function slotDown(p) {
-    const U = slotUI, k = slotHit(p), t = tNow;
-    if (U.scr === 'menu') { if (k === 'card0') slotEnter('frutas'); else if (k === 'card1') slotEnter('nilo'); else if (k === 'exit') closeSlot(); return; }
-    if (U.info) { U.info = false; return; }
-    if (U.gam) {
-      if (k === 'rojo') gambleCard(true, t); else if (k === 'negro') gambleCard(false, t); else if (k === 'parar') gambleLadder(t);
-      else if (k === 'gcob' || k === 'lcob') slotCollect();
-      return;
+    const U = slotUI, t = tNow;
+    if (U.wallet) {                                                  // la cartera abierta: coger un billete o una moneda
+      const it = U.items.find(i => slIn(p, i));
+      if (it && it.close) { U.wallet = false; return; }
+      if (it) { U.drag = { v: it.v, x: p.x, y: p.y, sx: p.x, sy: p.y, moved: false }; return; }
     }
+    const k = slotHit(p);
+    if (k === 'girar') return btnRed(t); if (k === 'juego') return btnOrange(); if (k === 'cobro') return btnGreen();
+    if (k === 'apuesta') return betCycle(); if (k === 'cartera') { pressFx('cartera'); U.wallet = !U.wallet; return; }
+    if (U.wallet && p.y < SCR_H) { U.wallet = false; return; }       // tocar fuera de la cartera: se cierra
+    if (U.info) { U.info = false; return; }
+    if (U.scr === 'menu') { if (k === 'card0' || k === 'card1') { const s = k === 'card1' ? 1 : 0; if (U.sel === s) slotEnter(s ? 'nilo' : 'frutas'); else { U.sel = s; sfx(420, 0.04, 'square', 0.03, 300); } } else if (k === 'back') closeSlot(); return; }
+    if (U.gam) { if (k === 'rojo') gambleCard(true, t); else if (k === 'negro') gambleCard(false, t); return; }
     if (U.banner) { U.banner.until = Math.min(U.banner.until, t + 0.2); return; }
     if (k === 'cobrar') slotCollect(); else if (k === 'carta') gambleStart('card', t); else if (k === 'escal') gambleStart('ladder', t);
-    else if (k === 'spin') slotStart(t);
-    else if (k === 'back') slotMenu();
+    else if (k === 'back') closeSlot();
     else if (k === 'info' && !U.spin) U.info = true;
-    else if ((k === 'minus' || k === 'plus') && !U.spin && !U.fs) { U.bet = clamp(U.bet + (k === 'plus' ? 1 : -1), 0, SLOT_BETS.length - 1); sfx(600 + U.bet * 80, 0.04, 'square', 0.03, 700); }
+  }
+  function slotMove(p) { const U = slotUI, D = U && U.drag; if (!D) return; D.x = p.x; D.y = p.y; if (Math.hypot(p.x - D.sx, p.y - D.sy) > 3) D.moved = true; }
+  function slotUp(p) {
+    const U = slotUI, D = U && U.drag; if (!D) return; U.drag = null;
+    const bill = isBill(D.v), zone = bill ? MP.bill : MP.coin, other = bill ? MP.coin : MP.bill;
+    if (!D.moved || slIn(p, { x: zone.x - 4, y: zone.y - 6, w: zone.w + 8, h: zone.h + 10 })) { if (slotInsert(D.v, { x: p.x, y: p.y }, tNow) && !D.moved) {} return; }
+    if (slIn(p, other)) { U.msg = { t: tNow, text: bill ? 'LOS BILLETES VAN POR LA RANURA DE BILLETES' : 'LAS MONEDAS VAN POR LA RANURA DE MONEDAS' }; sfx(200, 0.12, 'square', 0.04, 120); }
   }
   function slotKey(code) {
     const U = slotUI, t = tNow;
-    if (U.gam) {
-      if (U.gam.mode === 'card') { if (code === 'ArrowLeft' || code === 'KeyR') gambleCard(true, t); else if (code === 'ArrowRight' || code === 'KeyN') gambleCard(false, t); }
-      else if (code === 'Space' || code === 'Enter') gambleLadder(t);
-      if ((code === 'KeyC' || code === 'Escape') && !U.gam.done && !U.gam.stop) slotCollect();
-      return true;
-    }
-    if (code === 'Escape' || code === 'KeyF') { if (U.scr === 'menu') closeSlot(); else if (U.info) U.info = false; else slotMenu(); return true; }
-    if (U.scr === 'menu') { if (code === 'Digit1' || code === 'ArrowLeft') slotEnter('frutas'); else if (code === 'Digit2' || code === 'ArrowRight') slotEnter('nilo'); return true; }
-    if (code === 'Space' || code === 'Enter') { if (U.info) U.info = false; else if (U.banner) U.banner.until = t; else slotStart(t); return true; }
+    if (code === 'KeyQ') { U.wallet = !U.wallet; return true; }
+    if (code === 'Escape' || code === 'KeyF') { if (U.wallet) U.wallet = false; else if (U.info) U.info = false; else if (U.gam) { if (!U.gam.done) slotCollect(); } else closeSlot(); return true; }
+    if (code === 'Space' || code === 'Enter') { btnRed(t); return true; }
+    if (code === 'KeyJ' || code === 'Tab') { btnOrange(); return true; }
+    if (code === 'KeyX') { btnGreen(); return true; }
+    if (code === 'KeyB') { const v = BILL_V.find(v => purse()[v]); if (v) slotInsert(v, { x: 160, y: 60 }, t); return true; }
+    if (code === 'KeyM') { const v = COIN_OK.find(v => purse()[v]); if (v) slotInsert(v, { x: 160, y: 60 }, t); return true; }
+    if (code === 'ArrowUp' || code === 'ArrowDown') { if (!U.spin && !U.fs && !U.gam) U.bet = clamp(U.bet + (code === 'ArrowUp' ? 1 : -1), 0, SLOT_BETS.length - 1); return true; }
+    if (U.scr === 'menu') { if (code === 'ArrowLeft' || code === 'ArrowRight') btnOrange(); return true; }
+    if (U.gam) { if (U.gam.mode === 'card') { if (code === 'ArrowLeft' || code === 'KeyR') gambleCard(true, t); else if (code === 'ArrowRight' || code === 'KeyN') gambleCard(false, t); } if (code === 'KeyC' && !U.gam.done) slotCollect(); return true; }
     if (U.pend && !U.spin && !U.banner) { if (code === 'KeyC') slotCollect(); else if (code === 'KeyR') gambleStart('card', t); else if (code === 'KeyE') gambleStart('ladder', t); }
-    if (code === 'ArrowUp' || code === 'ArrowDown') { if (!U.spin && !U.fs) U.bet = clamp(U.bet + (code === 'ArrowUp' ? 1 : -1), 0, SLOT_BETS.length - 1); return true; }
     if (code === 'KeyI') { U.info = !U.info; return true; }
     return true;
+  }
+  // --- la cartera fuera de la máquina: se mira, pero aquí el dinero no sirve ---
+  function openWallet() { if (!running || slotUI) { if (slotUI) slotUI.wallet = !slotUI.wallet; return; } if (walletUI) { walletUI = null; return; } if (!jr.wallet) return; purse(); walletUI = { items: [] }; Object.assign(P, { moving: false, phase: 0, tx: null }); keys.clear(); joyEnd(); sfx(300, 0.06, 'square', 0.03, 240); }
+  function walletDown(p) {
+    const it = walletUI.items.find(i => slIn(p, i));
+    if (!it || it.close) { walletUI = null; return; }
+    popup = { t: tNow, text: isBill(it.v) ? 'Mejor me lo guardo para la casa de apuestas.' : 'Unas monedas sueltas.' };
   }
   // --- dibujo ---
   function slTxt(s, x, y, col, sc, center, sh) {
@@ -7525,26 +7608,181 @@
   }
   const SUITS = ['.X.X.|XXXXX|XXXXX|.XXX.|..X..', '..X..|.XXX.|XXXXX|.XXX.|..X..', '..X..|.XXX.|X.X.X|XXXXX|..X..', '..X..|.XXX.|XXXXX|XXXXX|..X..'];
   function drawSuit(i, x, y, s) { SUITS[i].split('|').forEach((row, ry) => [...row].forEach((c, rx) => { if (c === 'X') PR(x + rx * s, y + ry * s, s, s, i < 2 ? '#d4161e' : '#141418'); })); }
+  // --- el dinero, dibujado: monedas de euro y billetes ---
+  function drawCoin(v, x, y, r) {
+    const ring = v === 200 ? '#c8ccd2' : v === 100 ? '#e0b848' : v >= 10 ? '#d8b040' : '#b8682a', core = v === 200 ? '#e0b848' : v === 100 ? '#c8ccd2' : ring;
+    slEll(x + 0.5, y + 1, r, r, '#000', 0.35); slEll(x, y, r, r, '#5a4a20'); slEll(x, y, r - 0.8, r - 0.8, ring); slEll(x, y, r * 0.62, r * 0.62, core);
+    slEll(x - r * 0.35, y - r * 0.35, r * 0.25, r * 0.2, '#ffffff', 0.5);
+    slTxt(v >= 100 ? String(v / 100) : String(v), x, y - 3, '#3a2a10', 1, true);
+  }
+  const BILL_COL = { 500: ['#a8b4a0', '#6a7a64'], 1000: ['#d89a88', '#9a5a4a'], 2000: ['#8aa8d8', '#4a6aa8'], 5000: ['#f0b070', '#b0702a'] };
+  function drawBill(v, x, y, w, h) {
+    const [c1, c2] = BILL_COL[v] || BILL_COL[500];
+    PR(x + 1, y + 1, w, h, '#000', 0.3); PR(x, y, w, h, c2); PR(x + 1, y + 1, w - 2, h - 2, c1);
+    ctx.fillStyle = c2; ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(x + w * 0.62, y + h - 2, h * 0.42, Math.PI, 0); ctx.fill(); ctx.globalAlpha = 1;   // el arco
+    for (let i = 0; i < 4; i++) PR(x + w * 0.5 + i * 4, y + h - 2 - h * 0.42 + 2, 1, h * 0.42, '#ffffff', 0.25);
+    slTxt(String(v / 100), x + 3, y + 2, '#2a2a2a', w > 40 ? 2 : 1); slTxt('EURO', x + w - 26, y + 3, '#2a2a2a', 1);
+    PR(x + w - 12, y + h - 9, 6, 6, '#d8c070', 0.8);                 // el holograma
+  }
+  // --- la cartera abierta: billetes a la izquierda, monedas a la derecha (se pueden coger) ---
+  function drawWalletBox(t, items, drag) {
+    const P0 = purse(), x0 = 64, y0 = 14, w = 192, h = 100;
+    PR(x0 + 2, y0 + 3, w, h, '#000', 0.45); PR(x0, y0, w, h, '#2a160c'); PR(x0 + 2, y0 + 2, w - 4, h - 4, '#6a3a1e'); PR(x0 + 2, y0 + 2, w - 4, 2, '#8a5a32');
+    for (let i = x0 + 6; i < x0 + w - 6; i += 4) { PP(i, y0 + 5, '#c8a070'); PP(i, y0 + h - 6, '#c8a070'); }   // las costuras
+    PR(x0 + w / 2 - 1, y0 + 4, 2, h - 8, '#3a1e0e');
+    slTxt('CARTERA: ' + slMoney(purseTotal()), x0 + 8, y0 + 8, '#f4e0c0', 1, false, '#000');
+    items.length = 0;
+    const cl = { x: x0 + w - 13, y: y0 + 4, w: 10, h: 10, close: true }; PR(cl.x, cl.y, cl.w, cl.h, '#3a1e0e'); slTxt('X', cl.x + 5, cl.y + 2, '#f4e0c0', 1, true); items.push(cl);
+    const bills = BILL_V.filter(v => P0[v]).flatMap(v => Array(P0[v]).fill(v));
+    PR(x0 + 6, y0 + 20, 86, 74, '#4a2614');                           // el bolsillo de los billetes
+    if (!bills.length) slTxt('SIN BILLETES', x0 + 49, y0 + 52, '#a8805a', 1, true);
+    bills.slice(0, 5).forEach((v, i) => { const r = { x: x0 + 10 + i * 3, y: y0 + 26 + i * 6, w: 76, h: 36, v }; if (!(drag && i === 0 && isBill(drag.v))) drawBill(v, r.x, r.y, r.w, r.h); items.push(r); });
+    if (bills.length) slTxt('X' + bills.length, x0 + 82, y0 + 84, '#f4e0c0', 1, true, '#000');
+    PR(x0 + w / 2 + 4, y0 + 20, 86, 74, '#4a2614');                  // el monedero
+    const coins = COIN_V.filter(v => P0[v]);
+    if (!coins.length) slTxt('SIN MONEDAS', x0 + w / 2 + 47, y0 + 52, '#a8805a', 1, true);
+    coins.forEach((v, i) => {
+      const cx = x0 + w / 2 + 18 + (i % 4) * 20, cy = y0 + 34 + Math.floor(i / 4) * 30;
+      if (!(drag && drag.v === v && P0[v] === 1)) drawCoin(v, cx, cy, 8);
+      slTxt('X' + P0[v], cx, cy + 11, '#f4e0c0', 1, true, '#000');
+      items.push({ x: cx - 9, y: cy - 9, w: 18, h: 18, v });
+    });
+    items.reverse();                                                 // (lo de encima, primero)
+    items.sort((a, b) => (a.close ? -1 : 0) - (b.close ? -1 : 0));
+  }
+  function drawWalletOverlay(t) {                                    // fuera de la máquina
+    ctx.save(); ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;
+    PR(0, 0, W, H, '#000', 0.6); drawWalletBox(t, walletUI.items, null);
+    slTxt(TOUCH ? 'TOCA FUERA PARA CERRAR' : 'Q O ESC: CERRAR', 160, 122, '#c8c8d0', 1, true, '#000');
+    ctx.restore();
+  }
   function drawSlotMenu(t) {
     const U = slotUI;
-    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#1a0a14'); g.addColorStop(1, '#0a0608'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    for (let i = 0; i < 30; i++) PR(10 + i * 10, 4, 4, 3, Math.floor(t * 4 + i) % 3 ? '#5a1a1a' : '#ffd84a');   // las bombillas del marco
-    for (let i = 0; i < 30; i++) PR(10 + i * 10, H - 7, 4, 3, Math.floor(t * 4 + i + 1) % 3 ? '#5a1a1a' : '#ffd84a');
-    slTxt('ELIGE UN JUEGO', 160, 14, '#ffd84a', 2, true, '#5a0a0a');
+    const g = ctx.createLinearGradient(0, 0, 0, SCR_H); g.addColorStop(0, '#1a0a14'); g.addColorStop(1, '#0a0608'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, SCR_H);
+    for (let i = 0; i < 30; i++) PR(10 + i * 10, 2, 4, 2, Math.floor(t * 4 + i) % 3 ? '#5a1a1a' : '#ffd84a');   // las bombillas del marco
+    slTxt('ELIGE UN JUEGO', 160, 8, '#ffd84a', 2, true, '#5a0a0a');
     [['frutas', SL_BTN.card0, '#0a1450', '#4a8aff'], ['nilo', SL_BTN.card1, '#0a2a6a', '#f4c838']].forEach(([id, b, c1, c2], i) => {
-      const G = SLOT_GAMES[id], hov = U.hover === 'card' + i;
-      PR(b.x - 2, b.y - 2 + (hov ? -1 : 0), b.w + 4, b.h + 4, hov ? '#ffffff' : c2); PR(b.x, b.y + (hov ? -1 : 0), b.w, b.h, c1);
-      const y = b.y + (hov ? -1 : 0);
-      ctx.save(); ctx.beginPath(); ctx.rect(b.x, y, b.w, b.h); ctx.clip();
-      if (id === 'frutas') { drawSymGlow(G, 'SE', b.x + 58, y + 40, t); drawSymGlow(G, 'CH', b.x + 24, y + 46, t); drawSymGlow(G, 'W', b.x + 92, y + 46, t); drawSymGlow(G, 'GR', b.x + 58, y + 68, t); }
-      else { drawSym('S', b.x + 58, y + 42, t); drawSym('WS', b.x + 26, y + 48, t); drawSym('MA', b.x + 92, y + 48, t); drawSym('AN', b.x + 58, y + 70, t); }
+      const G = SLOT_GAMES[id], sel = U.sel === i, blink = Math.floor(t * 4) % 2;
+      if (sel) PR(b.x - 4, b.y - 4, b.w + 8, b.h + 8, blink ? '#ffffff' : '#ff8a1a');
+      PR(b.x - 2, b.y - 2, b.w + 4, b.h + 4, c2); PR(b.x, b.y, b.w, b.h, c1);
+      ctx.save(); ctx.beginPath(); ctx.rect(b.x, b.y, b.w, b.h); ctx.clip();
+      const y = b.y - 9;
+      if (id === 'frutas') { drawSymGlow(G, 'SE', b.x + 58, y + 34, t); drawSymGlow(G, 'CH', b.x + 24, y + 40, t); drawSymGlow(G, 'W', b.x + 92, y + 40, t); drawSymGlow(G, 'GR', b.x + 58, y + 60, t); }
+      else { drawSym('S', b.x + 58, y + 36, t); drawSym('WS', b.x + 26, y + 42, t); drawSym('MA', b.x + 92, y + 42, t); drawSym('AN', b.x + 58, y + 62, t); }
       ctx.restore();
-      PR(b.x, y + 82, b.w, 22, '#000', 0.55); slTxt(G.name, b.x + b.w / 2, y + 85, '#ffffff', 1, true, '#000');
-      slTxt(id === 'frutas' ? '81 FORMAS - X2 X4 X8' : '12 GIROS GRATIS', b.x + b.w / 2, y + 95, c2, 1, true);
-      slTxt(String(i + 1), b.x + 6, y + 4, '#ffffff', 1, false, '#000');
+      if (!sel) PR(b.x, b.y, b.w, b.h, '#000', 0.35);
+      PR(b.x, b.y + 62, b.w, 22, '#000', 0.6); slTxt(G.name, b.x + b.w / 2, b.y + 64, '#ffffff', 1, true, '#000');
+      slTxt(id === 'frutas' ? '81 FORMAS - X2 X4 X8' : '12 GIROS GRATIS', b.x + b.w / 2, b.y + 74, c2, 1, true);
     });
-    slTxt('SALDO: ' + slMoney(slCash()), 160, 146, '#4aff6a', 1, true, '#000');
-    slButton(SL_BTN.exit, 'SALIR', '#8a1a1a', true, U.hover === 'exit');
+    slTxt('NARANJA: CAMBIAR   ROJO: JUGAR', 160, 117, '#c8c8d0', 1, true, '#000');
+    slButton(SL_BTN.back, 'SALIR', '#8a1a1a', true, U.hover === 'back');
+  }
+  function drawGamble(t) {
+    const U = slotUI, Gm = U.gam;
+    const g = ctx.createLinearGradient(0, 0, 0, SCR_H); g.addColorStop(0, '#0a0a3a'); g.addColorStop(1, '#14041a'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, SCR_H);
+    if (Gm.mode === 'card') {
+      slTxt('RIESGO: ¿ROJA O NEGRA?', 160, 4, '#ffd84a', 2, true, '#5a0a0a');
+      slTxt('EN JUEGO: ' + slMoney(Gm.amt), 160, 22, '#ffffff', 1, true, '#000');
+      slTxt('SI ACIERTAS: ' + slMoney(Gm.amt * 2), 160, 31, '#4aff6a', 1, true, '#000');
+      const cx = 145, cy = 42, C = Gm.card;                          // la carta
+      PR(cx - 1, cy - 1, 32, 46, '#000'); PR(cx, cy, 30, 44, '#f8f8f4');
+      if (!C) { PR(cx + 2, cy + 2, 26, 40, Math.floor(t * 4) % 2 ? '#1a3ab8' : '#c8101a'); for (let y = 0; y < 38; y += 4) for (let x = (y / 4) % 2 * 2; x < 24; x += 4) PR(cx + 3 + x, cy + 3 + y, 2, 2, '#ffffff', 0.35); }
+      else {
+        const red = C.suit < 2, rk = C.rank === 'T' ? '10' : C.rank;
+        slTxt(rk, cx + 3, cy + 3, red ? '#d4161e' : '#141418', 1); drawSuit(C.suit, cx + 3, cy + 12, 1);
+        drawSuit(C.suit, cx + 8, cy + 15, 3);
+        slTxt(rk, cx + 27 - (rk.length > 1 ? 11 : 5), cy + 34, red ? '#d4161e' : '#141418', 1);
+      }
+      if (Gm.done) slTxt(Gm.amt > 0 ? '¡ACIERTO!' : 'HAS PERDIDO', 160, 92, Gm.amt > 0 ? '#4aff6a' : '#ff4a4a', 1, true, '#000');
+      slTxt('ULTIMAS', 30, 24, '#8a8aa8', 1, true); Gm.hist.forEach((s, i) => { PR(16 + (i % 3) * 10, 34 + Math.floor(i / 3) * 10, 8, 8, '#f8f8f4'); drawSuit(s, 17 + (i % 3) * 10, 35 + Math.floor(i / 3) * 10, 1); });
+      slTxt('ACIERTOS ' + Gm.wins + '/' + GAMBLE_MAX, 272, 24, '#8a8aa8', 1, true);
+      if (!Gm.done) { slButton(SL_BTN.rojo, TOUCH ? 'ROJA' : '< ROJA', '#c8101a', true, U.hover === 'rojo'); slButton(SL_BTN.negro, TOUCH ? 'NEGRA' : 'NEGRA >', '#2a2a32', true, U.hover === 'negro'); }
+      slTxt('VERDE: PLANTARSE', 160, 122, '#8ac88a', 1, true);
+    } else {
+      slTxt('RIESGO: LA ESCALERA', 160, 4, '#ffd84a', 2, true, '#5a0a0a');
+      const base = Gm.amt > 0 ? Gm.amt / Math.pow(2, Gm.wins) : Gm.base0, steps = GAMBLE_MAX + 1; Gm.base0 = base;
+      const cur = Gm.amt > 0 ? Gm.wins + 1 : 0, nxt = Gm.wins + 2, settled = !!Gm.done;
+      for (let i = steps; i >= 0; i--) {                             // de arriba (x32) a abajo (NADA)
+        const y = 21 + (steps - i) * 13, val = i === 0 ? 0 : base * Math.pow(2, i - 1);
+        const cand = !settled && (i === nxt || i === 0), lit = !settled && ((Gm.lit && i === nxt) || (!Gm.lit && i === 0)), isCur = i === cur && (settled || i !== 0);
+        PR(96, y, 128, 12, '#000', 0.7);
+        PR(97, y + 1, 126, 10, isCur ? (settled && Gm.amt === 0 ? '#a81a1a' : '#1a8a2a') : lit ? (i === 0 ? '#ff4a4a' : '#ffd84a') : cand ? '#3a3a7a' : '#14143a');
+        if (lit) { PR(97, y + 1, 126, 1, '#ffffff', 0.6); PR(86, y + 3, 6, 6, i === 0 ? '#ff4a4a' : '#ffd84a'); PR(228, y + 3, 6, 6, i === 0 ? '#ff4a4a' : '#ffd84a'); }
+        slTxt(i === 0 ? 'NADA' : slMoney(Math.round(val)), 160, y + 3, isCur || lit ? '#ffffff' : '#8a8ac8', 1, true, isCur || lit ? '#000' : null);
+      }
+      if (settled) slTxt(Gm.amt > 0 ? '¡SUBES! ' + slMoney(Gm.amt) : 'HAS PERDIDO', 160, 115, Gm.amt > 0 ? '#4aff6a' : '#ff4a4a', 1, true, '#000');
+      else slTxt('ROJO: PARAR LA LUZ    VERDE: PLANTARSE', 160, 115, '#c8c8e8', 1, true);
+    }
+  }
+  // --- el panel de la máquina ---
+  function drawPanel(t) {
+    const U = slotUI, pr = id => U.press && U.press.id === id && t - U.press.t < 0.15;
+    PR(0, SCR_H - 3, W, 3, '#8a8e94'); PR(0, SCR_H - 3, W, 1, '#e8ecf0'); PR(0, SCR_H - 1, W, 1, '#2a2a30');   // el canto cromado de la pantalla
+    const g = ctx.createLinearGradient(0, SCR_H, 0, H); g.addColorStop(0, '#3a3a44'); g.addColorStop(1, '#16161c'); ctx.fillStyle = g; ctx.fillRect(0, SCR_H, W, H - SCR_H);
+    for (const x of [3, W - 4]) for (const y of [SCR_H + 3, H - 4]) { PP(x, y, '#8a8e94'); }   // tornillos
+    // la ranura de BILLETES
+    const B = MP.bill, dragB = U.drag && isBill(U.drag.v);
+    PR(B.x, B.y, B.w, B.h, '#0e0e12'); PR(B.x, B.y, B.w, 1, '#5a5a66'); PR(B.x + 4, B.y + 5, B.w - 8, 4, '#000'); PR(B.x + 4, B.y + 9, B.w - 8, 1, '#3a3a44');
+    for (let i = 0; i < 3; i++) PR(B.x + 8 + i * 12, B.y + 12 + ((Math.floor(t * 3) + i) % 3 === 0 ? 0 : 1), 6, 2, '#4aff6a', dragB ? 1 : 0.5);   // las flechas verdes
+    { const ix = B.x + B.w / 2 - 7, iy = B.y + 15; PR(ix, iy, 14, 7, '#2a2a30'); PR(ix + 1, iy + 1, 12, 5, dragB ? '#c8e0c0' : '#a8b4a0'); PR(ix + 5, iy + 2, 4, 3, '#6a7a64'); }   // icono: un billete
+    if (dragB) { ctx.strokeStyle = '#4aff6a'; ctx.lineWidth = 1; ctx.strokeRect(B.x - 1.5, B.y - 1.5, B.w + 3, B.h + 3); }
+    // la ranura de MONEDAS
+    const C = MP.coin, dragC = U.drag && !isBill(U.drag.v);
+    PR(C.x, C.y, C.w, C.h - 8, '#8a8e94'); PR(C.x + 1, C.y + 1, C.w - 2, C.h - 10, '#c8ccd2'); PR(C.x + C.w / 2 - 1, C.y + 3, 2, C.h - 14, '#000');
+    { const cx = C.x + C.w / 2, cy = C.y + C.h - 3; slEll(cx, cy, 4, 4, '#5a4a20'); slEll(cx, cy, 3.2, 3.2, dragC ? '#ffe070' : '#d8b040'); slEll(cx, cy, 1.6, 1.6, '#c8ccd2'); }   // icono: una moneda
+    if (dragC) { ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 1; ctx.strokeRect(C.x - 1.5, C.y - 1.5, C.w + 3, C.h - 5); }
+    // la BANDEJA, donde caen las monedas del cobro
+    const T = MP.tray; PR(T.x, T.y, T.w, T.h, '#0a0a0e'); PR(T.x, T.y, T.w, 2, '#000'); PR(T.x, T.y + T.h - 1, T.w, 1, '#5a5a66');
+    if (U.tray) {
+      const e = t - U.tray.t; U.tray.coins.slice(0, 18).forEach((v, i) => { const d = i * 0.06; if (e < d) return; const fy = Math.min(1, (e - d) / 0.25); drawCoin(v, T.x + 8 + (i % 9) * 7, T.y - 6 + fy * (10 + Math.floor(i / 9) * 2), 4); });
+      if (e > 0.4) slTxt('+' + slMoney(U.tray.amt) + ' A LA CARTERA', 160, SCR_H - 12, '#4aff6a', 1, true, '#000');
+    } else slTxt('BANDEJA', T.x + T.w / 2, T.y + 5, '#3a3a44', 1, true);
+    // el visor
+    const L = MP.led; PR(L.x, L.y, L.w, L.h, '#000'); PR(L.x, L.y, L.w, 1, '#5a5a66');
+    const got = U.got && t - U.got.t < 1.2;
+    [['CREDITO', U.credit + U.fly.reduce((a, f) => a, 0), got ? '#ffffff' : '#4aff6a'], ['APUESTA', slBet(), '#ffd84a'], ['CARTERA', purseTotal(), '#6ac8ff']].forEach(([l, v, c], i) => {
+      slTxt(l, L.x + 3, L.y + 3 + i * 9, c, 1); const s = slMoney(v), w = window.PD ? window.PD.measure(window.PD.norm(s)) : 0; slTxt(s, L.x + L.w - 3 - w, L.y + 3 + i * 9, c, 1);
+    });
+    if (U.pend && !U.spin) { PR(L.x, L.y, L.w, L.h, '#ffd84a', 0.08 + 0.06 * Math.sin(t * 8)); }
+    // APUESTA y CARTERA
+    const sb = (b, txt, c1, on) => { const d = pr(on) ? 1 : 0; PR(b.x, b.y + 2, b.w, b.h, '#000', 0.6); PR(b.x, b.y + d, b.w, b.h, c1); PR(b.x, b.y + d, b.w, 1, '#ffffff', 0.35); slTxt(txt, b.x + b.w / 2, b.y + d + 3, '#ffffff', 1, true, '#000'); };
+    sb(MP.apuesta, 'APUESTA', '#2a4ab8', 'apuesta'); sb(MP.cartera, 'CARTERA', '#7a4a22', 'cartera');
+    // COBRO: el verde, rectangular
+    const K = MP.cobro, dk = pr('cobro') ? 2 : 0, canCob = (U.credit > 0 || U.pend || U.gam) && !U.spin && !U.fs;
+    PR(K.x, K.y + 3, K.w, K.h, '#000', 0.6); PR(K.x, K.y + dk, K.w, K.h, '#0e5a1a'); PR(K.x + 2, K.y + 2 + dk, K.w - 4, K.h - 6, canCob ? '#2ac83a' : '#1a7a26');
+    PR(K.x + 2, K.y + 2 + dk, K.w - 4, 2, '#a8ffb0', 0.6); if (canCob) PR(K.x, K.y + dk, K.w, K.h, '#ffffff', 0.08 + 0.08 * Math.sin(t * 5));
+    slTxt('COBRO', K.x + K.w / 2, K.y + 12 + dk, '#ffffff', 1, true, '#0a3a0a');
+    // JUEGO: el naranja, redondo
+    const J = MP.juego, dj = pr('juego') ? 2 : 0;
+    slEll(J.cx, J.cy + 3, J.r + 1, J.r, '#000', 0.6); slEll(J.cx, J.cy + 1, J.r + 1, J.r + 1, '#7a3a08'); slEll(J.cx, J.cy + dj, J.r, J.r - 1, '#f08a1a'); slEll(J.cx - 3, J.cy - 4 + dj, J.r * 0.45, J.r * 0.3, '#ffd8a0', 0.7);
+    slTxt('JUEGO', J.cx, J.cy + J.r + 4, '#f0a040', 1, true);
+    // GIRAR: el rojo, redondo y grande, con su corona de luces que gira
+    const R0 = MP.girar, dr = pr('girar') ? 2 : 0, spinning = U.spin && !U.spin.stopped.every(Boolean);
+    for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2 + t * (spinning ? 9 : 2); const on = Math.floor(t * (spinning ? 12 : 4) + i) % 3 === 0; PR(R0.cx + Math.cos(a) * (R0.r + 4) - 1, R0.cy + Math.sin(a) * (R0.r + 4) - 1, 2, 2, on ? '#ffd84a' : '#5a1a1a'); }
+    slEll(R0.cx, R0.cy + 3, R0.r + 1, R0.r, '#000', 0.6); slEll(R0.cx, R0.cy + 1, R0.r + 1, R0.r + 1, '#5a0408'); slEll(R0.cx, R0.cy + dr, R0.r, R0.r - 1, '#d8141e');
+    const ang = spinning ? t * 10 : t * 1.2;                         // el brillo en espiral que gira
+    for (let k = 0; k < 3; k++) { const a = ang + k * Math.PI * 2 / 3; slEll(R0.cx + Math.cos(a) * R0.r * 0.5, R0.cy + dr + Math.sin(a) * R0.r * 0.45, 3, 2, '#ff6a6a', 0.7); }
+    slEll(R0.cx - 5, R0.cy - 7 + dr, R0.r * 0.4, R0.r * 0.22, '#ffc0c0', 0.75);
+    slTxt('GIRAR', R0.cx, R0.cy - 3 + dr, '#ffffff', 1, true, '#5a0408');
+    // el dinero entrando en su ranura
+    for (const f of U.fly) {
+      const u = clamp((t - f.t0) / f.dur, 0, 1), e = 1 - Math.pow(1 - u, 2);
+      if (f.bill) { const x = f.x0 + (f.x1 - f.x0) * Math.min(1, e * 1.6), y = f.y0 + (f.y1 - f.y0) * Math.min(1, e * 1.6), hh = u < 0.6 ? 20 : 20 * (1 - (u - 0.6) / 0.4); if (hh > 0) { ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, f.y1 + 1); ctx.clip(); drawBill(f.v, x - 20, y - hh, 40, 20); ctx.restore(); } }
+      else drawCoin(f.v, f.x0 + (f.x1 - f.x0) * e, f.y0 + (f.y1 - f.y0) * e - Math.sin(u * Math.PI) * 14, 5);
+    }
+  }
+  function drawSlot(t) {
+    const U = slotUI; if (!U) return;
+    ctx.save(); ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, SCR_H); ctx.clip();
+    if (U.scr === 'menu') drawSlotMenu(t); else drawSlotGame(t);
+    if (U.msg && tNow - U.msg.t < 2.5 && U.scr === 'menu') { PR(40, 100, 240, 12, '#000', 0.8); slTxt(U.msg.text, 160, 103, '#ff6a6a', 1, true); }
+    ctx.restore();
+    drawPanel(t);
+    if (U.wallet) { PR(0, 0, W, SCR_H, '#000', 0.45); drawWalletBox(t, U.items, U.drag); slTxt(TOUCH ? 'ARRASTRA O TOCA PARA METERLO' : 'ARRASTRA (O PINCHA) A SU RANURA', 160, 117, '#ffffff', 1, true, '#000'); }
+    if (U.drag && U.drag.moved) { if (isBill(U.drag.v)) drawBill(U.drag.v, U.drag.x - 20, U.drag.y - 10, 40, 20); else drawCoin(U.drag.v, U.drag.x, U.drag.y, 7); }
+    if (U.info) drawSlotInfo(t);
+    ctx.restore();
   }
   function slReelSym(U, r, idx) {
     const st = U.G.strips[r], s = st[((idx % st.length) + st.length) % st.length];
@@ -7609,7 +7847,7 @@
     if (lbl) slTxt(lbl, 160, 104, '#ffffff', 1, true, '#000');
     else if (S) slTxt(U.got && tNow - U.got.t < 2.5 ? 'COBRADO: ' + slMoney(U.got.amt) : 'BUENA SUERTE...', 160, 104, U.got && tNow - U.got.t < 2.5 ? '#4aff6a' : '#c8c8d0', 1, true, '#000');
     else if (U.msg) slTxt(U.msg.text, 160, 104, '#ff6a6a', 1, true, '#000');
-    else slTxt(TOUCH ? 'TOCA GIRAR' : 'ESPACIO: GIRAR   FLECHAS: APUESTA   I: PREMIOS', 160, 104, '#c8c8d0', 1, true, '#000');
+    else slTxt(U.credit < slBet() ? 'METE DINERO: CARTERA, BILLETES O MONEDAS' : TOUCH ? 'BOTON ROJO: GIRAR' : 'ESPACIO: GIRAR   FLECHAS: APUESTA   I: PREMIOS', 160, 104, U.credit < slBet() ? '#ffd84a' : '#c8c8d0', 1, true, '#000');
     if (pendUI) {                                                    // cobrar o arriesgar
       slButton(SL_BTN.cobrar, TOUCH ? 'COBRAR' : 'COBRAR C', '#1a8a2a', true, U.hover === 'cobrar');
       slButton(SL_BTN.carta, TOUCH ? 'CARTA' : 'CARTA R', '#a81a2a', true, U.hover === 'carta');
@@ -7620,69 +7858,13 @@
       G.ladder.forEach((s, i) => { const yy = i * 20; ctx.globalAlpha = i < U.lvlShown ? 0.3 : 1; drawSym(s, 0, yy, t); ctx.globalAlpha = 1; if (i === U.lvlShown) { ctx.strokeStyle = '#4aff6a'; ctx.lineWidth = 2; ctx.strokeRect(-14, yy - 11, 28, 22); } });
       ctx.restore(); slTxt('MEJORA', 20, 30, '#4aff6a', 1, true);
     }
-    // el panel de abajo
-    PR(0, 128, W, H - 128, '#000', 0.55); PR(0, 128, W, 1, gold ? '#c8984a' : '#4a7aff');
-    slBox({ x: 8, y: 132, w: 84, h: 24 }, 'SALDO', slMoney(slCash()), '#4aff6a');
-    if (U.got && t - U.got.t < 1.6) { const k = (t - U.got.t) / 1.6; PR(8, 132, 84, 24, '#4aff6a', 0.25 * (1 - k)); slTxt('+' + slMoney(U.got.amt), 50, 124 - k * 10, '#4aff6a', 1, true, '#000'); }   // lo cobrado sube al saldo
-    slBox({ x: 100, y: 132, w: 70, h: 18 }, 'APUESTA', '', '#ffd84a'); slTxt(slMoney(slBet()), 135, 156, '#ffffff', 1, true, '#000');
-    const lock = !!(U.spin || U.fs);
-    slButton(SL_BTN.minus, '-', '#8a6a1a', !lock && U.bet > 0, U.hover === 'minus'); slButton(SL_BTN.plus, '+', '#8a6a1a', !lock && U.bet < SLOT_BETS.length - 1, U.hover === 'plus');
-    slBox({ x: 178, y: 132, w: 66, h: 24 }, U.fs ? 'BONO' : U.pend ? 'POR COBRAR' : 'PREMIO', slMoney(U.fs ? U.fs.won : U.pend || U.win), '#ffd84a');
-    slTxt(G.ways ? '81 FORMAS' : '10 LINEAS FIJAS', 8, 164, '#8a8a96', 1);
-    const canSpin = !U.spin && !U.banner && (U.fs ? false : slCash() + (U.pend || 0) >= slBet()), sb = SL_BTN.spin, pulse = canSpin ? 0.5 + 0.5 * Math.sin(t * 5) : 0;
-    PR(sb.x, sb.y + 2, sb.w, sb.h, '#000', 0.5); PR(sb.x, sb.y, sb.w, sb.h, canSpin ? '#1a8a2a' : '#3a3a42'); PR(sb.x + 2, sb.y + 2, sb.w - 4, sb.h - 4, canSpin ? '#2ac83a' : '#4a4a52');
-    PR(sb.x + 2, sb.y + 2, sb.w - 4, 2, '#ffffff', 0.4); if (canSpin) PR(sb.x, sb.y, sb.w, sb.h, '#ffffff', 0.12 * pulse);
-    slTxt(U.fs ? 'AUTO' : 'GIRAR', sb.x + sb.w / 2, sb.y + 14, '#ffffff', 2, true, '#0a3a0a');
-    slButton(SL_BTN.back, 'MENU', '#5a2a6a', !U.spin && !U.fs, U.hover === 'back'); slButton(SL_BTN.info, 'INFO', '#2a5a8a', !U.spin, U.hover === 'info');
+    slButton(SL_BTN.back, 'SALIR', '#8a1a1a', !U.spin && !U.fs, U.hover === 'back'); slButton(SL_BTN.info, 'INFO', '#2a5a8a', !U.spin, U.hover === 'info');
     for (const c of U.coins) { slEll(c.x, c.y, 3, 3, '#8a5a0a'); slEll(c.x, c.y, 2.3, 2.3, '#ffd84a'); }
     if (U.banner) {
       const b = U.banner; PR(0, 52, W, 50, '#000', 0.78); PR(0, 52, W, 1, '#ffd84a'); PR(0, 101, W, 1, '#ffd84a');
       slTxt(b.text, 160, 62, Math.floor(t * 6) % 2 ? '#ffd84a' : '#ffffff', 2, true, '#5a0a0a'); if (b.sub) slTxt(b.sub, 160, 84, '#ffffff', b.sub.length > 12 ? 1 : 2, true, '#000');
     }
     if (U.gam) drawGamble(t);
-    if (U.info) drawSlotInfo(t);
-  }
-  function drawGamble(t) {
-    const U = slotUI, Gm = U.gam;
-    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0a0a3a'); g.addColorStop(1, '#14041a'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    for (let i = 0; i < 30; i++) PR(10 + i * 10, 3, 4, 2, Math.floor(t * 5 + i) % 2 ? '#3a1a5a' : '#ffd84a');
-    if (Gm.mode === 'card') {
-      slTxt('RIESGO: ¿ROJA O NEGRA?', 160, 12, '#ffd84a', 2, true, '#5a0a0a');
-      slTxt('EN JUEGO: ' + slMoney(Gm.amt), 160, 32, '#ffffff', 1, true, '#000');
-      slTxt('SI ACIERTAS: ' + slMoney(Gm.amt * 2), 160, 42, '#4aff6a', 1, true, '#000');
-      const cx = 145, cy = 56, C = Gm.card;                          // la carta
-      PR(cx - 1, cy - 1, 32, 46, '#000'); PR(cx, cy, 30, 44, '#f8f8f4');
-      if (!C) { PR(cx + 2, cy + 2, 26, 40, Math.floor(t * 4) % 2 ? '#1a3ab8' : '#c8101a'); for (let y = 0; y < 38; y += 4) for (let x = (y / 4) % 2 * 2; x < 24; x += 4) PR(cx + 3 + x, cy + 3 + y, 2, 2, '#ffffff', 0.35); }
-      else {
-        const red = C.suit < 2, rk = C.rank === 'T' ? '10' : C.rank;
-        slTxt(rk, cx + 3, cy + 3, red ? '#d4161e' : '#141418', 1); drawSuit(C.suit, cx + 3, cy + 12, 1);
-        drawSuit(C.suit, cx + 8, cy + 15, 3);
-        slTxt(rk, cx + 27 - (rk.length > 1 ? 11 : 5), cy + 34, red ? '#d4161e' : '#141418', 1);
-        if (Gm.done) slTxt(Gm.amt > 0 ? '¡ACIERTO!' : 'HAS PERDIDO', 160, 106, Gm.amt > 0 ? '#4aff6a' : '#ff4a4a', 2, true, '#000');
-      }
-      slTxt('ULTIMAS', 30, 30, '#8a8aa8', 1, true); Gm.hist.forEach((s, i) => { PR(16 + (i % 3) * 10, 40 + Math.floor(i / 3) * 10, 8, 8, '#f8f8f4'); drawSuit(s, 17 + (i % 3) * 10, 41 + Math.floor(i / 3) * 10, 1); });
-      slTxt('ACIERTOS ' + Gm.wins + '/' + GAMBLE_MAX, 272, 30, '#8a8aa8', 1, true);
-      if (!Gm.done) {
-        slButton(SL_BTN.rojo, TOUCH ? 'ROJA' : '< ROJA', '#c8101a', true, U.hover === 'rojo'); slButton(SL_BTN.negro, TOUCH ? 'NEGRA' : 'NEGRA >', '#2a2a32', true, U.hover === 'negro');
-        slButton(SL_BTN.gcob, 'COBRAR', '#1a8a2a', true, U.hover === 'gcob');
-      }
-    } else {
-      slTxt('RIESGO: LA ESCALERA', 160, 8, '#ffd84a', 2, true, '#5a0a0a');
-      const base = Gm.amt > 0 ? Gm.amt / Math.pow(2, Gm.wins) : Gm.base0, steps = GAMBLE_MAX + 1; Gm.base0 = base;
-      const cur = Gm.amt > 0 ? Gm.wins + 1 : 0, nxt = Gm.wins + 2, settled = !!Gm.done;
-      for (let i = steps; i >= 0; i--) {                             // de arriba (x32) a abajo (el cero)
-        const y = 26 + (steps - i) * 16, val = i === 0 ? 0 : base * Math.pow(2, i - 1);
-        const cand = !settled && (i === nxt || i === 0), lit = !settled && ((Gm.lit && i === nxt) || (!Gm.lit && i === 0)), isCur = i === cur && (settled || i !== 0);
-        PR(96, y, 128, 14, '#000', 0.7);
-        PR(97, y + 1, 126, 12, isCur ? (settled && Gm.amt === 0 ? '#a81a1a' : '#1a8a2a') : lit ? (i === 0 ? '#ff4a4a' : '#ffd84a') : cand ? '#3a3a7a' : '#14143a');
-        if (lit) { PR(97, y + 1, 126, 1, '#ffffff', 0.6); PR(86, y + 4, 6, 6, i === 0 ? '#ff4a4a' : '#ffd84a'); PR(228, y + 4, 6, 6, i === 0 ? '#ff4a4a' : '#ffd84a'); }
-        slTxt(i === 0 ? 'NADA' : slMoney(Math.round(val)), 160, y + 4, isCur || lit ? '#ffffff' : '#8a8ac8', 1, true, isCur || lit ? '#000' : null);
-      }
-      if (settled) slTxt(Gm.amt > 0 ? '¡SUBES! ' + slMoney(Gm.amt) : 'HAS PERDIDO', 160, 140, Gm.amt > 0 ? '#4aff6a' : '#ff4a4a', 1, true, '#000');
-      else if (Gm.stop) slTxt('...', 160, 140, '#ffffff', 1, true);
-      else slTxt('PARA LA LUZ: ARRIBA DOBLAS, EN NADA LO PIERDES', 160, 140, '#c8c8e8', 1, true);
-      if (!settled && !Gm.stop) { slButton(SL_BTN.parar, TOUCH ? 'PARAR' : 'PARAR ESP', '#c8101a', true, U.hover === 'parar'); slButton(SL_BTN.lcob, TOUCH ? 'COBRAR' : 'COBRAR C', '#1a8a2a', true, U.hover === 'lcob'); }
-    }
   }
   function drawSlotInfo(t) {
     const U = slotUI, G = U.G, bet = slBet(), ns = G.ways ? [4, 3] : [5, 4, 3], mul = G.ways ? 1 : 0.1;
@@ -7696,12 +7878,21 @@
     else { slTxt('ESCARABAJO (RODILLOS 2-4): COMODIN QUE SE EXPANDE', 160, 136, '#ffffff', 1, true); slTxt('3/4/5 PIRAMIDES: X2/X20/X200 Y 12 GIROS GRATIS', 160, 145, '#ffffff', 1, true); slTxt('EN LOS GIROS, CADA ESCARABAJO MEJORA UN SIMBOLO', 160, 154, '#ffffff', 1, true); }
     slTxt((G.ways ? 'RTP 95 %' : '10 LINEAS. RTP 96,5 %') + '. PREMIO: COBRAR O ARRIESGAR', 160, 168, '#8a8a96', 1, true);
   }
-  function drawSlot(t) {
-    if (!slotUI) return;
-    ctx.save(); ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;
-    if (slotUI.scr === 'menu') drawSlotMenu(t); else drawSlotGame(t);
-    ctx.restore();
+  // el icono de la CARTERA, al lado del móvil: abre la cartera (en la máquina, la de la máquina)
+  function paintWalletIcon(b) {
+    const c = document.createElement('canvas'); c.width = 16; c.height = 18; const g = c.getContext('2d'), Q = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+    Q(1, 5, 14, 10, 'rgba(232,224,208,0.9)'); Q(2, 6, 12, 8, '#7a4a22'); Q(2, 6, 12, 1, '#a8703a'); Q(9, 8, 6, 4, 'rgba(232,224,208,0.9)'); Q(10, 9, 4, 2, '#5a3214'); Q(12, 9, 1, 1, '#e8c060');
+    Q(3, 3, 8, 3, '#a8b4a0'); Q(4, 4, 2, 1, '#6a7a64');               // el billete asomando
+    b.append(c);
   }
+  function hudWalletTick() {
+    const b = document.getElementById('hudWallet'), ph = document.getElementById('hudPhone'); if (!b) return;
+    const show = !!(running && jr.wallet && ph && !ph.hidden && !slotUI);
+    if (b.hidden === show) b.hidden = !show;
+    if (show && !b.firstChild) paintWalletIcon(b);
+    if (ph) { const v = slotUI ? 'hidden' : ''; if (ph.style.visibility !== v) ph.style.visibility = v; }   // en la máquina, el móvil no tapa el botón rojo
+  }
+  { const b = document.getElementById('hudWallet'); if (b) b.addEventListener('click', () => openWallet()); }
 
   // ---------- intentos que no llevan a nada: la escalera (se niega) y la puerta de casa sin llaves ----------
   let popup = null, stairsCool = 0, doorCool = 0;
@@ -8040,7 +8231,7 @@
     } else if (A.kind === 'wallet') {
       once('f', 0, () => GA && GA.blip(700, 0.06, 'square', 0.04, 900));
       if (s >= 0.4) {
-        jrAct = null; jr.wallet = true; jr.cash = 500; renderTodo();   // 5 € en la cartera
+        jrAct = null; jr.wallet = true; jr.purse = { 500: 1 }; renderTodo();   // 5 € en la cartera
         if (jr.card) say('Vale, la cartera ya la tengo.', 2.2, t + 0.5);
         else say('Vale, la cartera ya la tengo... y la tarjeta de crédito de mi madre, ya la ha vuelto a esconder.', 3.8, t + 0.5);
         say('Espera... ¿y mis llaves?', 2.4, t + 0.5);
@@ -8226,7 +8417,7 @@
     const power = powerAt(t);                                            // luz eléctrica (1 = encendida); la del día no depende de ella
     outageSounds(t); autosave(t); fuseTick(t); runLater(t);
     const jrBlack = jrTick(t); furnTick(t, dt); liftTick(t); blockedChecks(t); lobbyTick(t);
-    const hsBlack = Math.max(hsTick(t, dt), shopTick(t, dt)); danTick(dt); npcTick(t, dt); streetEdges(t); barTick(t, dt); slotTick(t, dt);   // el saludo y la calle                                           // en su cuarto: cambiarse funde a negro un momento
+    const hsBlack = Math.max(hsTick(t, dt), shopTick(t, dt)); danTick(dt); npcTick(t, dt); streetEdges(t); barTick(t, dt); slotTick(t, dt); hudWalletTick();   // el saludo y la calle                                           // en su cuarto: cambiarse funde a negro un momento
     camTick(dt);
     ctx.setTransform(RES, 0, 0, RES, -Math.round(camX * RES), -Math.round(camY * RES)); ctx.imageSmoothingEnabled = false;   // en px lógicos del mundo (con la cámara)   // a partir de aquí, en px lógicos
 
@@ -8357,6 +8548,7 @@
     if (panel) drawFusePanel(t);
     if (fp) drawFurn(t);
     if (slotUI) drawSlot(t);
+    if (walletUI) drawWalletOverlay(t);
     drawClockShow(t);                                                // el aviso de la hora, por encima de todo
 
     // ayuda de controles: se va al empezar a moverse
@@ -8389,9 +8581,10 @@
     box1 = 'here'; cut = null; if (!HALL.solid.includes(HALL_BOX1)) HALL.solid.push(HALL_BOX1);         // la caja vuelve delante del cuadro de luz
     panel = false; panelCloseAt = null; difUp = false; difTripAt = null; fuse = 'idle'; back = null; brkUp.forEach((_, i) => { brkUp[i] = i !== 9; });   // cuadro de luz como al principio
     Object.assign(story, { scream: false, smell: false, bath: false }); missions = []; clockShow = null; fp = null; popup = null; Object.assign(lift, { state: 'idle', floor: 0, pending: false }); for (const k in fstate) delete fstate[k];
-    jrAct = null; const jrDone = from === 'llaves'; Object.assign(jr, { dressed: jrDone, bed: jrDone, clothes: [jrDone, jrDone, jrDone], tidy: jrDone, wallet: jrDone, cash: jrDone ? 500 : 0, card: false, keys: false, keyGot: false, keySpot: null, met: false, tried: [] });
+    jrAct = null; const jrDone = from === 'llaves'; Object.assign(jr, { dressed: jrDone, bed: jrDone, clothes: [jrDone, jrDone, jrDone], tidy: jrDone, wallet: jrDone, purse: jrDone ? { 500: 1 } : {}, card: false, keys: false, keyGot: false, keySpot: null, met: false, tried: [] });
     if (jrDone && opts.jr) Object.assign(jr, opts.jr, { clothes: (opts.jr.clothes || jr.clothes).slice() });
-    if (jrDone && opts.jr && opts.jr.keys === undefined && jr.wallet) jr.keys = true;   // guardadas antes: ya había echado en falta las llaves
+    if (jrDone && opts.jr && opts.jr.keys === undefined && jr.wallet) jr.keys = true;
+    if (jrDone && opts.jr && opts.jr.purse == null) { jr.purse = null; purse(); }   // partidas de antes: el dinero, a billetes y monedas   // guardadas antes: ya había echado en falta las llaves
     if (jr.keys && !jr.keySpot) jr.keySpot = randomKeySpot();
     hs = null; notif = null; cars = []; trail.length = 0; Object.assign(dan, { x: 220, y: 90, dir: 'down', moving: false });
     lob.doorT = null; lob.talk = false; LOB.walk = LOB_DEF.walk.slice(); if (jr.met) vestOpen();   // la recepción: la puerta blanca, como se dejó
