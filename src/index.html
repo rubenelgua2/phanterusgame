@@ -1085,7 +1085,7 @@
     '/':'....X|....X|...X.|..X..|.X...|X....|X....',
     'Ñ':'.XX.X|X..X.|.....|X...X|XX..X|X.X.X|X..XX',
     '¿':'..X..|.....|..X..|.X...|X....|X...X|.XXX.', '¡':'..X..|.....|..X..|..X..|..X..|..X..|..X..',
-    "'":'..X..|..X..|.....|.....|.....|.....|.....'
+    "'":'..X..|..X..|.....|.....|.....|.....|.....', '<':'...X.|..X..|.X...|X....|.X...|..X..|...X.', '>':'X....|.X...|..X..|...X.|..X..|.X...|X....', '€':'..XXX|.X...|XXXX.|.X...|XXXX.|.X...|..XXX'
   };
   // letras minúsculas del título (9 filas: ascendentes arriba, "p" con cola)
   const TSRC = {
@@ -3844,11 +3844,36 @@
   // Es más ancha que la pantalla: la cámara sigue a Juanjo de lado.
   const STR_DEF = {
     w: 620, FACADE: 72, CURB: 112,
-    walk: [{ x: 30, y: 76, w: 572, h: 34 }],
+    walk: [{ x: 30, y: 76, w: 572, h: 34 }, { x: 342, y: 62, w: 16, h: 16 }, { x: 566, y: 62, w: 16, h: 16 }],   // la acera y los huecos de las dos entradas
     PORTAL: { x: 180, w: 56 }, SHOP: { x: 262, w: 348 }, DOOR1: { x: 334, w: 32 }, DOOR2: { x: 558, w: 32 }, MURAL: { x: 370, w: 184 }
   };
   const STR = { name: 'calle', w: STR_DEF.w, h: H, walk: STR_DEF.walk, floor: [{ x: 0, y: 72, w: STR_DEF.w, h: 108 }], lit: [{ x: 0, y: 0, w: STR_DEF.w, h: H }], solid: [] };
-  const ROOMS = { sala: SALA, entrada: HALL, madre: MOM, bano: BATH, balcon: BALC, juanjo: JR, rellano: LND, ascensor: ELV, portal: LOB, calle: STR };
+  // ---------- EL BAR de la casa de apuestas (se entra por la puerta izquierda de la calle), según el plano del usuario.
+  // Más grande que la pantalla: la cámara sigue a Juanjo. Paredes rojas con neón y tarima blanqueada. Abajo, la puerta
+  // de la calle; arriba, la máquina de tabaco y la tragaperras negra contra la pared y la BARRA (camarero, grifos,
+  // cafetera, botellas y neveras); en la pared izquierda, la tele (de lado, mirando a las mesas) y las dos máquinas de
+  // apuestas; en medio, tres mesas altas con la "A" y un pilar; a la derecha, el letrero APUESTAS y la puerta doble de
+  // cristal opaco a la zona de apuestas
+  const BAR_DEF = {
+    w: 400, h: 240,
+    caps: [{ x: 10, y: 26, w: 130, h: 6 }, { x: 10, y: 26, w: 6, h: 196 }, { x: 390, y: 0, w: 6, h: 122 },
+      { x: 250, y: 116, w: 50, h: 6 }, { x: 348, y: 116, w: 48, h: 6 }, { x: 250, y: 116, w: 6, h: 106 },
+      { x: 10, y: 216, w: 150, h: 6 }, { x: 196, y: 216, w: 60, h: 6 },
+      { x: 134, y: 0, w: 6, h: 32 }, { x: 134, y: 0, w: 262, h: 2 }],
+    faces: [{ x: 16, y: 32, w: 118, h: 28 }, { x: 140, y: 2, w: 250, h: 18 }],
+    floor: [{ x: 16, y: 60, w: 234, h: 156 }, { x: 250, y: 60, w: 140, h: 56 }],
+    walk: [{ x: 17, y: 63, w: 232, h: 152 }, { x: 249, y: 63, w: 140, h: 52 }],
+    TOBACCO: { x: 68, w: 30 }, SLOT: { x: 102, w: 28 }, MACH_Y: 30, MACH_F: 72,   // las máquinas: arriba de su frente y su pie
+    COUNTER: { x: 140, w: 250, y: 42 }, TV: { x: 26, y: 68, w: 30, h: 18 },
+    TERMS: [{ x: 20, y: 104 }, { x: 20, y: 152 }], TABLES: [{ x: 104, y: 112 }, { x: 104, y: 174 }, { x: 196, y: 174 }],
+    PILLAR: { x: 140, y: 136, s: 10 }, DOOR: { x: 160, w: 36 }, DOOR2: { x: 300, w: 48 }, SIGN: { x: 270, y: 90, w: 108, h: 16 }
+  };
+  const BAR = {
+    name: 'bar', w: BAR_DEF.w, h: BAR_DEF.h, walk: BAR_DEF.walk, floor: BAR_DEF.floor, lit: BAR_DEF.floor.concat(BAR_DEF.faces),
+    solid: [{ x: 66, y: 62, w: 66, h: 11 }, { x: BAR_DEF.PILLAR.x, y: BAR_DEF.PILLAR.y, w: BAR_DEF.PILLAR.s, h: BAR_DEF.PILLAR.s }]
+      .concat(BAR_DEF.TABLES.map(T => ({ x: T.x - 14, y: T.y - 8, w: 28, h: 12 })))   // máquinas, pilar, máquinas de apuestas y mesas
+  };
+  const ROOMS = { sala: SALA, entrada: HALL, madre: MOM, bano: BATH, balcon: BALC, juanjo: JR, rellano: LND, ascensor: ELV, portal: LOB, calle: STR, bar: BAR };
   let room = SALA;
   const inRects = (rs, x, y) => rs.some(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
   const boxOf = rs => ({ x0: Math.min(...rs.map(r => r.x)), y0: Math.min(...rs.map(r => r.y)), x1: Math.max(...rs.map(r => r.x + r.w)), y1: Math.max(...rs.map(r => r.y + r.h)) });
@@ -4086,7 +4111,7 @@
     const v = vig.getContext('2d'), g = v.createRadialGradient(W / 2, H / 2 + 6, 70, W / 2, H / 2 + 6, 200);
     g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.6, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0.85)');
     v.fillStyle = g; v.fillRect(0, 0, W, H);
-    buildHall(); buildBalc(); buildMom(); buildBath(); buildJr(); buildLnd(); buildElv(); buildLob(); buildStreetScene();   // el balcón antes que el cuarto: el cuarto lo ve por la puerta
+    buildHall(); buildBalc(); buildMom(); buildBath(); buildJr(); buildLnd(); buildElv(); buildLob(); buildStreetScene(); buildBar();   // el balcón antes que el cuarto: el cuarto lo ve por la puerta
   }
 
   // ---------- fondo de la ENTRADA: paredes, suelo y puertas (sin muebles todavía) ----------
@@ -4825,6 +4850,174 @@
     tint();
   }
 
+  // ---------- fondo del BAR ----------
+  let barBg = null, barCounter = null;
+  // la "A" de la casa de apuestas: roja, de trazo grueso, con la bandera a cuadros ondeando en el palo derecho
+  function drawAlogo(b, x, y, s) {
+    const poly = (pts, c) => { b.fillStyle = c; b.beginPath(); pts.forEach(([px, py], i) => i ? b.lineTo(x + px * s, y + py * s) : b.moveTo(x + px * s, y + py * s)); b.closePath(); b.fill(); };
+    poly([[0, 20], [7, 0], [13, 0], [20, 20], [15, 20], [10, 6], [5, 20]], '#8a0a10');
+    poly([[1, 19], [7.5, 1], [12.5, 1], [19, 19], [15.5, 19], [10, 4.5], [4.5, 19]], '#e01822');
+    poly([[6, 13], [14, 13], [15, 15.5], [5, 15.5]], '#e01822');                                       // el travesaño
+    b.fillStyle = '#ff6a72'; b.fillRect(x + 7.5 * s, y + 1 * s, 1.2 * s, 6 * s);                         // brillo
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) {                                          // la bandera a cuadros, ondeando
+      b.fillStyle = (r + c) % 2 ? '#f4f4f0' : '#c8101a';
+      b.fillRect(x + (12 + c * 2.4) * s, y + (8 + r * 2.2 + Math.sin(c * 0.9) * 0.8) * s, 2.4 * s, 2.2 * s);
+    }
+  }
+  function buildBar() {
+    const D = BAR_DEF;
+    barBg = document.createElement('canvas'); barBg.width = D.w; barBg.height = D.h;
+    const b = barBg.getContext('2d'), PDx = window.PD;
+    const R = (x, y, w, h, c, a) => { b.globalAlpha = a == null ? 1 : a; b.fillStyle = c; b.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); b.globalAlpha = 1; };
+    const Pt = (x, y, c, a) => R(x, y, 1, 1, c, a);
+    const circ = (cx, cy, r, c, a) => { b.globalAlpha = a == null ? 1 : a; b.fillStyle = c; b.beginPath(); b.arc(cx, cy, r, 0, Math.PI * 2); b.fill(); b.globalAlpha = 1; };
+    const ell = (cx, cy, rx, ry, c, a) => { b.globalAlpha = a == null ? 1 : a; b.fillStyle = c; b.beginPath(); b.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); b.fill(); b.globalAlpha = 1; };
+    const text = (s, x, y, c, k) => { if (PDx) PDx.drawText(b, PDx.norm(s), x, y, c, k || 1); };
+    R(0, 0, D.w, D.h, '#060304');
+    // EL SUELO: tarima blanqueada, tablas largas grises claras con sus vetas
+    for (const F of D.floor) {
+      for (let y = F.y, r = 0; y < F.y + F.h; y += 6, r++) {
+        let x = F.x - Math.floor(hash(r * 3.7 + F.x) * 40);
+        while (x < F.x + F.w) {
+          const len = 34 + Math.floor(hash(r * 7 + x) * 36), c = ['#d6d2ca', '#ccc7be', '#dedad2', '#c6c1b8'][Math.floor(hash(x * 0.7 + r * 13) * 4)];
+          const x0 = Math.max(x, F.x), x1 = Math.min(x + len, F.x + F.w), h = Math.min(6, F.y + F.h - y);
+          R(x0, y, x1 - x0, h, c); R(x0, y, x1 - x0, 1, '#aca69c'); R(x0, y + h - 1, x1 - x0, 1, '#bdb7ad', 0.6); if (x + len < F.x + F.w) R(x1 - 1, y, 1, h, '#a49e94');
+          for (let g = 0; g < 3; g++) R(x0 + Math.floor(hash(g + x + r) * Math.max(1, x1 - x0 - 8)), y + 2 + (g % 2), 5 + Math.floor(hash(x + g * 3) * 10), 1, '#b8b2a8', 0.55);
+          if (hash(x * 3.1 + r) > 0.7) Pt(x0 + 4, y + 3, '#8a847a', 0.7);                              // un nudo
+          x += len;
+        }
+      }
+      for (let k = 0; k < 6; k++) R(F.x, F.y + k, F.w, 1, '#3a0a0c', 0.28 - k * 0.045);              // sombra de la pared
+    }
+    // DETRÁS DE LA BARRA: el suelo del camarero y la pared del fondo (espejo, baldas con botellas, neveras, cafetera)
+    R(140, 20, 250, 22, '#3a3436'); for (let y = 20; y < 42; y += 6) for (let x = 140; x < 390; x += 6) { R(x, y, 6, 1, '#2a2426'); R(x, y, 1, 6, '#2a2426'); }
+    // LAS PAREDES de frente: rojas, con el neón arriba (dos tubos) y el zócalo
+    for (const f of D.faces) {
+      R(f.x, f.y, f.w, f.h, '#b4141c'); for (let i = 0; i < f.w * f.h / 5; i++) Pt(f.x + hash(i * 1.3 + f.x) * f.w, f.y + hash(i * 2.9 + f.y) * f.h, hash(i) > 0.5 ? '#c21a22' : '#a0101a', 0.7);
+      for (let x = f.x + 24; x < f.x + f.w; x += 24) R(x, f.y + 3, 1, f.h - 6, '#8a0c12', 0.5);         // juntas de los paneles
+      R(f.x, f.y, f.w, 1, '#ffb0b4'); R(f.x, f.y + 1, f.w, 1, '#ff4a54'); R(f.x, f.y + 2, f.w, 1, '#c8202a');   // el neón
+      R(f.x, f.y + f.h - 3, f.w, 1, '#5a0a0e'); R(f.x, f.y + f.h - 2, f.w, 2, '#2a0608');
+    }
+    // LA PARED DEL FONDO DE LA BARRA, con variedad: licores, un botellero de vinos tumbados, la pizarra de tapas, el
+    // reloj y la bufanda del equipo; abajo, neveras de cerveza y de refrescos, el arcón de helados, el lavavajillas y la cafetera
+    const bottle = (x, y, kind) => {                                   // una botella: alta de licor, de vino o achaparrada
+      const c = ['#2a6a3a', '#c8a040', '#8a2a1e', '#e8e4d0', '#3a4a8a', '#5a3a1e', '#a8c8d8', '#d8d0a0', '#6a1a3a'][kind % 9], tall = kind % 3 !== 2;
+      R(x, y + (tall ? 0 : 2), 2, tall ? 7 : 5, c); Pt(x, y + (tall ? 0 : 2), '#2a2a2e'); Pt(x + 1, y + 3, '#ffffff', 0.35); if (kind % 4 === 0) R(x, y + 4, 2, 1, '#f4f0e0');
+    };
+    for (const [x0, x1, y] of [[141, 222, 4], [141, 222, 12]]) {      // las baldas de licores (dos alturas)
+      R(x0, y + 7, x1 - x0, 1, '#8a6a4a'); R(x0, y + 8, x1 - x0, 1, '#4a3020');
+      for (let x = x0 + 2; x < x1 - 2; x += 3 + (hash(x + y) > 0.8 ? 1 : 0)) bottle(x, y, Math.floor(hash(x * 1.7 + y) * 27));
+    }
+    R(224, 3, 40, 17, '#3a2416'); for (let r = 0; r < 4; r++) for (let c = 0; c < 9; c++) { const cx = 227 + c * 4 + (r % 2) * 2, cy = 5 + r * 4; R(cx, cy, 3, 3, '#1a0a0c'); Pt(cx + 1, cy + 1, ['#6a1a2a', '#2a4a1a', '#8a1a2a', '#c8b060'][(r + c) % 4]); }   // botellero de vinos
+    R(267, 3, 40, 17, '#5a3a22'); R(268, 4, 38, 15, '#1a2a22');      // la pizarra de las tapas, con tiza
+    if (PDx) { PDx.drawText(b, 'TAPAS', 270, 5, '#f4f0e0', 1); }
+    for (let k = 0; k < 3; k++) { R(270, 13 + k * 2, 18 + (k * 7) % 12, 1, '#c8c8c0', 0.8); R(298, 13 + k * 2, 5, 1, '#e8d080', 0.8); }
+    circ(318, 10, 6, '#2a2a2e'); circ(318, 10, 5, '#f4f0e8'); R(318, 6, 1, 4, '#1a1a1e'); R(318, 10, 3, 1, '#1a1a1e'); Pt(318, 10, '#c8202a');   // el reloj
+    for (let k = 0; k < 18; k++) R(330 + k * 2, 4 + Math.round(Math.sin(k * 0.35) * 2), 2, 4, k % 4 < 2 ? '#c8202a' : '#f4f4f0');   // la bufanda del equipo, colgada
+    for (const [x0, x1, y] of [[368, 388, 4], [368, 388, 12]]) { R(x0, y + 7, x1 - x0, 1, '#8a6a4a'); for (let x = x0 + 1; x < x1 - 1; x += 3) { R(x, y + 3, 2, 4, '#d8e4ec', 0.8); R(x, y + 3, 2, 1, '#ffffff'); } }   // vasos y copas
+    // abajo: dos neveras de cerveza, una de refrescos, el arcón de helados, el lavavajillas, otra nevera y la cafetera
+    const fridge = (x, cols) => { R(x, 20, 19, 13, '#5a5e64'); R(x + 1, 21, 17, 11, '#1e2a32'); for (let r = 0; r < 2; r++) for (let j = 0; j < 5; j++) R(x + 2 + j * 3, 22 + r * 5, 2, 4, cols[(j + r * 2) % cols.length]); R(x + 1, 21, 1, 11, '#a8c8d8', 0.6); R(x + 16, 25, 1, 4, '#c8ccd2'); R(x + 1, 32, 17, 1, '#3a3e44'); };
+    fridge(143, ['#5a3a1e', '#c8a040', '#5a3a1e', '#2a6a3a']); fridge(164, ['#c8a040', '#d4161e', '#c8a040', '#f4f0e0']);
+    fridge(185, ['#d4161e', '#f4a020', '#3a8a3a', '#c8202a', '#2a5ab8']);   // refrescos
+    R(206, 22, 28, 11, '#e8e8e4'); R(206, 22, 28, 2, '#ffffff'); R(208, 25, 24, 5, '#a8d8e8'); for (let k = 0; k < 6; k++) R(209 + k * 4, 26, 3, 3, ['#ff8aa0', '#f4e0a0', '#8a5a3a', '#a0e0a0', '#ffd84a', '#c8a0e0'][k]); R(212, 31, 16, 1, '#c8202a');   // el arcón de helados
+    R(236, 20, 20, 13, '#a8acb2'); R(236, 20, 20, 1, '#d8dce2'); R(238, 23, 16, 2, '#7a7e84'); R(250, 27, 3, 2, '#4aff6a');   // el lavavajillas
+    for (let k = 0; k < 4; k++) fridge(258 + k * 21, [['#5a3a1e', '#c8a040'], ['#2a6a3a', '#e8e4d0'], ['#c8a040', '#8a2a1e'], ['#d4161e', '#f4f0e0']][k]);
+    R(345, 20, 11, 13, '#2a2a2e'); R(346, 21, 9, 11, '#3a3a40'); R(347, 23, 7, 1, '#c8a040'); R(347, 26, 7, 1, '#c8a040');   // la caja fuerte de las monedas (máquinas)
+    R(358, 19, 20, 12, '#c8ccd2'); R(358, 19, 20, 1, '#eef0f2'); R(359, 21, 18, 3, '#2a2a2e'); R(361, 25, 4, 5, '#e8e4dc'); R(369, 25, 4, 5, '#e8e4dc'); R(374, 21, 2, 2, '#d4161e'); R(362, 24, 2, 1, '#6a4a2a');   // la cafetera
+    for (let k = 0; k < 3; k++) for (let j = 0; j < 2; j++) R(380 + j * 4, 21 + k * 4, 3, 3, '#d8e4ec', 0.8);   // vasos en su escurridor
+    // el mostrador va en una función: se pinta en el fondo y otra vez en barCounter (capa transparente que va delante del camarero)
+    const counter = g => {
+      const R = (x, y, w, h, c, a) => { g.globalAlpha = a == null ? 1 : a; g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); g.globalAlpha = 1; };
+      const Pt = (x, y, c, a) => R(x, y, 1, 1, c, a);
+    // EL MOSTRADOR: acero, frente rojo con el reposapiés; encima, de todo
+    const C = D.COUNTER;
+    R(C.x, C.y, C.w, 11, '#7a7e84'); R(C.x, C.y, C.w, 1, '#eef0f2'); R(C.x, C.y + 1, C.w, 9, '#b8bcc2'); for (let x = C.x + 3; x < C.x + C.w; x += 9) R(x, C.y + 3, 5, 1, '#d8dce2', 0.7);
+    R(C.x, C.y + 10, C.w, 8, '#c41a22'); R(C.x, C.y + 10, C.w, 1, '#ff5a62'); for (let x = C.x + 10; x < C.x + C.w; x += 20) R(x, C.y + 11, 1, 6, '#8a0c12');
+    R(C.x, C.y + 16, C.w, 1, '#eef0f2'); R(C.x, C.y + 17, C.w, 1, '#6a6e74'); R(C.x, C.y + 18, C.w, 2, '#000', 0.3);
+    const tap = (x, col) => { R(x, C.y - 7, 4, 9, '#b8bcc2'); R(x, C.y - 7, 1, 9, '#eef0f2'); R(x - 1, C.y - 8, 6, 2, '#eef0f2'); R(x + 1, C.y - 13, 2, 6, col); R(x + 1, C.y - 14, 2, 1, '#ffffff'); };
+    tap(156, '#2a2a2e'); tap(168, '#c8a040'); tap(180, '#d4161e'); tap(296, '#2a6a3a'); tap(308, '#f4f0e0');   // grifos de varias marcas
+    R(193, C.y + 1, 7, 6, '#e8e4dc'); R(194, C.y, 5, 1, '#ffffff'); R(194, C.y + 2, 5, 1, '#c8202a');                             // servilletero
+    for (const [x, c] of [[203, '#e8b850'], [209, '#5a2a1a']]) { R(x, C.y + 1, 4, 6, c, 0.9); R(x, C.y + 1, 4, 2, '#ffffff'); }   // una caña y un tinto de verano
+    R(216, C.y + 1, 12, 5, '#7a3a2a'); R(213, C.y + 3, 4, 2, '#e8d8c0'); R(226, C.y - 1, 2, 7, '#3a2a1e'); R(216, C.y + 1, 12, 1, '#a85a3a');   // el jamón en su jamonero
+    R(234, C.y - 6, 50, 13, '#8a8e94'); R(235, C.y - 5, 48, 11, '#c8e0e8', 0.55); R(235, C.y - 5, 48, 1, '#ffffff');               // LA VITRINA de las tapas
+    [['#e8c040', '#c86a2a'], ['#8a5a3a', '#e8e0c0'], ['#3a8a3a', '#c8202a'], ['#f4e0c0', '#a85a2a'], ['#c83a2a', '#f4d080']].forEach(([a, c], k) => { const x = 237 + k * 9; R(x, C.y, 8, 4, '#f4f4f0'); R(x + 1, C.y, 6, 3, a); Pt(x + 2, C.y + 1, c); Pt(x + 5, C.y + 1, c); });   // tortilla, croquetas, ensaladilla...
+    R(286, C.y + 2, 6, 4, '#e8e4dc'); for (let k = 0; k < 3; k++) Pt(287 + k * 2, C.y + 3, '#4a7a2a');                         // un cuenco de aceitunas
+    R(316, C.y + 1, 8, 5, '#a8784a'); R(317, C.y + 1, 6, 2, '#e8c890'); Pt(318, C.y + 1, '#f4e0b0');                               // la cesta del pan
+    R(326, C.y - 5, 15, 10, '#1e1e22'); R(327, C.y - 4, 13, 4, '#2a5a3a'); R(328, C.y - 3, 9, 1, '#6aff8a'); R(328, C.y + 1, 11, 3, '#5a5e64');   // la caja
+    R(343, C.y + 1, 5, 7, '#2a2a2e'); R(344, C.y + 2, 3, 2, '#6ab8ff'); R(344, C.y + 5, 3, 1, '#c8ccd2');                         // el datáfono
+    R(352, C.y + 2, 4, 5, '#2a2a2e'); R(353, C.y + 1, 2, 1, '#e8e4dc');                                                          // azucarero
+    for (const x of [360, 372]) { R(x, C.y + 3, 8, 3, '#f4f0e8'); R(x + 2, C.y + 2, 4, 3, '#f4f0e8'); R(x + 3, C.y + 2, 2, 2, '#6a3a1a'); }   // dos cafés con su plato
+    R(382, C.y + 1, 6, 6, '#c8202a'); R(383, C.y + 2, 4, 3, '#f4f4f0'); R(384, C.y + 3, 2, 1, '#c8202a');                       // el expositor de las quinielas
+    };
+    counter(b); barCounter = document.createElement('canvas'); barCounter.width = D.w; barCounter.height = D.h; counter(barCounter.getContext('2d'));
+    // LA MÁQUINA DE TABACO y LA TRAGAPERRAS negra, contra la pared de arriba (pintadas DESPUÉS de las tapas: no las solapa nada)
+    const TB = D.TOBACCO, y0 = D.MACH_Y, y1 = D.MACH_F;
+    const box3d = (x, y, w, h, top, side, edge) => {                  // volumen: el techo (hacia el fondo) y el costado derecho, en perspectiva
+      R(x + w, y + h - 2, 6, 4, '#000', 0.25); R(x - 1, y + h, w + 6, 2, '#000', 0.2);                 // la sombra en el suelo
+      for (let c = 1; c <= 3; c++) { R(x + w - 1 + c, y - 2 * c, 1, h, side); R(x + w - 1 + c, y - 2 * c, 1, 1, edge); R(x + w - 1 + c, y - 2 * c + h - 1, 1, 1, '#000', 0.5); }
+      for (let j = 1; j <= 6; j++) R(x + Math.floor(j / 2), y - j, w, 1, top);
+      R(x + 3, y - 7, w, 1, edge); R(x, y - 1, w, 1, '#000', 0.25);
+    };
+    const tobacco = () => {
+      box3d(TB.x, y0, TB.w, y1 - y0, '#c8ccd2', '#6a7078', '#e8ecf0');
+      R(TB.x - 1, y0 - 1, TB.w + 2, y1 - y0 + 2, '#141418'); R(TB.x, y0, TB.w, y1 - y0, '#a4aab2'); R(TB.x, y0, TB.w, 1, '#d8dce2'); R(TB.x, y0, 1, y1 - y0, '#c4c8ce'); R(TB.x + TB.w - 2, y0, 2, y1 - y0, '#7a8088');
+      R(TB.x + 2, y0 + 2, TB.w - 4, 6, '#123a7a'); R(TB.x + 2, y0 + 2, TB.w - 4, 1, '#3a6aba');      // el rótulo con luz: un cigarro humeando
+      R(TB.x + 6, y0 + 4, 14, 2, '#f4f4f0'); R(TB.x + 6, y0 + 4, 4, 2, '#d89040'); R(TB.x + 20, y0 + 4, 1, 2, '#ff6a2a'); Pt(TB.x + 22, y0 + 3, '#c8ccd2'); Pt(TB.x + 23, y0 + 2, '#c8ccd2', 0.6);
+      R(TB.x + 2, y0 + 9, TB.w - 4, 18, '#1e2228'); R(TB.x + 2, y0 + 9, TB.w - 4, 1, '#4a5058');      // el escaparate de cajetillas
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) { const x = TB.x + 3 + c * 5, y = y0 + 10 + r * 6, col = ['#c8202a', '#f4f4f0', '#1a3a8a', '#d8b040', '#e8e8e8', '#2a6a3a', '#7a2a6a'][(r * 5 + c) % 7]; R(x, y, 4, 4, col); R(x, y, 4, 1, '#ffffff', 0.4); R(x + 1, y + 2, 2, 1, '#2a2a2e', 0.5); R(x, y + 4, 4, 1, '#c8ccd2'); }
+      R(TB.x + 3, y0 + 29, 12, 4, '#0a1a0a'); R(TB.x + 4, y0 + 30, 9, 2, '#4aff6a'); R(TB.x + 18, y0 + 29, 8, 5, '#5a5e64'); R(TB.x + 19, y0 + 30, 1, 3, '#1a1a1e'); R(TB.x + 22, y0 + 30, 3, 1, '#ffd84a');   // pantalla y monedero
+      R(TB.x + 3, y0 + 35, TB.w - 6, 5, '#3a3e44'); R(TB.x + 4, y0 + 36, TB.w - 8, 3, '#141418'); R(TB.x + 4, y0 + 36, TB.w - 8, 1, '#6a6e74');   // el cajetín
+    };
+    const slot = () => {
+      const SL = D.SLOT;
+      box3d(SL.x - 2, y0 - 2, SL.w + 4, y1 - y0 + 2, '#2a2a30', '#0e0e12', '#d4a020');
+      R(SL.x - 2, y0 - 2, SL.w + 4, y1 - y0 + 2, '#d4a020'); R(SL.x - 1, y0 - 1, SL.w + 2, y1 - y0, '#000'); R(SL.x, y0, SL.w, y1 - y0 - 1, '#141418');   // perfiles dorados
+      R(SL.x + 2, y0 + 1, SL.w - 4, 10, '#1a0a3a'); R(SL.x + 3, y0 + 2, SL.w - 6, 8, '#4a1a8a'); text('777', SL.x + 5, y0 + 2, '#ffd84a');   // la pantalla de juegos
+      R(SL.x + 2, y0 + 13, SL.w - 4, 11, '#d4a020'); for (let k = 0; k < 3; k++) { R(SL.x + 3 + k * 8, y0 + 14, 7, 9, '#f4f4f0'); R(SL.x + 3 + k * 8, y0 + 14, 7, 1, '#c8c8c0'); }
+      R(SL.x + 5, y0 + 17, 3, 3, '#c8202a'); Pt(SL.x + 6, y0 + 16, '#2a6a2a'); R(SL.x + 12, y0 + 16, 3, 4, '#d4a020'); R(SL.x + 11, y0 + 19, 5, 1, '#d4a020'); R(SL.x + 21, y0 + 17, 3, 3, '#c8202a');   // cerezas, campana, cerezas
+      R(SL.x + 2, y0 + 18, SL.w - 4, 1, '#c8202a', 0.6);                                                // la línea de premio
+      for (let k = 0; k < 5; k++) R(SL.x + 2 + k * 5, y0 + 27, 4, 3, ['#ff4a4a', '#ffd84a', '#4aff6a', '#4ad8ff', '#ff8a2a'][k]);   // botones
+      R(SL.x + 3, y0 + 33, SL.w - 6, 6, '#2a2a30'); R(SL.x + 4, y0 + 34, SL.w - 8, 4, '#8a8e94'); R(SL.x + 4, y0 + 34, SL.w - 8, 1, '#c8ccd2');   // la bandeja
+    };
+    // LA PUERTA DOBLE A LA ZONA DE APUESTAS: más grande, de cristal opaco con sus rayas rojas, marco de aluminio, tiradores
+    // y la alfombra con la A delante; y EL LETRERO APUESTAS (caja de luz) con la A a su lado
+    const door2 = () => {
+      const D2 = D.DOOR2, yy = 116;
+      R(D2.x - 3, yy - 2, D2.w + 6, 10, '#2a2a2e'); R(D2.x - 2, yy - 1, 2, 8, '#b8bcc2'); R(D2.x + D2.w, yy - 1, 2, 8, '#b8bcc2');   // el marco
+      for (let k = 0; k < 2; k++) {
+        const x = D2.x + k * (D2.w / 2), w = D2.w / 2;
+        R(x, yy, w, 6, '#8a9096'); R(x + 1, yy + 1, w - 2, 4, '#e6e8e4'); R(x + 1, yy + 1, w - 2, 1, '#ffffff');
+        for (let xx = x + 3; xx < x + w - 2; xx += 4) R(xx, yy + 2, 2, 2, '#c8202a');               // las rayas rojas
+        R(k ? x + 2 : x + w - 4, yy - 1, 2, 3, '#c8ccd2'); R(k ? x + 2 : x + w - 4, yy - 1, 2, 1, '#ffffff');   // los tiradores
+      }
+      R(D2.x + D2.w / 2 - 1, yy, 2, 6, '#6a7076');
+    };
+    const sign = () => {
+      const S = D.SIGN;
+      drawAlogo(b, 262, 35, 1);                                       // la "A" grande, a la izquierda del letrero
+      R(S.x - 2, S.y - 2, S.w + 4, S.h + 4, '#1a0608'); R(S.x - 1, S.y - 1, S.w + 2, S.h + 2, '#e8e8e4');   // la caja de luz: marco claro...
+      const g = b.createLinearGradient(0, S.y, 0, S.y + S.h); g.addColorStop(0, '#ff3a44'); g.addColorStop(1, '#b8101a'); b.fillStyle = g; b.fillRect(S.x, S.y, S.w, S.h);   // ...y fondo rojo encendido
+      R(S.x, S.y, S.w, 1, '#ffb0b4');
+      if (PDx) [...'APUESTAS'].forEach((ch, i) => { const x = S.x + 5 + i * 11; PDx.drawText(b, ch, x + 1, S.y + 3, '#5a060a', 2); PDx.drawText(b, ch, x, S.y + 2, '#ffffff', 2); });
+      R(S.x + 2, S.y + S.h + 2, S.w - 4, 1, '#000', 0.3);
+    };
+    // las tapas de las paredes, PRIMERO; luego, delante, todo lo que va contra ellas
+    for (const c of D.caps) { R(c.x - 1, c.y - 1, c.w + 2, c.h + 2, '#000'); R(c.x, c.y, c.w, c.h, '#3a1214'); R(c.x, c.y, c.w, 1, '#5a1e20'); }
+    D.TERMS.forEach(M => {                                              // donde estaban las máquinas de apuestas: la marca en el suelo
+      const x = 17, y = M.y + 28, w = 26, h = 14;
+      R(x, y, w, h, '#e8e2d4', 0.55); for (let yy = y + 2; yy < y + h; yy += 5) R(x, yy, w, 1, '#d4ccbc', 0.5);   // la tarima sin gastar, más clara
+      R(x, y, w, 1, '#5a4a3a', 0.45); R(x, y + h - 1, w, 1, '#5a4a3a', 0.45); R(x + w - 1, y, 1, h, '#5a4a3a', 0.45);   // el cerco de polvo
+      R(x + 1, y + 1, w - 2, 1, '#8a7a64', 0.25); R(x + w - 2, y + 1, 1, h - 2, '#8a7a64', 0.25);
+      for (const [dx, dy] of [[3, 3], [w - 4, 3], [3, h - 4], [w - 4, h - 4]]) { Pt(x + dx, y + dy, '#2a2420'); Pt(x + dx + 1, y + dy, '#8a8e94'); }   // los agujeros de los tornillos
+      R(16, y + 6, 4, 2, '#1a1a1e'); Pt(20, y + 6, '#c8a040'); Pt(20, y + 7, '#c8202a'); R(16, y + 5, 3, 1, '#d8d8d0', 0.8);   // el cable cortado, con cinta
+      R(x + 8, y + h + 1, 6, 1, '#8a7a64', 0.25); R(x + 15, y + h + 3, 4, 1, '#8a7a64', 0.2);                  // marcas de arrastrarla
+    });
+    tobacco(); slot(); door2();   // (las máquinas de apuestas y la tele se pintan en cada fotograma)   // (el letrero cuelga del techo: se pinta delante, en cada fotograma)
+    // la puerta de la calle (abajo) y el felpudo
+    const D1 = D.DOOR; R(D1.x, 216, D1.w, 6, '#1a0a0c'); for (let k = 0; k < 2; k++) { const x = D1.x + k * D1.w / 2; R(x, 217, D1.w / 2, 4, '#e4e6e2'); for (let xx = x + 2; xx < x + D1.w / 2 - 1; xx += 3) R(xx, 218, 2, 2, '#c8202a'); }
+    R(D1.x - 2, 206, D1.w + 4, 9, '#2a2a2e'); for (let x = D1.x - 1; x < D1.x + D1.w + 2; x += 2) R(x, 207, 1, 7, '#4a4a50');
+  }
+
   // ---------- fondo de LA CALLE ----------
   let strBg = null;
   function buildStreetScene() {
@@ -5033,7 +5226,7 @@
   const keys = new Set();
   function update(dt) {
     // cruzando una puerta (lo mueve la animación de la puerta), en una mini escena o con el cuadro abierto: no se controla
-    if ((swap && tNow - swap.at < DOOR_T.inside) || cut || panel || jrAct || fp || (lob.talk && !jr.met) || hs) { P.moving = false; if (!swap) P.phase = 0; return; }
+    if ((swap && tNow - swap.at < DOOR_T.inside) || cut || panel || jrAct || fp || (lob.talk && !jr.met) || hs || (shopIn && tNow - shopIn.t0 < 2.6)) { P.moving = false; if (!swap) P.phase = 0; return; }
     let dx =(keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0), dy = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0), k = 1;
     const jm = Math.hypot(joy.x, joy.y);
     if (dx || dy) P.tx = null;                                      // el teclado manda sobre el joystick
@@ -5146,6 +5339,11 @@
     ctx.fillStyle = 'rgba(0,0,0,0.35)';                                                         // sombra en el suelo (más larga si está tumbado)
     const sw = 10 + Math.round(Math.sin(rot) * 16); ctx.fillRect(x - 5, y - 1, sw, 2); ctx.fillRect(x - 4, y - 2, sw - 2, 1);
     if (rot) { ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.drawImage(img, -7, -21); ctx.restore(); return; }
+    const sc = depthScale(P.y), fade = shopFade();
+    if (sc !== 1 || fade) {                                          // en el hueco de la casa de apuestas: más lejos, más pequeño
+      ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); ctx.globalAlpha = 1 - fade * 0.9; ctx.drawImage(img, -7, -21 + bob); ctx.restore();
+      return;
+    }
     ctx.drawImage(img, x - 7, y - 21 + bob);
     if (hold) {                                                                                 // el led del móvil brilla un poco
       const lx = P.dir === 'down' ? x - 2 : P.dir === 'left' ? x - 6 : P.dir === 'right' ? x + 5 : null, ly = y - 21 + bob + (P.dir === 'down' ? 15 : 14);
@@ -5160,9 +5358,10 @@
 
   // ---------- controles: flechas/WASD; con ratón, clic (o arrastrar) adonde ir; en móvil, joystick ----------
   const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
-  const busy = () => !running || panel || fp || document.getElementById('settings').classList.contains('open') || document.getElementById('phoneUI').classList.contains('open');
+  const busy = () => !running || panel || fp || slotUI || document.getElementById('settings').classList.contains('open') || document.getElementById('phoneUI').classList.contains('open');
   addEventListener('keydown', e => {
     if (fp && running) { if (furnKey(e.code)) e.preventDefault(); return; }   // un mueble abierto
+    if (slotUI && running) { if (slotKey(e.code)) e.preventDefault(); return; }   // la tragaperras abierta
     if (panel && running) {                                          // cuadro de luz abierto: W/S (o flechas) el DIF; F o Escape, cerrar
       if (e.code === 'KeyF' || e.code === 'Escape') closeFuse();
       else if (e.code === 'KeyW' || e.code === 'ArrowUp') setDif(true);
@@ -5170,7 +5369,7 @@
       else return;
       e.preventDefault(); return;
     }
-    if (e.code === 'KeyF' && !busy()) { if (moveBox1() || openFuse() || jrUse() || openFurn() || callLift()) e.preventDefault(); return; }   // F: apartar la caja o abrir el cuadro (si está al lado)
+    if (e.code === 'KeyF' && !busy()) { if (moveBox1() || openFuse() || jrUse() || openFurn() || callLift() || openSlot()) e.preventDefault(); return; }   // F: apartar la caja o abrir el cuadro (si está al lado)
     const k = KEYMAP[e.code]; if (!k || busy()) return;
     keys.add(k); moved = true; e.preventDefault();
   });
@@ -5184,7 +5383,8 @@
   cv.addEventListener('pointerdown', e => {
     const tp = toRoom(e), B = HALL_DEF.BOX1;
     if (panel && running) { panelTap(tp); e.preventDefault(); return; }
-    if (fp && running) { furnDown(tp, e); e.preventDefault(); return; }   // un mueble abierto: su minijuego, coger algo o salir   // con el cuadro abierto: interruptores o cerrar
+    if (fp && running) { furnDown(tp, e); e.preventDefault(); return; }
+    if (slotUI && running) { slotDown(tp); e.preventDefault(); return; }   // la tragaperras: botones   // un mueble abierto: su minijuego, coger algo o salir   // con el cuadro abierto: interruptores o cerrar
     if (running && notifHit(tp) && openNotifPhone()) { e.preventDefault(); return; }   // tocar la notificación: abre el chat
     if (busy()) return;
     tp.x += camX; tp.y += camY;                                      // de aquí en adelante, en el mundo (con la cámara)
@@ -5193,11 +5393,13 @@
     if (inBox(tp, HALL_DEF.FUSE, 5) && openFuse()) { e.preventDefault(); return; }
     if (jrTap(tp)) { e.preventDefault(); return; }
     { const f = furnNear(); if (f && inBox(tp, f.rect, 3) && openFurn(f)) { e.preventDefault(); return; } }   // tocar un mueble al lado
-    if (liftCallNear() && inBox(tp, { x: 70, y: 48, w: 44, h: 26 }, 2) && callLift()) { e.preventDefault(); return; }   // el botón del ascensor                  // en su cuarto: el armario, la cama, la ropa, la cartera
+    if (liftCallNear() && inBox(tp, { x: 70, y: 48, w: 44, h: 26 }, 2) && callLift()) { e.preventDefault(); return; }
+    if (slotNear() && inBox(tp, { x: BAR_DEF.SLOT.x - 2, y: BAR_DEF.MACH_Y - 8, w: BAR_DEF.SLOT.w + 8, h: BAR_DEF.MACH_F - BAR_DEF.MACH_Y + 8 }, 2) && openSlot()) { e.preventDefault(); return; }   // tocar la tragaperras   // el botón del ascensor                  // en su cuarto: el armario, la cama, la ropa, la cartera
     // con teclado/ratón el clic NO mueve: solo interacciones (muebles, botones…). En táctil, el joystick.
   });
   cv.addEventListener('pointermove', e => {
     if (fp) furnMove(toRoom(e));
+    else if (slotUI) { slotUI.hover = slotHit(toRoom(e)); cv.style.cursor = slotUI.hover ? 'pointer' : ''; }
     else cv.style.cursor = (running && notifHit(toRoom(e))) ? 'pointer' : '';
   });
   ['pointerup', 'pointercancel'].forEach(ev => cv.addEventListener(ev, () => { furnUp(); }));
@@ -5273,10 +5475,13 @@
     hallJ: { kind: 'v1', x: 269, hole: 266, y0: 61, y1: 81, dir: -1, beyond: '#5a4630' },   // la del cuarto de Juanjo (pared derecha de la entrada)...
     hallExit: { kind: 'h1', x: 126, y: 170, w: 26, beyond: '#141416' },   // la puerta de la calle (de casa al rellano)...
     lndW: { kind: 'v1', x: 37, hole: 34, y0: 90, y1: 112, dir: 1, beyond: '#2a2a2e' },   // ...y la misma, desde el rellano
-    liftL: { kind: 'hole' }, liftC: { kind: 'hole' }, liftB: { kind: 'hole' }, portalS: { kind: 'hole' }, streetN: { kind: 'hole' },                // el ascensor: sus puertas se pintan aparte
+    liftL: { kind: 'hole' }, liftC: { kind: 'hole' }, liftB: { kind: 'hole' }, portalS: { kind: 'hole' }, streetN: { kind: 'hole' }, barS: { kind: 'hole' }, shopL: { kind: 'hole' },                // el ascensor: sus puertas se pintan aparte
     jrW: { kind: 'v1', x: 87, hole: 84, y0: JR_DEF.DOOR.y, y1: JR_DEF.DOOR.y + JR_DEF.DOOR.h, dir: 1, beyond: '#3a3630' }   // ...y la misma, desde dentro
   };
-  SALA.doors = [DOORS.salaE, DOORS.salaN]; BALC.doors = [DOORS.balcE, DOORS.balcS]; HALL.doors = [DOORS.hallW, DOORS.hallMom, DOORS.hallJ, DOORS.hallExit]; LND.doors = [DOORS.lndW, DOORS.liftL]; ELV.doors = [DOORS.liftC]; LOB.doors = [DOORS.liftB, DOORS.portalS]; STR.doors = [DOORS.streetN];
+  SALA.doors = [DOORS.salaE, DOORS.salaN]; BALC.doors = [DOORS.balcE, DOORS.balcS]; HALL.doors = [DOORS.hallW, DOORS.hallMom, DOORS.hallJ, DOORS.hallExit]; LND.doors = [DOORS.lndW, DOORS.liftL]; ELV.doors = [DOORS.liftC]; LOB.doors = [DOORS.liftB, DOORS.portalS]; STR.doors = [DOORS.streetN, DOORS.shopL]; BAR.doors = [DOORS.barS];
+  BAR.exits = [{ door: DOORS.barS, to: STR, arrive: DOORS.shopL, out: { y: 222 }, path: { y: [64, 80] },   // del bar a la calle, por la misma puerta
+    test: () => P.dir === 'down' && P.y >= 212 && P.x > BAR_DEF.DOOR.x + 2 && P.x < BAR_DEF.DOOR.x + BAR_DEF.DOOR.w - 2,
+    place: () => { shopDoors[0].open = true; shopDoors[0].o = 1; return { x: 352, dir: 'down', ang: Math.PI / 2 }; } }];
   LOB.exits = [{ door: DOORS.portalS, to: STR, arrive: DOORS.streetN, out: { y: 204 }, path: { y: [80, 90] },   // por la verja, a la calle (tras el saludo)
     test: () => jr.met && !hs && P.dir === 'down' && P.y >= 186 && P.x > 26 && P.x < 74, place: () => ({ x: 208, dir: 'down', ang: Math.PI / 2 }) }];
   STR.exits = [{ door: DOORS.streetN, to: LOB, arrive: DOORS.portalS, out: { y: 72 }, path: { y: [200, 186] },   // y de vuelta al portal
@@ -6543,7 +6748,7 @@
   const dan = { x: 220, y: 90, dir: 'down', moving: false, phase: 0 };
   const trail = [];                                                  // por dónde ha ido Juanjo (Daniel le sigue unos pasos detrás)
   function danTick(dt) {
-    if (room !== STR) return;
+    if (room !== STR && room !== BAR) return;
     const last = trail[trail.length - 1];
     if (!last || Math.hypot(P.x - last.x, P.y - last.y) > 1) trail.push({ x: P.x, y: P.y });
     if (trail.length > 400) trail.shift();
@@ -6647,6 +6852,8 @@
   function drawActor(set, x, y, dir, moving, phase) {
     const s = set[dir] || set.down, fi = ((Math.floor(phase || 0) % 4) + 4) % 4, img = moving ? s.walk[fi] : s.idle, bob = moving && fi % 2 === 1 ? -1 : 0;
     ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(Math.round(x) - 5, Math.round(y) - 1, 10, 2);
+    const sc = depthScale(y);
+    if (sc !== 1) { ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.scale(sc, sc); ctx.drawImage(img, -7, -21 + bob); ctx.restore(); return; }
     ctx.drawImage(img, Math.round(x) - 7, Math.round(y) - 21 + bob);
   }
   function streetActors(front) {                                     // de detrás a delante, según su y
@@ -6673,33 +6880,72 @@
     cars = cars.filter(c => c.x > -60 && c.x < STR_DEF.w + 60);
     for (const c of cars) drawCar(c.col, c.x - CAR.w / 2, c.L.cy - CAR.h / 2, false, null, c.L.dirX * Math.PI / 2);
   }
-  // LAS PUERTAS DE LA CASA DE APUESTAS: dos hojas de cristal blanco opaco con rayas rojas (como las reales) que se
-  // abren solas, deslizándose hacia los lados, cuando Juanjo (o Daniel) se acerca; dentro, de momento, la penumbra roja
-  const shopDoors = [{ o: 0, was: 0 }, { o: 0, was: 0 }];
-  function drawShopDoors(t, dt) {
-    [STR_DEF.DOOR1, STR_DEF.DOOR2].forEach((Dr, i) => {
-      const st = shopDoors[i], cx = Dr.x + Dr.w / 2;
-      const near = [P, dan].some(a => Math.abs(a.x - cx) < Dr.w / 2 + 6 && a.y < 92);
-      st.o += clamp((near ? 1 : 0) - st.o, -dt * 2.2, dt * 2.2);
-      if (near !== !!st.was) { st.was = near; sfx(near ? 340 : 260, 0.35, 'sawtooth', 0.01, near ? 520 : 180); }   // el motor de la puerta
-      const ix = Dr.x + 4, iw = Dr.w - 8, y0 = 39, y1 = 66, half = iw / 2, gap = Math.round(st.o * (half - 1));
-      if (st.o > 0.01) {                                             // dentro: penumbra con luz roja y las maquinitas
-        PR(ix, y0, iw, y1 - y0, '#1a0a0c');
-        const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(200,30,40,0.35)'); g.addColorStop(1, 'rgba(200,30,40,0.05)'); ctx.fillStyle = g; ctx.fillRect(ix, y0, iw, y1 - y0);
-        for (let k = 0; k < 4; k++) if (Math.sin(t * 4 + k * 1.7 + i) > -0.2) PP(ix + 3 + k * 6, y0 + 10 + (k % 2) * 3, ['#ffd84a', '#4ad8ff', '#ff4a8a', '#8aff4a'][k]);
-        PR(ix, y1 - 3, iw, 3, '#3a2a24');
+  // LAS PUERTAS DE LA CASA DE APUESTAS (en las dos entradas): la hoja de la izquierda es un cristal fijo y la de la
+  // derecha, la puerta, MANUAL: se abre cuando Juanjo la empuja (girando hacia dentro sobre su bisagra) y se cierra
+  // sola, con un golpe, al salir del hueco. En el hueco se puede entrar: cuanto más dentro, más pequeño se ve (está más
+  // lejos). Al cruzar la puerta se aleja y se oscurece (el interior, más adelante)
+  const shopDoors = [{ o: 0, open: false }, { o: 0, open: false }];
+  const SHOP_DOORS = () => [STR_DEF.DOOR1, STR_DEF.DOOR2];
+  const RECESS_Y = 76;                                               // la línea de la fachada: por encima, dentro del hueco
+  const inRecess = (a, Dr) => a.y < RECESS_Y && a.x > Dr.x + 6 && a.x < Dr.x + Dr.w - 6;
+  const depthScale = y => room === STR && y < RECESS_Y ? clamp(1 - (RECESS_Y - y) / 50, 0.55, 1) : 1;
+  let shopIn = null;                                                 // { t0, i, x0, y0, fx }
+  const leafX = Dr => { const ix = Dr.x + 4, iw = Dr.w - 8; return { ix, iw, half: iw / 2 }; };
+  function shopTick(t, dt) {                                         // devuelve lo negro que está la pantalla
+    if (room === STR) SHOP_DOORS().forEach((Dr, i) => {
+      const st = shopDoors[i], { ix, half } = leafX(Dr);
+      const atLeaf = a => inRecess(a, Dr) && a.y <= 69 && a.x >= ix + half - 2;
+      if (!st.open && !shopIn && P.moving && P.dir === 'up' && atLeaf(P)) { st.open = true; sfx(170, 0.35, 'sawtooth', 0.02, 120); }   // la empuja: cruje
+      const someoneIn = inRecess(P, Dr) || inRecess(dan, Dr) || (shopIn && shopIn.i === i);
+      if (st.open && !someoneIn) { st.open = false; setTimeout(() => sfx(110, 0.1, 'square', 0.06, 70), 450); }   // se cierra sola, ¡pum!
+      st.o += clamp((st.open ? 1 : 0) - st.o, -dt * 1.6, dt * 2.4);
+      if (!shopIn && st.o > 0.85 && P.moving && P.dir === 'up' && atLeaf(P) && P.y <= 67) { shopIn = { t0: t, i, x0: P.x, y0: P.y, fx: {} }; keys.clear(); joyEnd(); }
+    });
+    if (!shopIn) return 0;
+    const s = t - shopIn.t0, Dr = SHOP_DOORS()[shopIn.i], { ix, iw } = leafX(Dr), tx = ix + iw * 0.72;
+    if (s < 1.1 && room === STR) { const u = s / 1.1; Object.assign(P, { x: shopIn.x0 + (tx - shopIn.x0) * u, y: shopIn.y0 - 9 * u, dir: 'up', moving: true }); P.phase += dt * STEP_RATE * 0.8; }   // cruza, alejándose
+    if (s >= 1.6 && !shopIn.fx.back) {
+      shopIn.fx.back = 1;
+      if (shopIn.i === 0) {                                          // la puerta izquierda: AL BAR (Daniel entra detrás); ¡ya están en la casa de apuestas!
+        room = BAR; camRoom = null; shopDoors[0].open = false; shopDoors[0].o = 0;
+        Object.assign(P, { x: 178, y: 204, dir: 'up', ang: -Math.PI / 2, moving: false, phase: 0, tx: null });
+        Object.assign(dan, { x: 178, y: 213, dir: 'up', moving: false }); trail.length = 0;
+        if (missionOn('bajar')) completeMission('bajar');
+        saveAt('llaves');
+      } else {                                                       // la derecha (la zona de apuestas), más adelante: vuelve a la acera
+        Object.assign(P, { x: Dr.x + Dr.w / 2, y: 86, dir: 'down', ang: Math.PI / 2, moving: false, phase: 0, tx: null });
+        Object.assign(dan, { x: P.x + 14, y: 88 }); trail.length = 0;
+        popup = { t, text: 'La zona de apuestas, muy pronto.' };
       }
-      ctx.save(); ctx.beginPath(); ctx.rect(ix, y0, iw, y1 - y0); ctx.clip();
-      for (const [lx, dir] of [[ix - gap, -1], [ix + half + gap, 1]]) {   // las dos hojas
-        PR(lx, y0, half, y1 - y0, '#8a9096'); PR(lx + 1, y0 + 1, half - 2, y1 - y0 - 2, '#e4e6e2');
-        for (let y = y0 + 2; y < y0 + 6; y += 2) PR(lx + 1, y, half - 2, 1, '#c8202a');              // franja roja de arriba
-        for (let y = y1 - 11; y < y1 - 1; y += 2) PR(lx + 1, y, half - 2, 1, '#c8202a');              // las rayas rojas de abajo
-        PP(lx + half / 2, y0 + 12, '#b8bcc0'); PP(lx + half / 2 - 1, y0 + 13, '#b8bcc0'); PP(lx + half / 2 + 1, y0 + 13, '#b8bcc0'); PP(lx + half / 2, y0 + 14, '#b8bcc0');   // el dibujo de la estrella, al ácido
-        PR(lx + 1, y0 + 8, 1, 6, '#ffffff', 0.5);                                                   // reflejo
-        PR(dir < 0 ? lx + half - 2 : lx + 1, y0 + 10, 1, 7, '#c8ccd2');                               // el tirador
-        PP(lx + half / 2 - 2, y0 + 7, '#c8202a'); PR(lx + half / 2 - 3, y0 + 8, 3, 3, '#f4f4f0');   // los carteles pegados
+    }
+    if (s >= 2.8) { shopIn = null; return 0; }
+    return s < 0.8 ? 0 : s < 1.5 ? ease((s - 0.8) / 0.7) : s < 2.1 ? 1 : 1 - ease((s - 2.1) / 0.7);
+  }
+  const shopFade = () => shopIn && room === STR ? clamp((tNow - shopIn.t0 - 0.3) / 0.8, 0, 1) : 0;   // al cruzar, se va oscureciendo
+  function drawShopDoors(t) {
+    SHOP_DOORS().forEach((Dr, i) => {
+      const st = shopDoors[i], { ix, iw, half } = leafX(Dr), y0 = 39, y1 = 66;
+      const leaf = (lx, w, shade) => {                               // una hoja: marco de aluminio, cristal blanco opaco y las rayas rojas
+        PR(lx, y0, w, y1 - y0, '#8a9096'); if (w < 3) return;
+        PR(lx + 1, y0 + 1, w - 2, y1 - y0 - 2, '#e4e6e2');
+        for (let y = y0 + 2; y < y0 + 6; y += 2) PR(lx + 1, y, w - 2, 1, '#c8202a');
+        for (let y = y1 - 11; y < y1 - 1; y += 2) PR(lx + 1, y, w - 2, 1, '#c8202a');
+        if (w > 6) { const cx = lx + Math.floor(w / 2); PP(cx, y0 + 12, '#b8bcc0'); PP(cx - 1, y0 + 13, '#b8bcc0'); PP(cx + 1, y0 + 13, '#b8bcc0'); PP(cx, y0 + 14, '#b8bcc0'); PR(cx - 2, y0 + 8, 3, 3, '#f4f4f0'); PP(cx - 1, y0 + 7, '#c8202a'); }
+        PR(lx + 1, y0 + 8, 1, 6, '#ffffff', 0.5);
+        if (shade) PR(lx, y0, w, y1 - y0, '#000', shade);
+      };
+      const ox = ix + half, ow = iw - half, open = ease(st.o);
+      if (open > 0.01) {                                             // por el hueco de la puerta: dentro, la penumbra roja con las maquinitas
+        PR(ox, y0, ow, y1 - y0, '#1a0a0c');
+        const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(200,30,40,0.35)'); g.addColorStop(1, 'rgba(200,30,40,0.05)'); ctx.fillStyle = g; ctx.fillRect(ox, y0, ow, y1 - y0);
+        for (let k = 0; k < 2; k++) if (Math.sin(t * 4 + k * 1.7 + i) > -0.2) PP(ox + 3 + k * 5, y0 + 10 + k * 3, ['#ffd84a', '#4ad8ff'][k]);
+        PR(ox, y1 - 3, ow, 3, '#3a2a24');
       }
-      ctx.restore();
+      leaf(ix, half, 0);                                             // el cristal fijo
+      PR(ix + half - 1, y0, 2, y1 - y0, '#6a7076');                  // el montante entre las dos
+      const w = Math.max(2, Math.round(ow * Math.cos(open * Math.PI / 2 * 0.9)));   // la puerta, girando hacia dentro sobre su bisagra (a la derecha)
+      leaf(ox + ow - w, w, open * 0.35);
+      if (w > 4) PR(ox + ow - w + 1, y0 + 10, 1, 7, '#c8ccd2');      // el tirador
     });
   }
   function drawStreetSigns(t) {                                      // la pantalla de LED del salón de juegos, animada
@@ -6796,6 +7042,664 @@
       wrapText(notif.text, maxW).forEach((l, i) => PDx.drawText(ctx, l, tx, by + Math.round(34 * Sc) + i * (fk * 9), '#3a3e48', fk));
       ctx.globalAlpha = 1;
     }
+    ctx.restore();
+  }
+
+  // ---------- EL BAR: la tele con el fútbol, las luces de las máquinas, el camarero, las mesas y el pilar ----------
+  const BARMAN = npcLook({ H: '#2a1a12', h: '#3a2a1e', T: '#26262c', t: '#16161a', P: '#141418', K: '#0e0e10', E: '#2a1a14', M: '#9a5a4a' });   // todo de negro (el delantal rojo va encima)
+  let barMan = { x: 196, y: 46, dir: 'down', moving: false, phase: 0, tx: 196, act: 'look', t: 0, dur: 2 };
+  // la TELE se pinta de frente en un lienzo y se tuerce columna a columna (girada "/")
+  const TV_W = 30, TV_H = 18;
+  let tvCv = null;
+  function offCv(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  function skewBlit(src, x, y, k) {                                  // columna i → (x+i, y - i·k)
+    for (let i = 0; i < src.width; i++) ctx.drawImage(src, i, 0, 1, src.height, x + i, y - Math.round(i * k), 1, src.height);
+  }
+  function drawBarLife(t) {
+    const SL = BAR_DEF.SLOT, y0 = BAR_DEF.MACH_Y;                     // la tragaperras: su pantalla y sus botones parpadean
+    if (Math.sin(t * 5) > 0) PR(SL.x + 3, y0 + 2, SL.w - 6, 8, '#ffd84a', 0.22);
+    for (let k = 0; k < 5; k++) if (Math.sin(t * 6 + k) > 0.3) PR(SL.x + 2 + k * 5, y0 + 27, 4, 3, '#ffffff', 0.5);
+  }
+  // las MESAS del bar: bajas, de madera, para comer o tomar algo, con cuatro sillas rojas (dos a cada lado), platos,
+  // vasos y el servilletero; el PILAR (de suelo a techo). Se pintan por orden de y con los personajes
+  function drawChair(x, y, back) {                                   // back: el respaldo hacia arriba (-1) o hacia abajo (1)
+    PR(x - 4, y - 1, 9, 2, '#000', 0.25);
+    PR(x - 3, y - 4, 1, 4, '#4a2a1a'); PR(x + 3, y - 4, 1, 4, '#4a2a1a');                             // las patas de delante
+    PR(x - 4, y - 7, 9, 4, '#8a0c12'); PR(x - 4, y - 7, 9, 1, '#e8303a'); PR(x - 3, y - 6, 7, 2, '#c41a22');   // el asiento rojo
+    if (back < 0) { PR(x - 4, y - 14, 9, 7, '#5a2a1a'); PR(x - 3, y - 13, 7, 5, '#c41a22'); PR(x - 3, y - 13, 7, 1, '#ff5a62'); }   // el respaldo, detrás
+    else { PR(x - 4, y - 9, 9, 8, '#4a1a10'); PR(x - 3, y - 9, 7, 1, '#8a3a2a'); PR(x - 3, y - 7, 1, 5, '#6a2a1a'); PR(x + 3, y - 7, 1, 5, '#6a2a1a'); }   // el respaldo, de espaldas a nosotros
+  }
+  function drawTable(T) {                                            // REDONDA y baja, de madera, con su pie central
+    const x = T.x, y = T.y, top = y - 9, el = (cx, cy, rx, ry, c, a) => { ctx.globalAlpha = a == null ? 1 : a; ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; };
+    el(x + 1, y, 9, 2.5, '#000', 0.25); el(x, y - 0.5, 5, 1.6, '#2a1a10');                            // la sombra y la base
+    PR(x - 1, top + 2, 3, y - top - 2, '#3a2214'); PR(x - 1, top + 2, 1, y - top - 2, '#6a4224');     // el pie
+    el(x, top + 1.5, 14, 6, '#3a2214'); el(x, top, 14, 6, '#5a3a20'); el(x, top - 0.5, 13, 5.2, '#8a5a32');   // el canto y el tablero
+    el(x - 3, top - 2, 7, 2, '#a87a4a', 0.6); PR(x - 8, top + 1, 5, 1, '#6a4224', 0.5); PR(x + 3, top - 3, 6, 1, '#6a4224', 0.5);   // brillo y veta
+    for (const [dx, dy] of [[-6, 0], [6, 1]]) el(x + dx, top + dy, 3.5, 2, '#f4f4f0');                    // dos platos...
+    PR(x - 7, top - 1, 2, 1, '#e8c040'); PR(x - 6, top, 2, 1, '#c86a2a'); PR(x + 5, top, 3, 1, '#3a8a3a'); PR(x + 6, top + 1, 1, 1, '#c8202a');   // ...con su tapa
+    PR(x - 1, top - 4, 3, 3, '#e8e4dc'); PR(x, top - 5, 1, 1, '#ffffff');                             // el servilletero
+    PR(x + 2, top + 2, 2, 3, '#e8b850', 0.9); PR(x + 2, top + 2, 2, 1, '#ffffff'); PR(x - 3, top + 2, 2, 3, '#5a2a1a', 0.9);   // una caña y un tinto
+  }
+  function drawTableSet(T, front) {                                  // las sillas de atrás, la mesa y las de delante
+    if (!front) { drawChair(T.x - 8, T.y - 11, -1); drawChair(T.x + 8, T.y - 11, -1); drawTable(T); }
+    else { drawChair(T.x - 9, T.y + 8, 1); drawChair(T.x + 9, T.y + 8, 1); }
+  }
+  function drawPillar() {
+    const Pl = BAR_DEF.PILLAR, x = Pl.x, y = Pl.y + Pl.s, top = y - 52;
+    PR(x - 1, top, Pl.s + 2, y - top, '#2a0608'); PR(x, top, Pl.s, y - top, '#b4141c'); PR(x, top, 2, y - top, '#d42a32'); PR(x + Pl.s - 2, top, 2, y - top, '#7a0a10');   // la cara de delante, roja
+    PR(x, y - 6, Pl.s, 6, '#2a0608'); PR(x, y - 6, Pl.s, 1, '#5a1e20');                               // el zócalo
+    PR(x + 2, y - 30, Pl.s - 4, 7, '#f4f0e0'); PR(x + 3, y - 29, Pl.s - 6, 1, '#2a2a2e'); PR(x + 3, y - 27, Pl.s - 7, 1, '#2a2a2e');   // un cartel pegado
+    for (let k = 0; k < 3; k++) PR(x, top + k, Pl.s, 1, '#000', 0.5 - k * 0.15);                      // se pierde hacia el techo
+    PR(x - 2, y - 1, Pl.s + 6, 3, '#000', 0.3);
+  }
+  // LA TELE, en la pared izquierda con su brazo, GIRADA hacia las mesas (/): el partido
+  function drawBarTV(t) {
+    const T = BAR_DEF.TV, k = 0.5;
+    if (!tvCv) tvCv = offCv(TV_W, TV_H);
+    const g = tvCv.getContext('2d'), R = (x, y, w, h, c, a) => { g.globalAlpha = a == null ? 1 : a; g.fillStyle = c; g.fillRect(x, y, w, h); g.globalAlpha = 1; };
+    g.clearRect(0, 0, TV_W, TV_H);
+    const sx = 2, sy = 2, sw = TV_W - 4, sh = TV_H - 5;
+    R(sx, sy, sw, sh, '#2a8a3a'); for (let i = 0; i < 8; i++) R(sx + (((i * 8 - Math.floor(t * 5)) % 64) + 64) % 64 - 4, sy, 4, sh, '#34a044', 0.7);   // el césped a franjas
+    R(sx + sw / 2, sy, 1, sh, '#e8f4e8', 0.7); R(sx, sy + sh - 1, sw, 1, '#e8f4e8', 0.5);
+    R(sx + sw / 2 - 2, sy + sh / 2 - 2, 5, 1, '#e8f4e8', 0.6); R(sx + sw / 2 - 2, sy + sh / 2 + 2, 5, 1, '#e8f4e8', 0.6); R(sx + sw / 2 - 3, sy + sh / 2 - 1, 1, 3, '#e8f4e8', 0.6); R(sx + sw / 2 + 3, sy + sh / 2 - 1, 1, 3, '#e8f4e8', 0.6);
+    for (let i = 0; i < 10; i++) { const px = sx + 1 + Math.floor((((i * 9 + Math.sin(t * 0.8 + i) * 6 + t * 4) % (sw - 2)) + (sw - 2)) % (sw - 2)), py = sy + 3 + Math.floor((((i * 5 + Math.cos(t * 1.1 + i) * 3) % (sh - 5)) + (sh - 5)) % (sh - 5)); R(px, py, 1, 2, i % 2 ? '#f4f4f0' : '#d4161e'); }
+    R(sx + 2 + Math.floor((t * 7) % (sw - 4)), sy + 3 + Math.floor(Math.abs(Math.sin(t * 1.7)) * (sh - 5)), 1, 1, '#ffffff');   // el balón
+    R(sx, sy, 13, 3, '#0a0a0c', 0.85); R(sx + 1, sy + 1, 2, 1, '#d4161e'); R(sx + 4, sy + 1, 1, 1, '#ffffff'); R(sx + 6, sy + 1, 1, 1, '#ffffff'); R(sx + 8, sy + 1, 2, 1, '#3a6ac8');   // el marcador
+    R(sx, sy, sw, sh, '#ffffff', 0.03 + 0.03 * Math.sin(t * 9)); R(sx + 1, sy + 1, 1, 7, '#ffffff', 0.2);
+    R(0, 0, TV_W, 2, '#0a0a0c'); R(0, 0, 2, TV_H, '#0a0a0c'); R(TV_W - 2, 0, 2, TV_H, '#0a0a0c'); R(0, TV_H - 3, TV_W, 3, '#1a1a1e'); R(0, TV_H - 1, TV_W, 1, '#0a0a0c');   // el marco
+    R(TV_W - 5, TV_H - 2, 2, 1, '#d4161e');                          // el piloto
+    const ay = T.y + 6;                                              // el brazo, desde la pared
+    PR(16, ay - 3, 3, 8, '#2a2a30'); PR(16, ay, T.x - 15, 2, '#3a3a40'); PR(16, ay, T.x - 15, 1, '#7a7a84');
+    PR(T.x - 2, T.y + 1, 2, TV_H, '#0a0a0c'); PR(T.x - 2, T.y + 1, 1, TV_H, '#2a2a30');   // el canto de la tele
+    skewBlit(tvCv, T.x, T.y, k);
+  }
+  // EL CAMARERO, con vida: va andando por detrás de la barra de un sitio a otro y, en cada uno, hace algo: tira una caña
+  // en el grifo (se ve la caña llenarse), limpia la barra con el trapo, prepara un café o se queda mirando a la sala
+  const BAR_SPOTS = [{ x: 158, act: 'pour' }, { x: 170, act: 'pour' }, { x: 214, act: 'wipe' }, { x: 298, act: 'pour' }, { x: 250, act: 'look' }, { x: 336, act: 'wipe' }, { x: 368, act: 'coffee' }, { x: 196, act: 'look' }, { x: 226, act: 'idle' }, { x: 274, act: 'shelf' }, { x: 186, act: 'shelf' }, { x: 344, act: 'idle' }];
+  function barmanTick(t, dt) {
+    const B = barMan;
+    if (B.moving) {
+      const d = B.tx - B.x, st = Math.sign(d) * Math.min(Math.abs(d), 26 * dt);
+      B.x += st; B.dir = d > 0 ? 'right' : 'left'; B.phase += dt * STEP_RATE * 0.75;
+      if (Math.abs(B.tx - B.x) < 0.5) { B.moving = false; B.phase = 0; B.t = 0; B.dur = 2.5 + Math.random() * 3; B.dir = B.act === 'pour' || B.act === 'coffee' || B.act === 'shelf' ? 'up' : 'down'; if (B.act === 'pour') sfx(420, 1.2, 'sawtooth', 0.004, 300); }
+      return;
+    }
+    B.t += dt;
+    if (B.act === 'look' && B.t > 1.2 && Math.sin(t * 0.7) > 0.95) B.dir = Math.random() < 0.5 ? 'left' : 'right';   // mira a un lado y a otro
+    if (B.t > B.dur) {                                               // al siguiente sitio
+      let n; do { n = BAR_SPOTS[Math.floor(Math.random() * BAR_SPOTS.length)]; } while (Math.abs(n.x - B.x) < 4);
+      Object.assign(B, { tx: n.x, act: n.act, moving: true });
+    }
+  }
+  function drawBarman() {
+    const B = barMan, wiping = !B.moving && B.act === 'wipe', x = B.x + (wiping ? Math.sin(tNow * 5) * 3 : 0);
+    drawActor(BARMAN, x, B.y, B.dir, B.moving || wiping, B.moving ? B.phase : tNow * 6);
+    const ax = Math.round(x), ay = Math.round(B.y) + (B.moving && Math.floor(B.phase) % 2 === 1 ? -1 : 0);   // EL DELANTAL rojo, con el logo de la casa
+    if (B.dir === 'down') {
+      PR(ax - 3, ay - 10, 1, 1, '#c8101a'); PR(ax + 2, ay - 10, 1, 1, '#c8101a');                       // los tirantes
+      PR(ax - 3, ay - 9, 6, 5, '#c8101a'); PR(ax - 3, ay - 9, 6, 1, '#e8303a'); PR(ax - 3, ay - 5, 6, 1, '#8a0a10');
+      PR(ax - 1, ay - 8, 2, 2, '#f4f2ee'); PP(ax - 1, ay - 8, '#c8101a'); PP(ax, ay - 7, '#c8101a');     // el logo: la estrella roja y blanca
+    } else if (B.dir === 'up') { PR(ax - 4, ay - 7, 8, 1, '#c8101a'); PR(ax - 1, ay - 7, 2, 2, '#e8303a'); }   // el lazo a la espalda
+    else { const fx = B.dir === 'left' ? ax - 4 : ax + 1; PR(fx, ay - 9, 3, 5, '#c8101a'); PR(fx, ay - 9, 3, 1, '#e8303a'); }
+    if (barCounter) { const C = BAR_DEF.COUNTER; ctx.drawImage(barCounter, C.x, C.y - 16, C.w, 36, C.x, C.y - 16, C.w, 36); }   // LA BARRA, delante: se le ve de cintura para arriba
+    if (!B.moving && B.act === 'pour') {                             // la caña, llenándose bajo el grifo
+      const u = clamp(B.t / Math.min(2.2, B.dur), 0, 1), gx = Math.round(B.x) - 1, gy = BAR_DEF.COUNTER.y - 1;
+      PR(gx, gy - 7, 4, 7, '#e8f0f4', 0.5); PR(gx, gy - Math.round(6 * u), 4, Math.round(6 * u), '#e8b850', 0.95); if (u > 0.8) PR(gx, gy - 7, 4, 2, '#ffffff');
+    }
+    if (wiping) PR(Math.round(x) - 3, BAR_DEF.COUNTER.y + 2, 6, 2, '#f4f4f0');   // el trapo, sobre la barra
+    if (!B.moving && B.act === 'coffee' && Math.sin(tNow * 3) > 0) PP(372, 18 - ((tNow * 8) % 6), '#e8e8e8');   // vapor de la cafetera
+  }
+  function barActors(front) {                                        // de detrás a delante: mesas, pilar, el camarero y Daniel
+    const list = BAR_DEF.TABLES.map(T => ({ y: T.y + 2, f: () => drawTableSet(T, false) })).concat(BAR_DEF.TABLES.map(T => ({ y: T.y + 10, f: () => drawTableSet(T, true) })));
+    list.push({ y: BAR_DEF.PILLAR.y + BAR_DEF.PILLAR.s, f: drawPillar });
+    list.push({ y: barMan.y, f: drawBarman });
+    list.push({ y: dan.y, f: () => drawActor(JJ_DAN, dan.x, dan.y, dan.dir, dan.moving, dan.phase) });
+    list.filter(a => front ? a.y > P.y : a.y <= P.y).sort((a, b) => a.y - b.y).forEach(a => a.f());
+  }
+  function barTick(t, dt) {
+    if (room !== BAR) return;
+    barmanTick(t, dt);                                               // el camarero, a lo suyo
+    const D2 = BAR_DEF.DOOR2;
+    if (!swap && P.moving && P.dir === 'down' && P.y >= 113 && P.x > D2.x && P.x < D2.x + D2.w && t > edgeCool) {
+      edgeCool = t + 3; popup = { t, text: 'La zona de apuestas, muy pronto.' }; sfx(150, 0.18, 'square', 0.06, 110);
+    }
+  }
+  function barLights(t, power, lvl) {                                // la luz roja del neón, el letrero y el resplandor de la tele
+    const g = ctx.createLinearGradient(0, 32, 0, 150); g.addColorStop(0, `rgba(255,40,50,${0.2 * lvl})`); g.addColorStop(1, 'rgba(255,40,50,0.03)');
+    ctx.fillStyle = g; ctx.fillRect(16, 32, 374, 184);
+    const T = BAR_DEF.TV, tg = ctx.createRadialGradient(T.x + 24, T.y + 6, 2, T.x + 24, T.y + 6, 46);
+    tg.addColorStop(0, `rgba(120,255,140,${0.12 + 0.04 * Math.sin(t * 7)})`); tg.addColorStop(1, 'rgba(120,255,140,0)'); ctx.fillStyle = tg; ctx.fillRect(T.x - 10, T.y - 30, 90, 80);
+  }
+
+  // ---------- LAS TRAGAPERRAS: el motor (rodillos reales con sus tiras de símbolos, 10 líneas, tabla de pagos) ----------
+  // Dos juegos propios: FRUTAS LOCAS (frutas clásicas; el comodín se expande a todo el rodillo y multiplica x2, y los
+  // multiplicadores se multiplican entre sí) y TESORO DEL NILO (el escarabajo se expande; 3 pirámides = 12 giros gratis en
+  // los que cada escarabajo mejora el símbolo más bajo). Las probabilidades salen de las tiras: RTP ~95-96 % (simulado).
+  const SLOT_LINES = [[1, 1, 1, 1, 1], [0, 0, 0, 0, 0], [2, 2, 2, 2, 2], [0, 1, 2, 1, 0], [2, 1, 0, 1, 2], [1, 0, 0, 0, 1], [1, 2, 2, 2, 1], [0, 0, 1, 2, 2], [2, 2, 1, 0, 0], [1, 2, 1, 0, 1]];
+  const SLOT_BETS = [0.10, 0.20, 0.50, 1.00, 2.00];
+  function slotStrip(counts, seed) {                                 // la tira de un rodillo: los símbolos repartidos sin que se junten iguales
+    const a = []; for (const k in counts) for (let i = 0; i < counts[k]; i++) a.push(k);
+    let s = seed; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    for (let pass = 0; pass < 4; pass++) for (let i = 0; i < a.length; i++) {   // separa los iguales que hayan quedado pegados
+      const n = (i + 1) % a.length; if (a[i] !== a[n]) continue;
+      for (let j = 0; j < a.length; j++) { const p = (j + a.length - 1) % a.length, q = (j + 1) % a.length; if (a[j] !== a[i] && a[p] !== a[i] && a[q] !== a[i]) { [a[n], a[j]] = [a[j], a[n]]; break; } }
+    }
+    return a;
+  }
+  const SLOT_GAMES = {
+    frutas: {                                                        // 4 rodillos x 3, 81 formas; el comodín NO se expande: multiplica
+      name: 'FRUTAS LOCAS', ways: true, wild: 'W', wildReels: [], wildTop: 2000,   // x2 / x4 / x8 por cada comodín de la combinación; 4 comodines = 2000x
+      syms: ['CH', 'LE', 'OR', 'PL', 'GR', 'ME', 'BE', 'SE'],
+      pay: { CH: [0.1, 0.4], LE: [0.1, 0.4], OR: [0.1, 0.4], PL: [0.1, 0.6], GR: [0.5, 2], ME: [0.5, 2], BE: [1, 4], SE: [2, 10] },   // x la apuesta, por forma (3 y 4 iguales). RTP ~95 % (1,5 M giros)
+      reels: [0, 1, 2, 3].map(() => ({ CH: 6, LE: 6, OR: 6, PL: 6, GR: 4, ME: 4, BE: 3, SE: 2, W: 1 }))
+    },
+    nilo: {
+      name: 'TESORO DEL NILO', wild: 'W', wildReels: [1, 2, 3], scatter: 'S', freeSpins: 12, scatPay: [2, 20, 200],
+      syms: ['T', 'J', 'Q', 'K', 'A', 'AN', 'CA', 'MA'],
+      ladder: ['T', 'J', 'Q', 'K', 'A', 'AN', 'CA', 'MA'],             // en los giros gratis cada escarabajo sube un peldaño
+      pay: { T: [5, 25, 100], J: [5, 25, 100], Q: [5, 25, 100], K: [5, 30, 120], A: [5, 30, 120], AN: [10, 40, 150], CA: [10, 50, 200], MA: [15, 75, 300] },
+      reels: [0, 1, 2, 3, 4].map(r => Object.assign({ T: 9, J: 9, Q: 8, K: 7, A: 6, AN: 4, CA: 3, MA: 2, S: r === 0 || r === 4 ? 2 : 1 }, r >= 1 && r <= 3 ? { W: 1 } : {}))
+    }
+  };
+  for (const id in SLOT_GAMES) { const G = SLOT_GAMES[id]; G.id = id; G.strips = G.reels.map((c, i) => slotStrip(c, 977 + i * 131 + id.length * 7)); }
+  // un giro: dónde para cada rodillo, la ventana de 5x3, los comodines expandidos y lo que paga (en € con la apuesta total)
+  function slotSpin(G, bet, fs, rnd = Math.random) {
+    const stops = G.strips.map(s => Math.floor(rnd() * s.length));
+    const grid = stops.map((p, r) => [0, 1, 2].map(i => G.strips[r][(p + i) % G.strips[r].length]));
+    return slotEval(G, grid, bet, fs, stops);
+  }
+  // 81 FORMAS (4x3): 3 o 4 iguales en rodillos seguidos desde la izquierda, en cualquier fila. Cada comodín de la forma
+  // multiplica x2 (x4, x8); una forma de 4 comodines paga 2000x la apuesta
+  function slotEvalWays(G, grid, bet, stops) {
+    const res = { stops, grid, view: grid, wins: [], total: 0, expand: [], mult: 1, scat: 0, newFs: 0, upgrades: 0 }, NR = grid.length;
+    const nw = grid.map(c => c.filter(s => s === G.wild).length);
+    if (nw.every(n => n > 0)) {
+      const ways = nw.reduce((a, b) => a * b, 1), win = ways * G.wildTop * bet;
+      res.wins.push({ line: -2, sym: G.wild, n: NR, ways, m: 1, win, cells: grid.map(c => c.map(s => s === G.wild)) }); res.total += win;
+    }
+    for (const s of G.syms) {
+      let n = 0; while (n < NR && grid[n].some(x => x === s || x === G.wild)) n++;
+      if (n < 3) continue;
+      let wt = 1, wOnly = 1, plain = 1, pOnly = 1;
+      for (let r = 0; r < n; r++) { const ns = grid[r].filter(x => x === s).length; wt *= ns + 2 * nw[r]; wOnly *= 2 * nw[r]; plain *= ns + nw[r]; pOnly *= nw[r]; }
+      const weighted = wt - wOnly, ways = plain - pOnly; if (ways <= 0) continue;
+      const win = G.pay[s][n - 3] * bet * weighted;
+      res.wins.push({ line: -2, sym: s, n, ways, m: Math.round(weighted / ways * 10) / 10, win, cells: grid.map((c, r) => c.map(x => r < n && (x === s || x === G.wild))) });
+      res.total += win;
+    }
+    res.total = Math.round(res.total * 100) / 100;
+    return res;
+  }
+  function slotEval(G, grid, bet, fs, stops) {
+    if (G.ways) return slotEvalWays(G, grid, bet, stops);
+    const lineBet = bet / SLOT_LINES.length, res = { stops, grid, wins: [], total: 0, expand: [], mult: 1, scat: 0, newFs: 0, upgrades: 0 };
+    const view = grid.map(c => c.slice());
+    for (const r of G.wildReels) if (view[r].includes(G.wild)) { res.expand.push(r); view[r] = [G.wild, G.wild, G.wild]; if (G.mult) res.mult *= G.mult; }
+    if (fs && G.ladder) { res.upgrades = res.expand.length && fs.lvl < G.ladder.length - 1 ? 1 : 0; fs.lvl += res.upgrades; }   // un peldaño por giro con escarabajo
+    const up = s => (fs && G.ladder && G.ladder.indexOf(s) >= 0 && G.ladder.indexOf(s) < fs.lvl) ? G.ladder[fs.lvl] : s;
+    res.view = view.map(c => c.map(s => s === G.wild || s === G.scatter ? s : up(s)));
+    SLOT_LINES.forEach((L, li) => {                                  // de izquierda a derecha, 3 o más iguales (el comodín vale por cualquiera)
+      const row = L.map((y, r) => res.view[r][y]);
+      let sym = null; for (const s of row) { if (s === G.scatter) break; if (s !== G.wild) { sym = s; break; } }
+      if (!sym || !G.pay[sym]) return;
+      let n = 0; for (const s of row) { if (s === sym || s === G.wild) n++; else break; }
+      if (n < 3) return;
+      const m = (G.mult ? Math.pow(G.mult, row.slice(0, n).filter(s => s === G.wild).length) : 1);
+      const win = G.pay[sym][n - 3] * lineBet * m;
+      res.wins.push({ line: li, sym, n, win, m }); res.total += win;
+    });
+    if (G.scatter) {
+      res.scat = res.view.reduce((a, c) => a + c.filter(s => s === G.scatter).length, 0);
+      if (res.scat >= 3) { const w = G.scatPay[Math.min(res.scat, 5) - 3] * bet; res.total += w; res.wins.push({ line: -1, sym: G.scatter, n: res.scat, win: w }); res.newFs = !fs ? G.freeSpins : fs.re ? 0 : (fs.re = true, G.freeSpins); }   // en los giros gratis, se recargan una sola vez
+    }
+    res.total = Math.round(res.total * 100) / 100;
+    return res;
+  }
+  // ---------- LA TRAGAPERRAS DEL BAR: el menú (dos juegos) y cada juego a pantalla completa ----------
+  // El dinero es el de la cartera (jr.cash, en céntimos: 5 € al cogerla). Se guarda al levantarse de la máquina.
+  // Tras un premio (fuera de los giros gratis) se puede COBRAR o ARRIESGAR: a la CARTA (roja o negra, x2) o en la ESCALERA.
+  let slotUI = null;
+  const slGeo = G => G.ways ? { x: 80, y: 28, cw: 40, ch: 24, n: 4 } : { x: 80, y: 28, cw: 32, ch: 24, n: 5 };
+  const slMoney = c => (c / 100).toFixed(2).replace('.', ',') + ' €';
+  const slCash = () => (jr.cash == null ? (jr.wallet ? 500 : 0) : jr.cash);
+  const GAMBLE_MAX = 5;                                              // como mucho 5 aciertos seguidos
+  function slotNear() {
+    if (room !== BAR || swap || fp || panel || slotUI) return false;
+    const S = BAR_DEF.SLOT; return P.x > S.x - 6 && P.x < S.x + S.w + 6 && P.y < BAR_DEF.MACH_F + 14;
+  }
+  function openSlot() {
+    if (!slotNear()) return false;
+    if (jr.cash == null) jr.cash = slCash();
+    slotUI = { scr: 'menu', bet: 0, info: false, hover: null };
+    Object.assign(P, { moving: false, phase: 0, tx: null }); keys.clear(); joyEnd();
+    sfx(520, 0.08, 'square', 0.04, 780); return true;
+  }
+  function slotCollect() {                                           // cobrar lo que esté pendiente (o en juego en el riesgo)
+    const U = slotUI; if (!U) return;
+    const amt = U.gam ? U.gam.amt : U.pend || 0;
+    if (amt > 0) { jr.cash = slCash() + amt; U.win = amt; U.got = { t: tNow, amt }; slotJingle(3); }   // se ve: +X € junto al saldo
+    U.pend = 0; U.gam = null;
+  }
+  function closeSlot() { if (!slotUI || slotUI.spin) return; slotCollect(); slotUI = null; cv.style.cursor = ''; sfx(300, 0.08, 'square', 0.04, 180); saveAt('llaves'); }
+  function slotMenu() { const U = slotUI; if (U.spin || U.fs) return; slotCollect(); U.scr = 'menu'; U.G = null; sfx(300, 0.06, 'square', 0.03, 200); }
+  function slotEnter(id) {
+    const G = SLOT_GAMES[id];
+    Object.assign(slotUI, { scr: id, G, L: slGeo(G), pos: G.strips.map((s, r) => (r * 7) % s.length), res: null, spin: null, win: 0, pend: 0, gam: null, shownAt: 0, fs: null, lvlShown: 0, banner: null, info: false, coins: [] });
+    sfx(660, 0.08, 'square', 0.04, 990);
+  }
+  const slBet = () => Math.round(SLOT_BETS[slotUI.bet] * 100);
+  function slotStart(t) {
+    const U = slotUI; if (!U || !U.G) return;
+    if (U.spin) {                                                    // FAST SPIN: volver a pulsar girar para los rodillos que faltan, casi de golpe
+      const S = U.spin; if (S.fast || U.fs) return;
+      const e = t - S.t0; let k = 0; S.fast = true;
+      S.stopAt = S.stopAt.map((T, r) => S.stopped[r] ? T : Math.min(T, e + 0.12 + 0.1 * k++));
+      sfx(500, 0.06, 'square', 0.03, 300); return;
+    }
+    if (U.banner || U.gam) return;
+    if (U.pend) slotCollect();                                       // girar con un premio pendiente: se cobra
+    const bet = slBet(), free = U.fs && U.fs.left > 0, NR = U.L.n;
+    if (!free) {
+      if (slCash() < bet) { U.msg = { t, text: 'SALDO INSUFICIENTE' }; sfx(140, 0.2, 'square', 0.05, 90); return; }
+      jr.cash = slCash() - bet;
+    } else U.fs.left--;
+    const res = slotSpin(U.G, bet / 100, U.fs);
+    const anticip = U.G.scatter ? res.grid.slice(0, 3).reduce((a, c) => a + c.filter(s => s === U.G.scatter).length, 0) >= 2 : false;
+    U.spin = { t0: t, res, from: U.pos.slice(), stopAt: [...Array(NR)].map((_, r) => 1.1 + r * 0.45 + (anticip && r >= 3 ? (r - 2) * 1.0 : 0)), stopped: [] };
+    U.res = null; U.win = 0; U.msg = null;
+    sfx(220, 0.12, 'sawtooth', 0.03, 440);
+  }
+  function slotTick(t, dt) {
+    const U = slotUI; if (!U || !U.G) return;
+    for (const c of U.coins) { c.x += c.vx * dt; c.y += c.vy * dt; c.vy += 160 * dt; }
+    U.coins = U.coins.filter(c => c.y < 200);
+    if (U.spin) {
+      const S = U.spin, e = t - S.t0;
+      U.G.strips.forEach((st, r) => {
+        const len = st.length, stop = S.res.stops[r], T = S.stopAt[r];
+        if (e >= T) { U.pos[r] = stop; if (!S.stopped[r]) { S.stopped[r] = true; sfx(160 + r * 20, 0.05, 'square', 0.05, 90); if (S.res.grid[r].includes(U.G.scatter || U.G.wild)) sfx(880, 0.12, 'triangle', 0.04, 1320); } return; }
+        const loops = Math.ceil(T * 9 / len) + 1, dist = ((S.from[r] - stop) % len + len) % len + loops * len, u = e / T, k = 1 - Math.pow(1 - u, 3);
+        U.pos[r] = S.from[r] - dist * k;
+      });
+      if (S.stopped.filter(Boolean).length === U.L.n) slotSettle(t);
+    }
+    if (U.banner && t > U.banner.until) { const b = U.banner; U.banner = null; if (b.then) b.then(t); }
+    if (!U.spin && !U.banner && U.fs && U.res && t - U.shownAt > (U.res.total > 0 ? 2.2 : 1.0)) {   // giros gratis: van solos
+      if (U.fs.left > 0) slotStart(t);
+      else { const tot = U.fs.won; U.fs = null; U.lvlShown = 0; U.banner = { text: 'PREMIO DE LOS GIROS', sub: slMoney(tot), until: t + 2.6 }; slotJingle(tot >= slBet() * 10 ? 6 : 3); }
+    }
+    const Gm = U.gam;                                                // el riesgo
+    if (Gm && Gm.mode === 'ladder' && !Gm.done && t > Gm.next) {
+      const st = Gm.stop;
+      if (st && st.left <= 0) {                                      // ya ha frenado: cae donde toca
+        Gm.lit = st.up ? 1 : 0; Gm.stop = null;
+        if (st.up) { Gm.amt *= 2; Gm.wins++; slotJingle(4); } else { Gm.amt = 0; sfx(160, 0.4, 'sawtooth', 0.05, 60); }
+        Gm.done = t + 1.8;
+      } else {
+        Gm.lit = 1 - Gm.lit; sfx(Gm.lit ? 880 : 440, 0.05, 'square', 0.025, Gm.lit ? 880 : 440);
+        if (st) { st.left--; Gm.next = t + 0.3; } else Gm.next = t + 0.14 + Math.random() * 0.08;   // rápido y algo irregular: difícil de clavar
+      }
+    }
+    if (Gm && Gm.done && t > Gm.done) {
+      if (Gm.amt <= 0) { U.gam = null; U.pend = 0; U.win = 0; }
+      else if (Gm.wins >= GAMBLE_MAX) slotCollect();
+      else { Gm.done = 0; Gm.card = null; }
+    }
+  }
+  function slotSettle(t) {
+    const U = slotUI, S = U.spin, res = S.res; U.spin = null; U.res = res; U.shownAt = t;
+    if (U.fs) U.lvlShown = U.fs.lvl;
+    const won = Math.round(res.total * 100); U.win = won;
+    if (won > 0) {
+      if (U.fs || res.newFs) { jr.cash = slCash() + won; if (U.fs) U.fs.won += won; }   // en los giros gratis se cobra solo
+      else U.pend = won;                                             // si no: cobrar o arriesgar
+      const big = won >= slBet() * 10 && !U.fs; slotJingle(big ? 7 : Math.min(5, 2 + res.wins.length));
+      if (big) { U.banner = { text: '¡GRAN PREMIO!', sub: slMoney(won), until: t + 3.2 }; for (let i = 0; i < 40; i++) U.coins.push({ x: 160 + (Math.random() - 0.5) * 60, y: 90, vx: (Math.random() - 0.5) * 220, vy: -80 - Math.random() * 160 }); }
+    }
+    if (res.expand.length) sfx(740, 0.25, 'triangle', 0.05, 1110);
+    if (res.newFs) {
+      const first = !U.fs; if (first) U.fs = { lvl: 0, left: 0, won: 0 };
+      U.fs.left += res.newFs; if (first) U.fs.won += won;
+      U.banner = { text: first ? '¡12 GIROS GRATIS!' : '¡+12 GIROS GRATIS!', sub: first ? 'CADA ESCARABAJO MEJORA UN SIMBOLO' : '', until: t + 2.6 };
+      slotJingle(6);
+    }
+    if (slCash() < SLOT_BETS[0] * 100 && !U.fs && won === 0) U.msg = { t, text: 'TE HAS QUEDADO SIN DINERO' };
+  }
+  function slotJingle(n) { for (let i = 0; i < n; i++) setTimeout(() => sfx(523 * Math.pow(1.26, i % 4), 0.09, 'square', 0.035, 523 * Math.pow(1.26, i % 4) * 1.5), i * 90); }
+  // --- el riesgo: carta roja/negra (x2) o la escalera (la luz salta entre el escalón de arriba y el cero) ---
+  function gambleStart(mode, t) {
+    const U = slotUI; if (!U.pend || U.spin || U.banner) return;
+    U.gam = { mode, amt: U.pend, wins: 0, hist: [], card: null, done: 0, lit: 0, next: t + 0.3, stop: null }; U.pend = 0;
+    sfx(440, 0.08, 'square', 0.04, 660);
+  }
+  function gambleCard(red, t) {
+    const Gm = slotUI.gam; if (!Gm || Gm.mode !== 'card' || Gm.done) return;
+    const suit = Math.floor(Math.random() * 4), rank = 'A23456789TJQK'[Math.floor(Math.random() * 13)], isRed = suit < 2;   // 0 ♥ 1 ♦ 2 ♣ 3 ♠
+    Gm.card = { suit, rank }; Gm.hist.unshift(suit); Gm.hist.length = Math.min(Gm.hist.length, 6);
+    if (isRed === red) { Gm.amt *= 2; Gm.wins++; slotJingle(4); } else { Gm.amt = 0; sfx(160, 0.4, 'sawtooth', 0.05, 60); }
+    Gm.done = t + 1.8;
+  }
+  function gambleLadder(t) {                                         // de habilidad: se queda lo que esté encendido al pulsar
+    const Gm = slotUI.gam; if (!Gm || Gm.mode !== 'ladder' || Gm.done) return;
+    if (Gm.lit) { Gm.amt *= 2; Gm.wins++; slotJingle(4); } else { Gm.amt = 0; sfx(160, 0.4, 'sawtooth', 0.05, 60); }
+    Gm.done = t + 1.8;
+  }
+  // --- los botones (px de pantalla) ---
+  const SL_BTN = {
+    back: { x: 6, y: 5, w: 34, h: 12 }, info: { x: 280, y: 5, w: 34, h: 12 },
+    minus: { x: 100, y: 152, w: 14, h: 14 }, plus: { x: 156, y: 152, w: 14, h: 14 }, spin: { x: 250, y: 132, w: 62, h: 42 },
+    card0: { x: 36, y: 34, w: 116, h: 104 }, card1: { x: 168, y: 34, w: 116, h: 104 }, exit: { x: 130, y: 160, w: 60, h: 14 },
+    cobrar: { x: 82, y: 114, w: 48, h: 12 }, carta: { x: 134, y: 114, w: 48, h: 12 }, escal: { x: 186, y: 114, w: 56, h: 12 },
+    rojo: { x: 56, y: 132, w: 60, h: 18 }, negro: { x: 204, y: 132, w: 60, h: 18 }, gcob: { x: 130, y: 158, w: 60, h: 14 },
+    parar: { x: 84, y: 150, w: 72, h: 22 }, lcob: { x: 164, y: 150, w: 72, h: 22 }
+  };
+  const slIn = (p, b) => p.x >= b.x && p.x < b.x + b.w && p.y >= b.y && p.y < b.y + b.h;
+  function slotHit(p) {
+    const U = slotUI; if (!U) return null;
+    const pick = ks => ks.find(k => slIn(p, SL_BTN[k])) || null;
+    if (U.scr === 'menu') return pick(['card0', 'card1', 'exit']);
+    if (U.info) return 'closeInfo';
+    if (U.gam) return U.gam.done || U.gam.stop ? null : U.gam.mode === 'card' ? pick(['rojo', 'negro', 'gcob']) : pick(['parar', 'lcob']);
+    if (U.pend && !U.spin && !U.banner) { const k = pick(['cobrar', 'carta', 'escal']); if (k) return k; }
+    return pick(['back', 'info', 'minus', 'plus', 'spin']);
+  }
+  function slotDown(p) {
+    const U = slotUI, k = slotHit(p), t = tNow;
+    if (U.scr === 'menu') { if (k === 'card0') slotEnter('frutas'); else if (k === 'card1') slotEnter('nilo'); else if (k === 'exit') closeSlot(); return; }
+    if (U.info) { U.info = false; return; }
+    if (U.gam) {
+      if (k === 'rojo') gambleCard(true, t); else if (k === 'negro') gambleCard(false, t); else if (k === 'parar') gambleLadder(t);
+      else if (k === 'gcob' || k === 'lcob') slotCollect();
+      return;
+    }
+    if (U.banner) { U.banner.until = Math.min(U.banner.until, t + 0.2); return; }
+    if (k === 'cobrar') slotCollect(); else if (k === 'carta') gambleStart('card', t); else if (k === 'escal') gambleStart('ladder', t);
+    else if (k === 'spin') slotStart(t);
+    else if (k === 'back') slotMenu();
+    else if (k === 'info' && !U.spin) U.info = true;
+    else if ((k === 'minus' || k === 'plus') && !U.spin && !U.fs) { U.bet = clamp(U.bet + (k === 'plus' ? 1 : -1), 0, SLOT_BETS.length - 1); sfx(600 + U.bet * 80, 0.04, 'square', 0.03, 700); }
+  }
+  function slotKey(code) {
+    const U = slotUI, t = tNow;
+    if (U.gam) {
+      if (U.gam.mode === 'card') { if (code === 'ArrowLeft' || code === 'KeyR') gambleCard(true, t); else if (code === 'ArrowRight' || code === 'KeyN') gambleCard(false, t); }
+      else if (code === 'Space' || code === 'Enter') gambleLadder(t);
+      if ((code === 'KeyC' || code === 'Escape') && !U.gam.done && !U.gam.stop) slotCollect();
+      return true;
+    }
+    if (code === 'Escape' || code === 'KeyF') { if (U.scr === 'menu') closeSlot(); else if (U.info) U.info = false; else slotMenu(); return true; }
+    if (U.scr === 'menu') { if (code === 'Digit1' || code === 'ArrowLeft') slotEnter('frutas'); else if (code === 'Digit2' || code === 'ArrowRight') slotEnter('nilo'); return true; }
+    if (code === 'Space' || code === 'Enter') { if (U.info) U.info = false; else if (U.banner) U.banner.until = t; else slotStart(t); return true; }
+    if (U.pend && !U.spin && !U.banner) { if (code === 'KeyC') slotCollect(); else if (code === 'KeyR') gambleStart('card', t); else if (code === 'KeyE') gambleStart('ladder', t); }
+    if (code === 'ArrowUp' || code === 'ArrowDown') { if (!U.spin && !U.fs) U.bet = clamp(U.bet + (code === 'ArrowUp' ? 1 : -1), 0, SLOT_BETS.length - 1); return true; }
+    if (code === 'KeyI') { U.info = !U.info; return true; }
+    return true;
+  }
+  // --- dibujo ---
+  function slTxt(s, x, y, col, sc, center, sh) {
+    const PDx = window.PD; if (!PDx) return 0; s = PDx.norm(String(s)); sc = sc || 1;
+    const w = PDx.measure(s) * sc, xx = Math.round(center ? x - w / 2 : x);
+    if (sh) PDx.drawText(ctx, s, xx + sc, y + sc, sh, sc);
+    PDx.drawText(ctx, s, xx, y, col, sc); return w;
+  }
+  function slEll(x, y, rx, ry, c, a) { ctx.globalAlpha = a == null ? 1 : a; ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
+  function slPoly(pts, c) { ctx.fillStyle = c; ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.fill(); }
+  function slLetter(ch, x, y, col, sc) { slTxt(ch, x + 1, y + 1, '#2a1a08', sc, true); slTxt(ch, x - 1, y, '#f4d070', sc, true); slTxt(ch, x, y, col, sc, true); }
+  // los símbolos, dibujados a mano, centrados en (x, y) dentro de una casilla de ~30x24
+  function drawSym(id, x, y, t) {
+    const R = (a, b, w, h, c, al) => PR(x + a, y + b, w, h, c, al);
+    switch (id) {
+      case 'CH': ctx.strokeStyle = '#2a7a2a'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - 5, y + 2); ctx.quadraticCurveTo(x - 3, y - 6, x + 2, y - 9); ctx.moveTo(x + 5, y + 3); ctx.quadraticCurveTo(x + 4, y - 4, x + 2, y - 9); ctx.stroke();
+        slEll(x + 5, y - 9, 4, 2, '#4ab83a'); for (const [cx, cy] of [[-5, 4], [5, 5]]) { slEll(x + cx, y + cy, 5.5, 5.5, '#6a0a10'); slEll(x + cx, y + cy, 4.6, 4.6, '#e0161e'); slEll(x + cx - 2, y + cy - 2, 1.4, 1.4, '#ffb0b0'); } break;
+      case 'LE': slEll(x, y, 11, 7.5, '#8a7010'); slEll(x, y, 10, 6.6, '#f4d020'); R(-12, -1, 2, 2, '#f4d020'); R(10, -1, 2, 2, '#f4d020'); slEll(x - 3, y - 3, 4, 1.6, '#fff4a0'); break;
+      case 'OR': slEll(x, y + 1, 9, 9, '#8a4a0a'); slEll(x, y + 1, 8, 8, '#f08a1a'); slEll(x - 3, y - 2, 2.5, 2, '#ffc070'); R(-1, -9, 2, 3, '#5a3a1a'); slEll(x + 3, y - 8, 3.5, 1.6, '#3a9a3a'); for (const [a, b] of [[3, 3], [-2, 5], [4, -1]]) R(a, b, 1, 1, '#c86a10'); break;
+      case 'PL': slEll(x, y + 1, 9, 10, '#0a0a4a'); slEll(x, y + 1, 8, 9, '#2a3ac8'); slEll(x + 2, y + 3, 5, 6, '#1a2490'); slEll(x - 3, y - 2, 2.4, 3.4, '#9ab0ff'); R(-1, -10, 1, 3, '#5a3a1a'); slEll(x + 3, y - 9, 3.4, 1.5, '#3ab83a'); break;
+      case 'GR': R(-1, -12, 2, 3, '#5a3a1a'); slEll(x + 4, y - 10, 5, 2.2, '#2a9a3a'); slEll(x + 3, y - 10.5, 3, 1.2, '#6ad86a');
+        for (const [a, b] of [[-6, -5], [0, -6], [6, -5], [-3, 0], [3, 0], [-7, 0], [7, 0], [0, 5], [-4, 5], [4, 5], [-2, 9], [2, 9]]) { slEll(x + a, y + b, 3.6, 3.6, '#140a40'); slEll(x + a, y + b, 2.9, 2.9, '#4a2ab8'); PP(x + a - 1, y + b - 1, '#b8a8ff'); } break;
+      case 'ME': ctx.fillStyle = '#1a5a1a'; ctx.beginPath(); ctx.arc(x, y - 4, 13, 0, Math.PI); ctx.fill(); ctx.fillStyle = '#e8f0c8'; ctx.beginPath(); ctx.arc(x, y - 4, 11, 0, Math.PI); ctx.fill(); ctx.fillStyle = '#e8303a'; ctx.beginPath(); ctx.arc(x, y - 4, 10, 0, Math.PI); ctx.fill();
+        R(-13, -5, 26, 1, '#ff7a80'); for (const [a, b] of [[-5, -1], [0, 1], [5, -1], [-2, 4], [3, 4]]) R(a, b, 1, 2, '#1a1a1a'); break;
+      case 'BE': slPoly([[x - 1, y - 11], [x + 1, y - 11], [x + 7, y - 2], [x + 8, y + 6], [x + 11, y + 8], [x - 11, y + 8], [x - 8, y + 6], [x - 7, y - 2]], '#8a5a0a');
+        slPoly([[x - 1, y - 10], [x + 1, y - 10], [x + 6, y - 2], [x + 7, y + 5], [x + 9, y + 7], [x - 9, y + 7], [x - 7, y + 5], [x - 6, y - 2]], '#f4c020'); R(-4, -7, 2, 10, '#fff0a0', 0.8); slEll(x, y + 9, 2.5, 2.5, '#8a5a0a'); R(-1, -13, 2, 3, '#8a5a0a'); break;
+      case 'SE': slTxt('7', x + 1, y - 10, '#4a0a0a', 3, true); slTxt('7', x - 1, y - 11, '#ffd84a', 3, true); slTxt('7', x, y - 11, '#e0161e', 3, true); R(-6, -11, 2, 2, '#ffffff', 0.6); break;
+      case 'W': { const tt = t || 0;
+        for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4 + tt * 0.8; ctx.globalAlpha = 0.25 + 0.15 * Math.sin(tt * 5 + k); slPoly([[x, y], [x + Math.cos(a - 0.12) * 17, y + Math.sin(a - 0.12) * 12], [x + Math.cos(a + 0.12) * 17, y + Math.sin(a + 0.12) * 12]], '#ffe070'); ctx.globalAlpha = 1; }   // los rayos
+        R(-16, -10, 32, 20, '#3a1a02'); R(-15, -9, 30, 18, '#a86a08'); R(-14, -8, 28, 16, '#f4c838'); R(-14, -8, 28, 2, '#fff4b0'); R(-14, 6, 28, 2, '#c8901a');   // la placa de oro, con relieve
+        R(-13, -8, 26, 16, '#5a1004'); R(-13, -8, 26, 1, '#2a0602');                                                   // el fondo de las letras
+        slTxt('X2', x + 1, y - 6, '#1a0400', 2, true); slTxt('X2', x, y - 7, '#ffd84a', 2, true); R(-11, -7, 22, 2, '#fff4b0', 0.35);
+        const sp = Math.floor(tt * 3) % 4; PP(x - 13 + sp * 8, y - 8, '#ffffff'); PP(x + 12 - sp * 6, y + 6, '#ffffff');   // destellos
+        break; }
+      case 'T': slLetter('10', x, y - 7, '#3a8ad8', 2); break;
+      case 'J': slLetter('J', x, y - 10, '#3ab858', 3); break;
+      case 'Q': slLetter('Q', x, y - 10, '#d84a9a', 3); break;
+      case 'K': slLetter('K', x, y - 10, '#f0a020', 3); break;
+      case 'A': slLetter('A', x, y - 10, '#e0402a', 3); break;
+      case 'AN': ctx.strokeStyle = '#6a4a0a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(x, y - 6, 4, 5, 0, 0, Math.PI * 2); ctx.stroke(); R(-2, -1, 4, 13, '#6a4a0a'); R(-9, 0, 18, 4, '#6a4a0a');
+        ctx.strokeStyle = '#f4c838'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, y - 6, 4, 5, 0, 0, Math.PI * 2); ctx.stroke(); R(-1, 0, 2, 11, '#f4c838'); R(-8, 1, 16, 2, '#f4c838'); R(-7, 1, 3, 1, '#fff0a0'); break;
+      case 'CA': slEll(x, y + 6, 7, 5, '#141418'); slEll(x - 1, y - 2, 5, 7, '#141418'); slEll(x, y - 8, 4.5, 4, '#141418'); slPoly([[x - 4, y - 10], [x - 3, y - 15], [x - 1, y - 11]], '#141418'); slPoly([[x + 1, y - 11], [x + 3, y - 15], [x + 4, y - 10]], '#141418');
+        R(-4, -5, 8, 2, '#f4c838'); PP(x, y - 3, '#f4c838'); PP(x - 2, y - 9, '#4aff6a'); PP(x + 2, y - 9, '#4aff6a'); R(5, 4, 4, 2, '#141418'); R(8, 0, 2, 5, '#141418'); break;
+      case 'MA': slPoly([[x - 5, y - 12], [x + 5, y - 12], [x + 12, y + 10], [x - 12, y + 10]], '#8a6010'); slPoly([[x - 4, y - 11], [x + 4, y - 11], [x + 11, y + 9], [x - 11, y + 9]], '#f4c838');   // el nemes, a rayas
+        for (let k = 0; k < 7; k++) { const yy = y - 10 + k * 3, hw = Math.round(4 + (yy - y + 11) * 7 / 20); PR(x - hw, yy, hw * 2, 1, '#2a4ab8'); }
+        slEll(x, y - 1, 5.5, 7, '#a87010'); slEll(x, y - 2, 5, 6.4, '#f4c838'); R(-4, -4, 3, 1, '#141418'); R(1, -4, 3, 1, '#141418'); PP(x - 5, y - 3, '#141418'); PP(x + 4, y - 3, '#141418'); R(-1, -2, 2, 3, '#c89020'); R(-2, 2, 4, 1, '#a83a2a'); R(-1, 5, 2, 5, '#2a4ab8'); R(-1, 5, 1, 5, '#f4c838'); break;
+      case 'S': slPoly([[x, y - 12], [x + 13, y + 9], [x - 13, y + 9]], '#7a5a2a'); slPoly([[x, y - 11], [x + 12, y + 8], [x, y + 8]], '#c8984a'); slPoly([[x, y - 11], [x, y + 8], [x - 12, y + 8]], '#e8c070');
+        R(-3, 1, 6, 7, '#2a1a0a'); R(-2, 2, 4, 6, '#4a2a0a'); slEll(x + 9, y - 10, 3, 3, '#ffd84a', 0.9); R(-13, 9, 26, 1, '#5a3a1a'); break;
+      case 'WS': { // el escarabajo de oro (comodín del Nilo)
+        R(-1, -12, 2, 3, '#8a6a10'); slEll(x, y - 8, 4, 3, '#8a6a10'); slEll(x, y - 8, 3, 2.2, '#f4c838');
+        for (const s of [-1, 1]) { ctx.strokeStyle = '#8a6a10'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + s * 4, y - 3); ctx.lineTo(x + s * 9, y - 6); ctx.moveTo(x + s * 4, y + 1); ctx.lineTo(x + s * 10, y + 1); ctx.moveTo(x + s * 4, y + 5); ctx.lineTo(x + s * 9, y + 9); ctx.stroke(); }
+        slEll(x, y + 1, 7, 8, '#6a4a0a'); slEll(x - 3, y + 1, 3.4, 7, '#f4c838'); slEll(x + 3, y + 1, 3.4, 7, '#e0a820'); R(0, -6, 1, 14, '#6a4a0a'); R(-5, -3, 1, 4, '#fff0a0');
+        R(-12, 7, 24, 7, '#1a3a8a'); R(-12, 7, 24, 1, '#4a7ad8'); slTxt('WILD', x, 7, '#f4c838', 1, true); break; }
+    }
+  }
+  const slShow = (G, s) => (G.id === 'nilo' && s === 'W') ? 'WS' : s;
+  function slBg(G, t) {
+    if (G.id === 'frutas') {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0a1a6a'); g.addColorStop(0.6, '#04082a'); g.addColorStop(1, '#020414'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      for (let i = 0; i < 9; i++) { const y = 20 + i * 12 + ((t * 8) % 12); PR(0, y, W, 1, '#2a5ae8', 0.12); }   // las rayas que bajan
+      for (let i = 0; i < 24; i++) PR((i * 41 + 7) % W, (i * 23) % 100, 1, 1, '#a8c8ff', 0.3 + 0.3 * Math.sin(t * 3 + i));
+    } else {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0a1430'); g.addColorStop(1, '#2a1a0a'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      for (let i = 0; i < 40; i++) PR((i * 53) % W, (i * 29) % 60, 1, 1, '#f4f0d0', 0.3 + 0.3 * Math.sin(t * 2 + i));
+      slPoly([[20, 128], [58, 80], [96, 128]], '#3a2a14'); slPoly([[230, 128], [276, 70], [322, 128]], '#3a2a14');
+      for (let x = 4; x < W; x += 16) for (let y = 120; y < H; y += 12) PR(x + ((y / 12) % 2) * 8, y, 6, 1, '#c8984a', 0.12);
+    }
+  }
+  function slFrame(x, y, w, h, gold) { PR(x - 3, y - 3, w + 6, h + 6, '#000'); PR(x - 2, y - 2, w + 4, h + 4, gold ? '#c8901a' : '#8a8e94'); PR(x - 2, y - 2, w + 4, 1, gold ? '#ffe08a' : '#e8ecf0'); PR(x - 1, y - 1, w + 2, h + 2, '#2a1a08'); }
+  function slBox(b, label, val, col) { PR(b.x, b.y, b.w, b.h, '#000', 0.6); PR(b.x, b.y, b.w, 1, col, 0.8); slTxt(label, b.x + b.w / 2, b.y + 3, col, 1, true); slTxt(val, b.x + b.w / 2, b.y + 13, '#ffffff', 1, true, '#000'); }
+  function slButton(b, text, col, on, hover) {
+    PR(b.x, b.y + 1, b.w, b.h, '#000', 0.5); PR(b.x, b.y, b.w, b.h, on ? col : '#4a4a52'); PR(b.x, b.y, b.w, 1, '#ffffff', 0.4); PR(b.x, b.y + b.h - 1, b.w, 1, '#000', 0.4);
+    if (hover && on) PR(b.x, b.y, b.w, b.h, '#ffffff', 0.15);
+    slTxt(text, b.x + b.w / 2, b.y + Math.round(b.h / 2) - 3, on ? '#ffffff' : '#9a9aa2', 1, true, '#000');
+  }
+  const SL_GLOWC = {};
+  const SL_GLOW = { CH: '#ff2a3a', LE: '#ffe84a', OR: '#ff9a2a', PL: '#4a7aff', GR: '#9a6aff', ME: '#4aff6a', BE: '#ffd84a', SE: '#ff3a3a', W: '#ffd84a' };
+  function drawSymGlow(G, id, x, y, t) {                            // las frutas de los 90: con su brillo de neón alrededor
+    if (G.id !== 'frutas') { drawSym(slShow(G, id), x, y, t); return; }
+    let gc = SL_GLOWC[id];
+    if (!gc) {                                                       // el brillo se pinta una vez (shadowBlur es caro) y se reutiliza
+      gc = SL_GLOWC[id] = document.createElement('canvas'); gc.width = 48; gc.height = 40;   // un halo suave del color de la fruta
+      const g = gc.getContext('2d'), rg = g.createRadialGradient(24, 20, 2, 24, 20, 20), c = SL_GLOW[id] || '#ffffff';
+      rg.addColorStop(0, c + 'b0'); rg.addColorStop(0.45, c + '60'); rg.addColorStop(1, c + '00'); g.fillStyle = rg; g.fillRect(0, 0, 48, 40);
+    }
+    ctx.globalAlpha = 0.55; ctx.drawImage(gc, x - 22, y - 15, 44, 30); ctx.globalAlpha = 1;
+    drawSym(id, x, y, t);
+  }
+  const SUITS = ['.X.X.|XXXXX|XXXXX|.XXX.|..X..', '..X..|.XXX.|XXXXX|.XXX.|..X..', '..X..|.XXX.|X.X.X|XXXXX|..X..', '..X..|.XXX.|XXXXX|XXXXX|..X..'];
+  function drawSuit(i, x, y, s) { SUITS[i].split('|').forEach((row, ry) => [...row].forEach((c, rx) => { if (c === 'X') PR(x + rx * s, y + ry * s, s, s, i < 2 ? '#d4161e' : '#141418'); })); }
+  function drawSlotMenu(t) {
+    const U = slotUI;
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#1a0a14'); g.addColorStop(1, '#0a0608'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 30; i++) PR(10 + i * 10, 4, 4, 3, Math.floor(t * 4 + i) % 3 ? '#5a1a1a' : '#ffd84a');   // las bombillas del marco
+    for (let i = 0; i < 30; i++) PR(10 + i * 10, H - 7, 4, 3, Math.floor(t * 4 + i + 1) % 3 ? '#5a1a1a' : '#ffd84a');
+    slTxt('ELIGE UN JUEGO', 160, 14, '#ffd84a', 2, true, '#5a0a0a');
+    [['frutas', SL_BTN.card0, '#0a1450', '#4a8aff'], ['nilo', SL_BTN.card1, '#0a2a6a', '#f4c838']].forEach(([id, b, c1, c2], i) => {
+      const G = SLOT_GAMES[id], hov = U.hover === 'card' + i;
+      PR(b.x - 2, b.y - 2 + (hov ? -1 : 0), b.w + 4, b.h + 4, hov ? '#ffffff' : c2); PR(b.x, b.y + (hov ? -1 : 0), b.w, b.h, c1);
+      const y = b.y + (hov ? -1 : 0);
+      ctx.save(); ctx.beginPath(); ctx.rect(b.x, y, b.w, b.h); ctx.clip();
+      if (id === 'frutas') { drawSymGlow(G, 'SE', b.x + 58, y + 40, t); drawSymGlow(G, 'CH', b.x + 24, y + 46, t); drawSymGlow(G, 'W', b.x + 92, y + 46, t); drawSymGlow(G, 'GR', b.x + 58, y + 68, t); }
+      else { drawSym('S', b.x + 58, y + 42, t); drawSym('WS', b.x + 26, y + 48, t); drawSym('MA', b.x + 92, y + 48, t); drawSym('AN', b.x + 58, y + 70, t); }
+      ctx.restore();
+      PR(b.x, y + 82, b.w, 22, '#000', 0.55); slTxt(G.name, b.x + b.w / 2, y + 85, '#ffffff', 1, true, '#000');
+      slTxt(id === 'frutas' ? '81 FORMAS - X2 X4 X8' : '12 GIROS GRATIS', b.x + b.w / 2, y + 95, c2, 1, true);
+      slTxt(String(i + 1), b.x + 6, y + 4, '#ffffff', 1, false, '#000');
+    });
+    slTxt('SALDO: ' + slMoney(slCash()), 160, 146, '#4aff6a', 1, true, '#000');
+    slButton(SL_BTN.exit, 'SALIR', '#8a1a1a', true, U.hover === 'exit');
+  }
+  function slReelSym(U, r, idx) {
+    const st = U.G.strips[r], s = st[((idx % st.length) + st.length) % st.length];
+    if (U.fs && U.G.ladder && s !== 'W' && s !== 'S') { const i = U.G.ladder.indexOf(s); if (i >= 0 && i < U.lvlShown) return U.G.ladder[U.lvlShown]; }
+    return s;
+  }
+  const SL_NAMES = { CH: 'CEREZAS', LE: 'LIMONES', OR: 'NARANJAS', PL: 'CIRUELAS', GR: 'UVAS', ME: 'SANDIAS', BE: 'CAMPANAS', SE: 'SIETES', W: 'COMODINES' };
+  function drawSlotGame(t) {
+    const U = slotUI, G = U.G, L = U.L, NR = L.n, RW = L.cw * NR, RH = L.ch * 3, gold = G.id === 'nilo';
+    slBg(G, t);
+    if (U.fs) { slTxt('GIROS GRATIS ' + (U.fs.left) + ' MAS', 160, 8, '#4aff6a', 2, true, '#000'); }
+    else if (gold) slTxt(G.name, 160, 8, '#f4c838', 2, true, '#1a0a00');
+    else { slTxt(G.name, 160, 8, '#ffffff', 2, true, '#1a3aa8'); }
+    if (G.ways) for (const sx of [L.x - 26, L.x + RW + 8]) {           // los carteles de los lados: 81 FORMAS
+      PR(sx, L.y, 18, RH, '#0a1a6a'); PR(sx + 1, L.y + 1, 16, RH - 2, '#1a3ab8'); PR(sx + 1, L.y + 1, 16, 1, '#8ab0ff');
+      slTxt('81', sx + 9, L.y + 4, '#ffd84a', 1, true, '#000');
+      [...'FORMAS'].forEach((c, i) => slTxt(c, sx + 9, L.y + 16 + i * 9, '#e8f0ff', 1, true));
+    }
+    slFrame(L.x, L.y, RW, RH, !G.ways);
+    if (G.ways) { PR(L.x - 2, L.y - 2, RW + 4, RH + 4, '#2a5ae8'); PR(L.x - 2, L.y - 2, RW + 4, 1, '#a8c8ff'); }
+    PR(L.x, L.y, RW, RH, gold ? '#f4ead0' : '#060c2a');
+    ctx.save(); ctx.beginPath(); ctx.rect(L.x, L.y, RW, RH); ctx.clip();
+    const S = U.spin;
+    for (let r = 0; r < NR; r++) {
+      const x = L.x + r * L.cw, p = U.pos[r], base = Math.floor(p), fr = p - base, moving = S && !S.stopped[r];
+      if (!gold) { const g = ctx.createLinearGradient(0, L.y, 0, L.y + RH); g.addColorStop(0, '#0a1450'); g.addColorStop(0.5, '#101e6a'); g.addColorStop(1, '#0a1450'); ctx.fillStyle = g; ctx.fillRect(x + 1, L.y, L.cw - 2, RH); }
+      else if (r % 2) PR(x, L.y, L.cw, RH, '#000', 0.04);
+      for (let i = -1; i <= 3; i++) {
+        const cy = L.y + (i - fr) * L.ch + L.ch / 2;
+        drawSymGlow(G, slReelSym(U, r, base + i), x + L.cw / 2, Math.round(cy), t);
+      }
+      if (moving) { PR(x, L.y, L.cw, RH, gold ? '#ffffff' : '#4a7aff', gold ? 0.25 : 0.2); for (let k = 0; k < 6; k++) PR(x + 3, L.y + ((k * 14 + t * 400) % RH), L.cw - 6, 1, '#ffffff', 0.4); }
+      if (r) PR(x, L.y, 1, RH, gold ? '#c8984a' : '#2a4ab8');
+    }
+    if (U.res && !S) for (const r of U.res.expand) {                  // los comodines que se expanden a todo el rodillo (Nilo)
+      const x = L.x + r * L.cw, u = clamp((t - U.shownAt) / 0.6, 0, 1), hh = RH * u, yy = L.y + (RH - hh) / 2;
+      PR(x + 1, yy, L.cw - 2, hh, '#1a3a8a'); PR(x + 2, yy + 1, L.cw - 4, hh - 2, '#2a4ab8');
+      if (u >= 1) { drawSym('WS', x + L.cw / 2, L.y + RH / 2 - 4, t); slTxt('WILD', x + L.cw / 2, L.y + RH - 12, '#ffffff', 1, true, '#000'); PR(x + 1, L.y, L.cw - 2, RH, '#ffffff', 0.12 + 0.1 * Math.sin(t * 8)); }
+    }
+    ctx.restore();
+    // los premios, uno tras otro
+    let lbl = null;
+    if (U.res && !S && U.res.wins.length) {
+      const wins = U.res.wins, k = Math.floor((t - U.shownAt) / 1.8) % wins.length, w = wins[k], money = slMoney(Math.round(w.win * 100));
+      if (w.cells) {                                                  // 81 formas: las casillas que cuentan
+        const col = SL_GLOW[w.sym] || '#ffffff', on = Math.sin(t * 10) > -0.3;
+        w.cells.forEach((c, r) => c.forEach((v, i) => { if (v && on) { ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(L.x + r * L.cw + 1.5, L.y + i * L.ch + 1.5, L.cw - 3, L.ch - 3); } }));
+        lbl = w.sym === G.wild ? `4 COMODINES: 2000X  ${money}` : `${w.n} ${SL_NAMES[w.sym]}, ${w.ways} ${w.ways > 1 ? 'FORMAS' : 'FORMA'}${w.m > 1 ? ' (X' + w.m + ')' : ''}  ${money}`;
+      } else if (w.line >= 0) {
+        const Ln = SLOT_LINES[w.line], col = ['#ff3a3a', '#3aa8ff', '#4aff6a', '#ffd84a', '#ff8a2a', '#c86aff', '#3affe8', '#ff6ac8', '#a8ff3a', '#ffffff'][w.line];
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.beginPath(); Ln.forEach((row, r) => { const px = L.x + r * L.cw + L.cw / 2, py = L.y + row * L.ch + L.ch / 2; r ? ctx.lineTo(px, py) : ctx.moveTo(L.x - 4, py); }); ctx.lineTo(L.x + RW + 4, L.y + Ln[4] * L.ch + L.ch / 2); ctx.stroke();
+        ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke();
+        for (let r = 0; r < w.n; r++) { ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(L.x + r * L.cw + 1.5, L.y + Ln[r] * L.ch + 1.5, L.cw - 3, L.ch - 3); }
+        PR(L.x - 14, L.y + Ln[0] * L.ch + L.ch / 2 - 5, 12, 10, col); slTxt(String(w.line + 1), L.x - 8, L.y + Ln[0] * L.ch + L.ch / 2 - 3, '#000', 1, true);
+        lbl = `LINEA ${w.line + 1}: ${w.n} IGUALES  ${money}`;
+      } else {
+        for (let r = 0; r < NR; r++) for (let i = 0; i < 3; i++) if (U.res.view[r][i] === G.scatter) { ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 1; ctx.strokeRect(L.x + r * L.cw + 1.5, L.y + i * L.ch + 1.5, L.cw - 3, L.ch - 3); }
+        lbl = `${w.n} PIRAMIDES  ${money}`;
+      }
+    }
+    const pendUI = U.pend && !S && !U.banner && !U.gam;
+    if (lbl) slTxt(lbl, 160, 104, '#ffffff', 1, true, '#000');
+    else if (S) slTxt(U.got && tNow - U.got.t < 2.5 ? 'COBRADO: ' + slMoney(U.got.amt) : 'BUENA SUERTE...', 160, 104, U.got && tNow - U.got.t < 2.5 ? '#4aff6a' : '#c8c8d0', 1, true, '#000');
+    else if (U.msg) slTxt(U.msg.text, 160, 104, '#ff6a6a', 1, true, '#000');
+    else slTxt(TOUCH ? 'TOCA GIRAR' : 'ESPACIO: GIRAR   FLECHAS: APUESTA   I: PREMIOS', 160, 104, '#c8c8d0', 1, true, '#000');
+    if (pendUI) {                                                    // cobrar o arriesgar
+      slButton(SL_BTN.cobrar, TOUCH ? 'COBRAR' : 'COBRAR C', '#1a8a2a', true, U.hover === 'cobrar');
+      slButton(SL_BTN.carta, TOUCH ? 'CARTA' : 'CARTA R', '#a81a2a', true, U.hover === 'carta');
+      slButton(SL_BTN.escal, TOUCH ? 'ESCALERA' : 'ESCALERA E', '#2a4ab8', true, U.hover === 'escal');
+    }
+    if (U.fs && G.ladder) {                                          // en los giros gratis del Nilo, la escalera de símbolos mejorados
+      ctx.save(); ctx.translate(20, 42); ctx.scale(0.5, 0.5);
+      G.ladder.forEach((s, i) => { const yy = i * 20; ctx.globalAlpha = i < U.lvlShown ? 0.3 : 1; drawSym(s, 0, yy, t); ctx.globalAlpha = 1; if (i === U.lvlShown) { ctx.strokeStyle = '#4aff6a'; ctx.lineWidth = 2; ctx.strokeRect(-14, yy - 11, 28, 22); } });
+      ctx.restore(); slTxt('MEJORA', 20, 30, '#4aff6a', 1, true);
+    }
+    // el panel de abajo
+    PR(0, 128, W, H - 128, '#000', 0.55); PR(0, 128, W, 1, gold ? '#c8984a' : '#4a7aff');
+    slBox({ x: 8, y: 132, w: 84, h: 24 }, 'SALDO', slMoney(slCash()), '#4aff6a');
+    if (U.got && t - U.got.t < 1.6) { const k = (t - U.got.t) / 1.6; PR(8, 132, 84, 24, '#4aff6a', 0.25 * (1 - k)); slTxt('+' + slMoney(U.got.amt), 50, 124 - k * 10, '#4aff6a', 1, true, '#000'); }   // lo cobrado sube al saldo
+    slBox({ x: 100, y: 132, w: 70, h: 18 }, 'APUESTA', '', '#ffd84a'); slTxt(slMoney(slBet()), 135, 156, '#ffffff', 1, true, '#000');
+    const lock = !!(U.spin || U.fs);
+    slButton(SL_BTN.minus, '-', '#8a6a1a', !lock && U.bet > 0, U.hover === 'minus'); slButton(SL_BTN.plus, '+', '#8a6a1a', !lock && U.bet < SLOT_BETS.length - 1, U.hover === 'plus');
+    slBox({ x: 178, y: 132, w: 66, h: 24 }, U.fs ? 'BONO' : U.pend ? 'POR COBRAR' : 'PREMIO', slMoney(U.fs ? U.fs.won : U.pend || U.win), '#ffd84a');
+    slTxt(G.ways ? '81 FORMAS' : '10 LINEAS FIJAS', 8, 164, '#8a8a96', 1);
+    const canSpin = !U.spin && !U.banner && (U.fs ? false : slCash() + (U.pend || 0) >= slBet()), sb = SL_BTN.spin, pulse = canSpin ? 0.5 + 0.5 * Math.sin(t * 5) : 0;
+    PR(sb.x, sb.y + 2, sb.w, sb.h, '#000', 0.5); PR(sb.x, sb.y, sb.w, sb.h, canSpin ? '#1a8a2a' : '#3a3a42'); PR(sb.x + 2, sb.y + 2, sb.w - 4, sb.h - 4, canSpin ? '#2ac83a' : '#4a4a52');
+    PR(sb.x + 2, sb.y + 2, sb.w - 4, 2, '#ffffff', 0.4); if (canSpin) PR(sb.x, sb.y, sb.w, sb.h, '#ffffff', 0.12 * pulse);
+    slTxt(U.fs ? 'AUTO' : 'GIRAR', sb.x + sb.w / 2, sb.y + 14, '#ffffff', 2, true, '#0a3a0a');
+    slButton(SL_BTN.back, 'MENU', '#5a2a6a', !U.spin && !U.fs, U.hover === 'back'); slButton(SL_BTN.info, 'INFO', '#2a5a8a', !U.spin, U.hover === 'info');
+    for (const c of U.coins) { slEll(c.x, c.y, 3, 3, '#8a5a0a'); slEll(c.x, c.y, 2.3, 2.3, '#ffd84a'); }
+    if (U.banner) {
+      const b = U.banner; PR(0, 52, W, 50, '#000', 0.78); PR(0, 52, W, 1, '#ffd84a'); PR(0, 101, W, 1, '#ffd84a');
+      slTxt(b.text, 160, 62, Math.floor(t * 6) % 2 ? '#ffd84a' : '#ffffff', 2, true, '#5a0a0a'); if (b.sub) slTxt(b.sub, 160, 84, '#ffffff', b.sub.length > 12 ? 1 : 2, true, '#000');
+    }
+    if (U.gam) drawGamble(t);
+    if (U.info) drawSlotInfo(t);
+  }
+  function drawGamble(t) {
+    const U = slotUI, Gm = U.gam;
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0a0a3a'); g.addColorStop(1, '#14041a'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 30; i++) PR(10 + i * 10, 3, 4, 2, Math.floor(t * 5 + i) % 2 ? '#3a1a5a' : '#ffd84a');
+    if (Gm.mode === 'card') {
+      slTxt('RIESGO: ¿ROJA O NEGRA?', 160, 12, '#ffd84a', 2, true, '#5a0a0a');
+      slTxt('EN JUEGO: ' + slMoney(Gm.amt), 160, 32, '#ffffff', 1, true, '#000');
+      slTxt('SI ACIERTAS: ' + slMoney(Gm.amt * 2), 160, 42, '#4aff6a', 1, true, '#000');
+      const cx = 145, cy = 56, C = Gm.card;                          // la carta
+      PR(cx - 1, cy - 1, 32, 46, '#000'); PR(cx, cy, 30, 44, '#f8f8f4');
+      if (!C) { PR(cx + 2, cy + 2, 26, 40, Math.floor(t * 4) % 2 ? '#1a3ab8' : '#c8101a'); for (let y = 0; y < 38; y += 4) for (let x = (y / 4) % 2 * 2; x < 24; x += 4) PR(cx + 3 + x, cy + 3 + y, 2, 2, '#ffffff', 0.35); }
+      else {
+        const red = C.suit < 2, rk = C.rank === 'T' ? '10' : C.rank;
+        slTxt(rk, cx + 3, cy + 3, red ? '#d4161e' : '#141418', 1); drawSuit(C.suit, cx + 3, cy + 12, 1);
+        drawSuit(C.suit, cx + 8, cy + 15, 3);
+        slTxt(rk, cx + 27 - (rk.length > 1 ? 11 : 5), cy + 34, red ? '#d4161e' : '#141418', 1);
+        if (Gm.done) slTxt(Gm.amt > 0 ? '¡ACIERTO!' : 'HAS PERDIDO', 160, 106, Gm.amt > 0 ? '#4aff6a' : '#ff4a4a', 2, true, '#000');
+      }
+      slTxt('ULTIMAS', 30, 30, '#8a8aa8', 1, true); Gm.hist.forEach((s, i) => { PR(16 + (i % 3) * 10, 40 + Math.floor(i / 3) * 10, 8, 8, '#f8f8f4'); drawSuit(s, 17 + (i % 3) * 10, 41 + Math.floor(i / 3) * 10, 1); });
+      slTxt('ACIERTOS ' + Gm.wins + '/' + GAMBLE_MAX, 272, 30, '#8a8aa8', 1, true);
+      if (!Gm.done) {
+        slButton(SL_BTN.rojo, TOUCH ? 'ROJA' : '< ROJA', '#c8101a', true, U.hover === 'rojo'); slButton(SL_BTN.negro, TOUCH ? 'NEGRA' : 'NEGRA >', '#2a2a32', true, U.hover === 'negro');
+        slButton(SL_BTN.gcob, 'COBRAR', '#1a8a2a', true, U.hover === 'gcob');
+      }
+    } else {
+      slTxt('RIESGO: LA ESCALERA', 160, 8, '#ffd84a', 2, true, '#5a0a0a');
+      const base = Gm.amt > 0 ? Gm.amt / Math.pow(2, Gm.wins) : Gm.base0, steps = GAMBLE_MAX + 1; Gm.base0 = base;
+      const cur = Gm.amt > 0 ? Gm.wins + 1 : 0, nxt = Gm.wins + 2, settled = !!Gm.done;
+      for (let i = steps; i >= 0; i--) {                             // de arriba (x32) a abajo (el cero)
+        const y = 26 + (steps - i) * 16, val = i === 0 ? 0 : base * Math.pow(2, i - 1);
+        const cand = !settled && (i === nxt || i === 0), lit = !settled && ((Gm.lit && i === nxt) || (!Gm.lit && i === 0)), isCur = i === cur && (settled || i !== 0);
+        PR(96, y, 128, 14, '#000', 0.7);
+        PR(97, y + 1, 126, 12, isCur ? (settled && Gm.amt === 0 ? '#a81a1a' : '#1a8a2a') : lit ? (i === 0 ? '#ff4a4a' : '#ffd84a') : cand ? '#3a3a7a' : '#14143a');
+        if (lit) { PR(97, y + 1, 126, 1, '#ffffff', 0.6); PR(86, y + 4, 6, 6, i === 0 ? '#ff4a4a' : '#ffd84a'); PR(228, y + 4, 6, 6, i === 0 ? '#ff4a4a' : '#ffd84a'); }
+        slTxt(i === 0 ? 'NADA' : slMoney(Math.round(val)), 160, y + 4, isCur || lit ? '#ffffff' : '#8a8ac8', 1, true, isCur || lit ? '#000' : null);
+      }
+      if (settled) slTxt(Gm.amt > 0 ? '¡SUBES! ' + slMoney(Gm.amt) : 'HAS PERDIDO', 160, 140, Gm.amt > 0 ? '#4aff6a' : '#ff4a4a', 1, true, '#000');
+      else if (Gm.stop) slTxt('...', 160, 140, '#ffffff', 1, true);
+      else slTxt('PARA LA LUZ: ARRIBA DOBLAS, EN NADA LO PIERDES', 160, 140, '#c8c8e8', 1, true);
+      if (!settled && !Gm.stop) { slButton(SL_BTN.parar, TOUCH ? 'PARAR' : 'PARAR ESP', '#c8101a', true, U.hover === 'parar'); slButton(SL_BTN.lcob, TOUCH ? 'COBRAR' : 'COBRAR C', '#1a8a2a', true, U.hover === 'lcob'); }
+    }
+  }
+  function drawSlotInfo(t) {
+    const U = slotUI, G = U.G, bet = slBet(), ns = G.ways ? [4, 3] : [5, 4, 3], mul = G.ways ? 1 : 0.1;
+    PR(0, 0, W, H, '#0a0608', 0.94); slTxt('PREMIOS (APUESTA ' + slMoney(bet) + ')', 160, 6, '#ffd84a', 1, true, '#000');
+    G.syms.slice().reverse().forEach((s, i) => {
+      const col = i % 2, row = Math.floor(i / 2), x = 14 + col * 150, y = 32 + row * 26;
+      PR(x, y - 12, 32, 24, G.id === 'nilo' ? '#f4ead0' : '#0a1450'); drawSymGlow(G, s, x + 16, y, t); const p = G.pay[s];
+      ns.forEach((n, k) => slTxt(n + 'X ' + slMoney(Math.round(p[n - 3] * bet * mul)), x + 38, y - 12 + k * 8 + (G.ways ? 4 : 0), k ? '#e8e0d0' : '#ffd84a', 1));
+    });
+    if (G.ways) { slTxt('81 FORMAS: 3 O 4 IGUALES DESDE LA IZQUIERDA (POR FORMA)', 160, 136, '#ffffff', 1, true); slTxt('COMODIN X2: SUSTITUYE Y MULTIPLICA X2, X4, X8', 160, 145, '#ffffff', 1, true); slTxt('4 COMODINES: 2000 VECES LA APUESTA', 160, 154, '#ffd84a', 1, true); }
+    else { slTxt('ESCARABAJO (RODILLOS 2-4): COMODIN QUE SE EXPANDE', 160, 136, '#ffffff', 1, true); slTxt('3/4/5 PIRAMIDES: X2/X20/X200 Y 12 GIROS GRATIS', 160, 145, '#ffffff', 1, true); slTxt('EN LOS GIROS, CADA ESCARABAJO MEJORA UN SIMBOLO', 160, 154, '#ffffff', 1, true); }
+    slTxt((G.ways ? 'RTP 95 %' : '10 LINEAS. RTP 96,5 %') + '. PREMIO: COBRAR O ARRIESGAR', 160, 168, '#8a8a96', 1, true);
+  }
+  function drawSlot(t) {
+    if (!slotUI) return;
+    ctx.save(); ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;
+    if (slotUI.scr === 'menu') drawSlotMenu(t); else drawSlotGame(t);
     ctx.restore();
   }
 
@@ -7136,7 +8040,7 @@
     } else if (A.kind === 'wallet') {
       once('f', 0, () => GA && GA.blip(700, 0.06, 'square', 0.04, 900));
       if (s >= 0.4) {
-        jrAct = null; jr.wallet = true; renderTodo();
+        jrAct = null; jr.wallet = true; jr.cash = 500; renderTodo();   // 5 € en la cartera
         if (jr.card) say('Vale, la cartera ya la tengo.', 2.2, t + 0.5);
         else say('Vale, la cartera ya la tengo... y la tarjeta de crédito de mi madre, ya la ha vuelto a esconder.', 3.8, t + 0.5);
         say('Espera... ¿y mis llaves?', 2.4, t + 0.5);
@@ -7322,18 +8226,19 @@
     const power = powerAt(t);                                            // luz eléctrica (1 = encendida); la del día no depende de ella
     outageSounds(t); autosave(t); fuseTick(t); runLater(t);
     const jrBlack = jrTick(t); furnTick(t, dt); liftTick(t); blockedChecks(t); lobbyTick(t);
-    const hsBlack = hsTick(t, dt); danTick(dt); npcTick(t, dt); streetEdges(t);   // el saludo y la calle                                           // en su cuarto: cambiarse funde a negro un momento
+    const hsBlack = Math.max(hsTick(t, dt), shopTick(t, dt)); danTick(dt); npcTick(t, dt); streetEdges(t); barTick(t, dt); slotTick(t, dt);   // el saludo y la calle                                           // en su cuarto: cambiarse funde a negro un momento
     camTick(dt);
     ctx.setTransform(RES, 0, 0, RES, -Math.round(camX * RES), -Math.round(camY * RES)); ctx.imageSmoothingEnabled = false;   // en px lógicos del mundo (con la cámara)   // a partir de aquí, en px lógicos
 
     const inSala = room === SALA;
-    ctx.drawImage(inSala ? bg : room === HALL ? hallBg : room === MOM ? momBg : room === BALC ? balcBg : room === JR ? jrBg : room === LND ? lndBg : room === ELV ? elvBg : room === LOB ? lobBg : room === STR ? strBg : bathBg, 0, 0);
+    ctx.drawImage(inSala ? bg : room === HALL ? hallBg : room === MOM ? momBg : room === BALC ? balcBg : room === JR ? jrBg : room === LND ? lndBg : room === ELV ? elvBg : room === LOB ? lobBg : room === STR ? strBg : room === BAR ? barBg : bathBg, 0, 0);
     drawDoorSwing(t);                                                // la puerta abriéndose o cerrándose al cruzarla
     if (room === MOM) drawCurtains(t);                               // las cortinas de la puerta del balcón, movidas por el aire
     if (room === JR) drawJr(t);
     if (room === LND || room === ELV) drawBuilding(t);
     if (room === LOB) drawLobby(t);
-    if (room === STR) { drawStreetSigns(t); drawShopDoors(t, dt); }              // el edificio: las puertas del ascensor y sus pantallitas                                      // su cuarto: la cama, la ropa del suelo, la cartera y el armario
+    if (room === STR) { drawStreetSigns(t); drawShopDoors(t); }
+    if (room === BAR) drawBarLife(t);                                // el bar: la tele, la tragaperras y las máquinas              // el edificio: las puertas del ascensor y sus pantallitas                                      // su cuarto: la cama, la ropa del suelo, la cartera y el armario
     if (room === BALC) { trafficTick(t, dt); drawStreet(t); }        // la calle: el coche azul con las cuatro intermitentes y el tráfico
     if (inSala) {                                                    // reflejo del espejo: la luz no deja ver nada dentro
       ctx.save(); ctx.beginPath(); ctx.rect(148, 14, 44, 8); ctx.clip(); ctx.globalCompositeOperation = 'screen';
@@ -7353,9 +8258,9 @@
         drawPuff(P.x + 17, P.y - 1, CUT.fall, cst.s); drawPuff(T.x + HALL_DEF.BOX1.w / 2, T.fy + 4, CUT.land, cst.s);
       }
     } else {
-      if (room === STR) streetActors(false);                         // en la calle: la gente y Daniel, de detrás a delante
+      if (room === STR) streetActors(false); if (room === BAR) barActors(false);                         // en la calle: la gente y Daniel, de detrás a delante
       if (!hsPastGate()) drawPlayer();                               // si ya pasó la verja, se pinta con Daniel (orden por y)
-      if (room === STR) { streetActors(true); streetTraffic(t, dt); }
+      if (room === STR) { streetActors(true); streetTraffic(t, dt); } if (room === BAR) { barActors(true); drawBarTV(tNow); }
     }
     if (room === LOB) { drawGate(t); drawHandshake(t); }             // la verja y Daniel; el saludo
 
@@ -7363,11 +8268,11 @@
     // OSCURIDAD como capa aparte: las luces que de verdad iluminan (linterna, claridad de la sala en la entrada) la
     // RECORTAN, así se ve el suelo, las paredes y las puertas con sus colores; encima solo va un tinte suave de cada luz.
     // Sin luz eléctrica: penumbra en la sala (son las 4 de la tarde); en la entrada, sin ventanas, oscuridad casi total
-    const beam = flashOn && room !== STR ? beamLayer(P.x + Math.cos(P.ang) * 5, P.y - 8 + Math.sin(P.ang) * 3, P.ang, 0.96 + 0.04 * Math.sin(t * 23)) : null;
+    const beam = flashOn && room !== STR && room !== BAR ? beamLayer(P.x + Math.cos(P.ang) * 5, P.y - 8 + Math.sin(P.ang) * 3, P.ang, 0.96 + 0.04 * Math.sin(t * 23)) : null;
     dctx.globalCompositeOperation = 'source-over'; dctx.clearRect(0, 0, darkCv.width, darkCv.height);
     // cuarto de la madre: entra el día por el balcón abierto (penumbra); baño: sin ventana grande, casi a oscuras
     dctx.fillStyle = inSala ? `rgba(10,5,4,${0.22 + 0.26 * (1 - power)})` : room === MOM || room === JR ? `rgba(8,4,4,${0.24 + 0.34 * (1 - power)})`
-      : room === STR ? 'rgba(0,0,0,0)' : room === ELV ? 'rgba(6,6,8,0.14)' : room === LND || room === LOB ? 'rgba(3,3,4,0.86)' : room === BATH ? `rgba(3,2,2,${0.3 + 0.6 * (1 - power)})` : room === BALC ? 'rgba(8,4,4,0.06)' : `rgba(3,2,2,${0.3 + 0.66 * (1 - power)})`;   // el balcón es fuera: de día
+      : room === STR || room === BAR ? 'rgba(0,0,0,0)' : room === ELV ? 'rgba(6,6,8,0.14)' : room === LND || room === LOB ? 'rgba(3,3,4,0.86)' : room === BATH ? `rgba(3,2,2,${0.3 + 0.6 * (1 - power)})` : room === BALC ? 'rgba(8,4,4,0.06)' : `rgba(3,2,2,${0.3 + 0.66 * (1 - power)})`;   // el balcón es fuera: de día
     dctx.fillRect(0, 0, darkCv.width, darkCv.height);
     dctx.globalCompositeOperation = 'destination-out';
     if (beam) { dctx.drawImage(beam, 0, 0); dctx.drawImage(beam, 0, 0); }          // dos veces: cerca del móvil se ve casi como de día
@@ -7391,7 +8296,7 @@
     }
     ctx.save(); ctx.globalCompositeOperation = 'screen';
     const showLights = !(cst && cst.bars > 0.3);                     // con el foco de circo encendido, nada más brilla
-    if (!inSala) { if (showLights) (room === HALL ? hallLights : room === MOM ? momLights : room === BALC ? balcLights : room === JR ? jrLights : room === LND ? lndLights : room === ELV ? elvLights : room === LOB ? lobLights : room === STR ? strLights : bathLights)(t, power, lvl); }
+    if (!inSala) { if (showLights) (room === HALL ? hallLights : room === MOM ? momLights : room === BALC ? balcLights : room === JR ? jrLights : room === LND ? lndLights : room === ELV ? elvLights : room === LOB ? lobLights : room === STR ? strLights : room === BAR ? barLights : bathLights)(t, power, lvl); }
     else {
     // luz del día de fuera: claridad desde el ventanal que se apaga hacia el centro de la sala
     const fill = ctx.createLinearGradient(26, 0, 190, 0);
@@ -7446,10 +8351,12 @@
     if (nearBox1()) drawTag(box1Center().x, HALL_DEF.BOX1.fy + HALL_DEF.BOX1.d, TOUCH ? 'Toca para mover' : 'Mover caja');
     else if (nearFuse()) drawTag(HALL_DEF.FUSE.x + HALL_DEF.FUSE.w / 2, HALL_DEF.FUSE.y + HALL_DEF.FUSE.h, TOUCH ? 'Toca para abrir' : 'Abrir cuadro');
     else if (liftCallNear()) drawTag(LND_DEF.LIFT.x + LND_DEF.LIFT.w / 2, 72, TOUCH ? 'Toca para llamar' : 'Llamar al ascensor');
+    else if (slotNear()) drawTag(BAR_DEF.SLOT.x + BAR_DEF.SLOT.w / 2, BAR_DEF.MACH_F, TOUCH ? 'Toca para jugar' : 'Jugar a la tragaperras');
     else if (furnNear()) { const f = furnNear(); drawTag(f.rect.x + f.rect.w / 2, f.rect.y + f.rect.h, TOUCH ? 'Toca para mirar' : f.label); }
     else { const a = jrNear(); if (a) drawTag(a.rect.x + a.rect.w / 2, a.rect.y + a.rect.h, a.label); }
     if (panel) drawFusePanel(t);
     if (fp) drawFurn(t);
+    if (slotUI) drawSlot(t);
     drawClockShow(t);                                                // el aviso de la hora, por encima de todo
 
     // ayuda de controles: se va al empezar a moverse
@@ -7482,7 +8389,7 @@
     box1 = 'here'; cut = null; if (!HALL.solid.includes(HALL_BOX1)) HALL.solid.push(HALL_BOX1);         // la caja vuelve delante del cuadro de luz
     panel = false; panelCloseAt = null; difUp = false; difTripAt = null; fuse = 'idle'; back = null; brkUp.forEach((_, i) => { brkUp[i] = i !== 9; });   // cuadro de luz como al principio
     Object.assign(story, { scream: false, smell: false, bath: false }); missions = []; clockShow = null; fp = null; popup = null; Object.assign(lift, { state: 'idle', floor: 0, pending: false }); for (const k in fstate) delete fstate[k];
-    jrAct = null; const jrDone = from === 'llaves'; Object.assign(jr, { dressed: jrDone, bed: jrDone, clothes: [jrDone, jrDone, jrDone], tidy: jrDone, wallet: jrDone, card: false, keys: false, keyGot: false, keySpot: null, met: false, tried: [] });
+    jrAct = null; const jrDone = from === 'llaves'; Object.assign(jr, { dressed: jrDone, bed: jrDone, clothes: [jrDone, jrDone, jrDone], tidy: jrDone, wallet: jrDone, cash: jrDone ? 500 : 0, card: false, keys: false, keyGot: false, keySpot: null, met: false, tried: [] });
     if (jrDone && opts.jr) Object.assign(jr, opts.jr, { clothes: (opts.jr.clothes || jr.clothes).slice() });
     if (jrDone && opts.jr && opts.jr.keys === undefined && jr.wallet) jr.keys = true;   // guardadas antes: ya había echado en falta las llaves
     if (jr.keys && !jr.keySpot) jr.keySpot = randomKeySpot();
@@ -7512,7 +8419,7 @@
       const outside = ['rellano', 'ascensor', 'portal', 'calle'].includes(room.name);
       if (PH && !PH.bajarDone) { if (outside) PH.completeBajar(); else PH.pingBajar(); }   // partidas viejas / mensaje pendiente
     } else renderTodo();
-    if (room === STR) Object.assign(dan, { x: P.x + 14, y: P.y + 2, dir: 'down' });   // en la calle, Daniel a su lado
+    if (room === STR || room === BAR) Object.assign(dan, { x: P.x + 14, y: P.y + 2, dir: 'down' });   // en la calle, Daniel a su lado
     t0 = performance.now() / 1000; last = performance.now();
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   }
