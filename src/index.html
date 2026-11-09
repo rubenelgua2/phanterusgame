@@ -3845,7 +3845,7 @@
   const STR_DEF = {
     w: 620, FACADE: 72, CURB: 112,
     walk: [{ x: 30, y: 76, w: 572, h: 34 }],
-    PORTAL: { x: 180, w: 56 }, SHOP: { x: 262, w: 348 }, DOOR1: { x: 338, w: 22 }, DOOR2: { x: 566, w: 22 }
+    PORTAL: { x: 180, w: 56 }, SHOP: { x: 262, w: 348 }, DOOR1: { x: 334, w: 32 }, DOOR2: { x: 558, w: 32 }, MURAL: { x: 370, w: 184 }
   };
   const STR = { name: 'calle', w: STR_DEF.w, h: H, walk: STR_DEF.walk, floor: [{ x: 0, y: 72, w: STR_DEF.w, h: 108 }], lit: [{ x: 0, y: 0, w: STR_DEF.w, h: H }], solid: [] };
   const ROOMS = { sala: SALA, entrada: HALL, madre: MOM, bano: BATH, balcon: BALC, juanjo: JR, rellano: LND, ascensor: ELV, portal: LOB, calle: STR };
@@ -4879,22 +4879,72 @@
     b.fillStyle = '#c8bcae'; b.beginPath(); [[0, -16], [5, -5], [16, 0], [5, 5], [0, 16], [-5, 5], [-16, 0], [-5, -5]].forEach(([dx, dy], i) => i ? b.lineTo(lx + dx, ly + dy) : b.moveTo(lx + dx, ly + dy)); b.closePath(); b.fill();
     b.fillStyle = '#c8202a'; b.beginPath(); [[-12, -12], [0, -4], [12, -12], [4, 0], [12, 12], [0, 4], [-12, 12], [-4, 0]].forEach(([dx, dy], i) => i ? b.lineTo(lx + dx, ly + dy) : b.moveTo(lx + dx, ly + dy)); b.closePath(); b.fill();
     b.fillStyle = '#f4f2ee'; b.beginPath(); b.ellipse(lx, ly, 8, 5, 0, 0, Math.PI * 2); b.fill(); text('BL', lx - 5, ly - 3, '#2a2a30');
-    // el marco rojo: el cartel de arriba, los postes y las puertas
-    R(330, 24, sx1 - 330 - 14, 11, '#d4161e'); R(330, 24, sx1 - 330 - 14, 1, '#f04a4a'); R(330, 34, sx1 - 330 - 14, 1, '#8a0a10');
-    text('SPORT BAR', 336, 26, '#f8f8f4'); text('SALON DE JUEGOS', 474, 26, '#f8f8f4');
-    R(330, 24, 6, 48, '#d4161e'); R(330, 24, 1, 48, '#f04a4a'); R(sx1 - 20, 24, 6, 48, '#d4161e'); R(sx1 - 15, 24, 1, 48, '#8a0a10');
-    const door = (x, w) => { R(x, 36, w, 36, '#1a1a1e'); R(x + 1, 37, w - 2, 34, '#a8202a'); R(x + 2, 38, w - 4, 20, '#e86a5a'); R(x + 2, 38, 2, 20, '#f8a090', 0.7); R(x + w - 4, 54, 1, 6, '#d8d8d8'); R(x + 3, 62, w - 6, 8, '#8a1820'); };
-    door(D.DOOR1.x, D.DOOR1.w); door(D.DOOR2.x, D.DOOR2.w);
-    R(D.DOOR1.x - 4, 72, D.DOOR1.w + 8, 0, '#000');
-    // el escaparate: vinilo con el portero estirándose, un balón y los moteros
-    const wx0 = D.DOOR1.x + D.DOOR1.w + 2, wx1 = D.DOOR2.x - 4;
-    R(wx0, 36, wx1 - wx0, 30, '#1a1a1e'); R(wx0 + 1, 37, wx1 - wx0 - 2, 28, '#3a3e48');
-    for (let i = 0; i < 260; i++) Pt(wx0 + 1 + hash(i * 3.3) * (wx1 - wx0 - 2), 37 + hash(i * 5.1) * 28, ['#4a4e58', '#5a5e68', '#2e323a'][i % 3]);
-    R(wx0 + 6, 46, 14, 4, '#c8202a'); R(wx0 + 18, 42, 8, 4, '#c8202a'); R(wx0 + 4, 44, 4, 3, '#e8c8a8'); R(wx0 + 24, 40, 4, 3, '#e8c8a8'); R(wx0 + 10, 50, 6, 8, '#2a2a30');   // el portero
-    b.fillStyle = '#f4f4f0'; b.beginPath(); b.arc(wx0 + 34, 44, 4, 0, Math.PI * 2); b.fill(); Pt(wx0 + 33, 43, '#2a2a30'); Pt(wx0 + 35, 45, '#2a2a30');   // el balón
-    [[wx0 + 140, 50], [wx0 + 164, 52], [wx0 + 186, 49]].forEach(([x, y]) => { b.fillStyle = '#c8ccd2'; b.beginPath(); b.ellipse(x, y, 10, 6, -0.2, 0, Math.PI * 2); b.fill(); b.fillStyle = '#5a5e68'; b.beginPath(); b.ellipse(x - 2, y + 4, 6, 3, 0, 0, Math.PI * 2); b.fill(); R(x - 3, y - 7, 6, 4, '#e8e8e8'); R(x + 2, y - 6, 3, 2, '#c8202a'); });   // los moteros
-    text('LAS MOLINETAS', wx0 + 46, 40, '#f8f8f4'); R(wx0 + 46, 48, 78, 1, '#f8f8f4', 0.5);
-    R(wx0, 36, wx1 - wx0, 1, '#6a6e78'); R(wx0, 64, wx1 - wx0, 2, '#141418');
+    // el marco rojo: el cartel de arriba (SPORT BAR · SALÓN DE JUEGOS) y los postes entre las entradas y el mural
+    R(328, 22, 268, 13, '#d4161e'); R(328, 22, 268, 1, '#f04a4a'); R(328, 34, 268, 1, '#8a0a10');
+    text('SPORT BAR', 336, 25, '#2a0a0c'); text('SPORT BAR', 335, 24, '#f8f8f4');                       // letras con su sombra
+    text('SALON DE JUEGOS', 462, 25, '#2a0a0c'); text('SALON DE JUEGOS', 461, 24, '#f8f8f4');
+    [[328, 6], [366, 4], [554, 4], [590, 6]].forEach(([x, w]) => { R(x, 35, w, 37, '#d4161e'); R(x, 35, 1, 37, '#f04a4a'); R(x + w - 1, 35, 1, 37, '#8a0a10'); });   // los postes, por debajo del cartel
+    // LAS ENTRADAS, con profundidad (como la real): un hueco con sus paredes a rayas rojas, el techo, el suelo de madera
+    // clara que asoma a la acera y, al fondo, las puertas de cristal (se pintan en cada fotograma: se abren al acercarse)
+    const recess = (x0, w) => {
+      const poly = (pts, c) => { b.fillStyle = c; b.beginPath(); pts.forEach(([px, py], i) => i ? b.lineTo(px, py) : b.moveTo(px, py)); b.closePath(); b.fill(); };
+      R(x0, 35, w, 37, '#141416');
+      poly([[x0, 35], [x0 + w, 35], [x0 + w - 4, 39], [x0 + 4, 39]], '#1e1e22'); R(x0 + w / 2 - 3, 36, 6, 1, '#e8e4d8');   // el techo, con su luz
+      for (const [sx, dx] of [[x0, 1], [x0 + w, -1]]) {               // las paredes del hueco, a rayas rojas y blancas
+        poly([[sx, 35], [sx + dx * 4, 39], [sx + dx * 4, 66], [sx, 72]], '#d8d4cc');
+        for (let y = 40; y < 70; y += 3) poly([[sx, y + (y - 39) * 0.2], [sx + dx * 4, y], [sx + dx * 4, y + 1], [sx, y + 1 + (y - 39) * 0.2]], '#c8202a');
+        poly([[sx, 35], [sx + dx * 4, 39], [sx + dx * 4, 66], [sx, 72]], dx > 0 ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.4)');
+      }
+      poly([[x0 + 4, 66], [x0 + w - 4, 66], [x0 + w, 72], [x0, 72]], '#d8d0c0');   // el suelo, de tarima clara
+      for (let k = 0; k < 4; k++) R(x0 + 2 + k * (w - 4) / 4, 67, 1, 5, '#b8b0a0');
+      R(x0, 72, w, 3, '#cfc8b8'); R(x0, 74, w, 1, '#a8a090');                                            // el umbral, en la acera
+    };
+    recess(D.DOOR1.x, D.DOOR1.w); recess(D.DOOR2.x, D.DOOR2.w);
+    // EL MURAL del escaparate: el portero de rojo lanzándose a por el balón, las motos, la ruleta con sus números y la
+    // tragaperras con la palanca; encima, LAS MOLINETAS en grande
+    const M = D.MURAL, my0 = 35, my1 = 66;
+    R(M.x, my0, M.w, my1 - my0, '#141418');
+    const mg = b.createLinearGradient(M.x, 0, M.x + M.w, 0); mg.addColorStop(0, '#3a3e4a'); mg.addColorStop(0.5, '#2a2e38'); mg.addColorStop(1, '#5a5e66');
+    b.fillStyle = mg; b.fillRect(M.x + 1, my0 + 1, M.w - 2, my1 - my0 - 2);
+    for (let i = 0; i < 520; i++) Pt(M.x + 1 + hash(i * 3.3) * (M.w - 2), my0 + 1 + hash(i * 5.1) * (my1 - my0 - 2), ['#8a8e98', '#c8ccd4', '#5a5e68', '#f4f4f4'][i % 4], 0.55);   // el spray
+    const poly = (pts, c) => { b.fillStyle = c; b.beginPath(); pts.forEach(([px, py], i) => i ? b.lineTo(px, py) : b.moveTo(px, py)); b.closePath(); b.fill(); };
+    b.save(); b.beginPath(); b.rect(M.x + 1, my0 + 1, M.w - 2, my1 - my0 - 2); b.clip();
+    // el portero, en diagonal: camiseta roja, pantalón negro, guantes blancos estirados hacia el balón
+    const gx = M.x + 8;
+    poly([[gx + 6, 54], [gx + 22, 46], [gx + 26, 52], [gx + 10, 60]], '#c8202a'); poly([[gx + 8, 55], [gx + 22, 47], [gx + 23, 49], [gx + 9, 57]], '#e84a4a');   // el cuerpo
+    poly([[gx + 22, 46], [gx + 30, 44], [gx + 32, 48], [gx + 26, 52]], '#1a1a1e');                    // el pantalón
+    poly([[gx + 30, 44], [gx + 40, 44], [gx + 40, 46], [gx + 32, 48]], '#c8202a'); R(gx + 40, 44, 3, 2, '#f4f4f0');   // las piernas y las botas
+    poly([[gx + 6, 54], [gx - 2, 46], [gx, 45], [gx + 8, 52]], '#c8202a'); R(gx - 4, 43, 4, 3, '#f4f4f0');   // el brazo y el guante
+    poly([[gx + 10, 52], [gx + 4, 42], [gx + 6, 41], [gx + 12, 50]], '#c8202a'); R(gx + 2, 39, 4, 3, '#f4f4f0');
+    b.fillStyle = '#e8c4a0'; b.beginPath(); b.arc(gx + 6, 58, 2.5, 0, Math.PI * 2); b.fill(); R(gx + 4, 56, 4, 1, '#2a1a10');   // la cabeza
+    b.fillStyle = '#f4f4f0'; b.beginPath(); b.arc(M.x + 6, 41, 3.5, 0, Math.PI * 2); b.fill(); Pt(M.x + 5, 40, '#1a1a1e'); Pt(M.x + 7, 42, '#1a1a1e'); Pt(M.x + 4, 42, '#1a1a1e');   // el balón
+    // las motos, inclinadas en la curva (en gris y blanco, con algo de rojo)
+    [[M.x + 66, 59, -0.35], [M.x + 92, 60, -0.3]].forEach(([cx, cy, a]) => {
+      b.save(); b.translate(cx, cy); b.rotate(a);
+      b.fillStyle = '#2a2a30'; b.beginPath(); b.ellipse(-8, 4, 4, 4, 0, 0, Math.PI * 2); b.ellipse(8, 4, 4, 4, 0, 0, Math.PI * 2); b.fill();
+      b.fillStyle = '#d8dce2'; b.beginPath(); b.ellipse(0, 0, 11, 4, 0, 0, Math.PI * 2); b.fill(); b.fillStyle = '#c8202a'; b.fillRect(-2, -3, 6, 2);
+      b.fillStyle = '#f4f4f4'; b.beginPath(); b.arc(-2, -6, 3, 0, Math.PI * 2); b.fill(); b.fillStyle = '#5a5e68'; b.fillRect(-4, -4, 6, 4);   // el piloto, con su casco
+      b.restore();
+    });
+    // la RULETA (media rueda con sus casillas rojas y negras y sus números) y la TRAGAPERRAS con la palanca
+    const rx = M.x + M.w - 16, ry = 62;
+    for (let i = 0; i < 18; i++) { const a0 = Math.PI * 0.5 + i * Math.PI / 18, a1 = a0 + Math.PI / 18; b.fillStyle = i % 2 ? '#c8202a' : '#141418'; b.beginPath(); b.moveTo(rx, ry); b.arc(rx, ry, 18, a0, a1); b.closePath(); b.fill(); }
+    b.fillStyle = '#c8ccd2'; b.beginPath(); b.arc(rx, ry, 11, 0, Math.PI * 2); b.fill(); b.fillStyle = '#8a8e96'; b.beginPath(); b.arc(rx, ry, 5, 0, Math.PI * 2); b.fill();
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; R(rx + Math.cos(a) * 7, ry + Math.sin(a) * 7, 1, 1, '#f4f4f4'); }
+    [['19', 0.75], ['15', 0.95], ['32', 1.15]].forEach(([n, a]) => { const ax = rx + Math.cos(Math.PI * a) * 15, ay = ry + Math.sin(Math.PI * a) * 15; R(ax - 1, ay - 1, 4, 3, '#f4f4f4', 0.85); });
+    const sx0 = M.x + M.w - 64;                                       // la tragaperras roja con sus tres rodillos y la palanca de bola roja
+    R(sx0, 50, 22, 12, '#8a1018'); R(sx0 + 1, 50, 20, 11, '#c8202a'); R(sx0 + 1, 50, 20, 2, '#e84a4a');
+    for (let k = 0; k < 3; k++) { R(sx0 + 3 + k * 6, 53, 5, 6, '#f4f4f0'); R(sx0 + 4 + k * 6, 55, 3, 2, '#2a2a30'); }
+    R(sx0 + 22, 42, 2, 14, '#c8ccd2'); b.fillStyle = '#e8202a'; b.beginPath(); b.arc(sx0 + 23, 41, 3, 0, Math.PI * 2); b.fill(); Pt(sx0 + 22, 40, '#ff8a8a');
+    // LAS MOLINETAS, en letras grandes (con su sombra) por encima del dibujo
+    b.restore();
+    if (PDx) [...'LAS MOLINETAS'].forEach((ch, i) => {              // letra a letra, algo más juntas, a la derecha del portero
+      const x = M.x + 40 + i * 11; PDx.drawText(b, ch, x + 1, my0 + 3, '#1a1a1e', 2); PDx.drawText(b, ch, x, my0 + 2, '#f4f4f0', 2);
+    });
+    R(M.x, my0, M.w, 1, '#6a6e78'); R(M.x, my1 - 1, M.w, 2, '#141418');
+    // la "A" roja con la bandera a cuadros, a la derecha de la última puerta
+    const ax0 = 598; poly([[ax0, 50], [ax0 + 5, 30], [ax0 + 10, 50], [ax0 + 7, 50], [ax0 + 5, 40], [ax0 + 3, 50]], '#d4161e');
+    for (let y = 40; y < 48; y += 2) for (let x = ax0 + 1; x < ax0 + 9; x += 2) Pt(x + ((y / 2) & 1), y, '#f4f4f0');
     R(476, 12, 40, 11, '#0a0a0c'); R(477, 13, 38, 9, '#141418');                                            // la pantalla de LED (se enciende en cada fotograma)
     R(SH.x + 2, 0, 2, 72, '#8a8e92');                                                                         // otro bajante
     // LA ACERA: paños de baldosa rojiza y beis con tiras grises, la franja junto a las fachadas y una rejilla
@@ -6623,6 +6673,35 @@
     cars = cars.filter(c => c.x > -60 && c.x < STR_DEF.w + 60);
     for (const c of cars) drawCar(c.col, c.x - CAR.w / 2, c.L.cy - CAR.h / 2, false, null, c.L.dirX * Math.PI / 2);
   }
+  // LAS PUERTAS DE LA CASA DE APUESTAS: dos hojas de cristal blanco opaco con rayas rojas (como las reales) que se
+  // abren solas, deslizándose hacia los lados, cuando Juanjo (o Daniel) se acerca; dentro, de momento, la penumbra roja
+  const shopDoors = [{ o: 0, was: 0 }, { o: 0, was: 0 }];
+  function drawShopDoors(t, dt) {
+    [STR_DEF.DOOR1, STR_DEF.DOOR2].forEach((Dr, i) => {
+      const st = shopDoors[i], cx = Dr.x + Dr.w / 2;
+      const near = [P, dan].some(a => Math.abs(a.x - cx) < Dr.w / 2 + 6 && a.y < 92);
+      st.o += clamp((near ? 1 : 0) - st.o, -dt * 2.2, dt * 2.2);
+      if (near !== !!st.was) { st.was = near; sfx(near ? 340 : 260, 0.35, 'sawtooth', 0.01, near ? 520 : 180); }   // el motor de la puerta
+      const ix = Dr.x + 4, iw = Dr.w - 8, y0 = 39, y1 = 66, half = iw / 2, gap = Math.round(st.o * (half - 1));
+      if (st.o > 0.01) {                                             // dentro: penumbra con luz roja y las maquinitas
+        PR(ix, y0, iw, y1 - y0, '#1a0a0c');
+        const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(200,30,40,0.35)'); g.addColorStop(1, 'rgba(200,30,40,0.05)'); ctx.fillStyle = g; ctx.fillRect(ix, y0, iw, y1 - y0);
+        for (let k = 0; k < 4; k++) if (Math.sin(t * 4 + k * 1.7 + i) > -0.2) PP(ix + 3 + k * 6, y0 + 10 + (k % 2) * 3, ['#ffd84a', '#4ad8ff', '#ff4a8a', '#8aff4a'][k]);
+        PR(ix, y1 - 3, iw, 3, '#3a2a24');
+      }
+      ctx.save(); ctx.beginPath(); ctx.rect(ix, y0, iw, y1 - y0); ctx.clip();
+      for (const [lx, dir] of [[ix - gap, -1], [ix + half + gap, 1]]) {   // las dos hojas
+        PR(lx, y0, half, y1 - y0, '#8a9096'); PR(lx + 1, y0 + 1, half - 2, y1 - y0 - 2, '#e4e6e2');
+        for (let y = y0 + 2; y < y0 + 6; y += 2) PR(lx + 1, y, half - 2, 1, '#c8202a');              // franja roja de arriba
+        for (let y = y1 - 11; y < y1 - 1; y += 2) PR(lx + 1, y, half - 2, 1, '#c8202a');              // las rayas rojas de abajo
+        PP(lx + half / 2, y0 + 12, '#b8bcc0'); PP(lx + half / 2 - 1, y0 + 13, '#b8bcc0'); PP(lx + half / 2 + 1, y0 + 13, '#b8bcc0'); PP(lx + half / 2, y0 + 14, '#b8bcc0');   // el dibujo de la estrella, al ácido
+        PR(lx + 1, y0 + 8, 1, 6, '#ffffff', 0.5);                                                   // reflejo
+        PR(dir < 0 ? lx + half - 2 : lx + 1, y0 + 10, 1, 7, '#c8ccd2');                               // el tirador
+        PP(lx + half / 2 - 2, y0 + 7, '#c8202a'); PR(lx + half / 2 - 3, y0 + 8, 3, 3, '#f4f4f0');   // los carteles pegados
+      }
+      ctx.restore();
+    });
+  }
   function drawStreetSigns(t) {                                      // la pantalla de LED del salón de juegos, animada
     for (let y = 0; y < 3; y++) for (let x = 0; x < 12; x++) {
       const on = Math.sin(t * 3 + x * 0.7 + y * 1.3) > 0.1;
@@ -7254,7 +7333,7 @@
     if (room === JR) drawJr(t);
     if (room === LND || room === ELV) drawBuilding(t);
     if (room === LOB) drawLobby(t);
-    if (room === STR) drawStreetSigns(t);              // el edificio: las puertas del ascensor y sus pantallitas                                      // su cuarto: la cama, la ropa del suelo, la cartera y el armario
+    if (room === STR) { drawStreetSigns(t); drawShopDoors(t, dt); }              // el edificio: las puertas del ascensor y sus pantallitas                                      // su cuarto: la cama, la ropa del suelo, la cartera y el armario
     if (room === BALC) { trafficTick(t, dt); drawStreet(t); }        // la calle: el coche azul con las cuatro intermitentes y el tráfico
     if (inSala) {                                                    // reflejo del espejo: la luz no deja ver nada dentro
       ctx.save(); ctx.beginPath(); ctx.rect(148, 14, 44, 8); ctx.clip(); ctx.globalCompositeOperation = 'screen';
