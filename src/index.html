@@ -7173,6 +7173,7 @@
     list.push({ y: BAR_DEF.PILLAR.y + BAR_DEF.PILLAR.s, f: drawPillar });
     list.push({ y: barMan.y, f: drawBarman });
     if (slotGuyOn()) list.push({ y: slotGuy.y, f: () => drawSlotGuy(tNow) });
+    list.push({ y: 86, f: drawSlotStool });
     list.push({ y: dan.y, f: () => drawActor(JJ_DAN, dan.x, dan.y, dan.dir, dan.moving, dan.phase) });
     list.filter(a => front ? a.y > P.y : a.y <= P.y).sort((a, b) => a.y - b.y).forEach(a => a.f());
   }
@@ -7185,12 +7186,56 @@
       edgeCool = t + 3; popup = { t, text: 'La zona de apuestas, muy pronto.' }; sfx(150, 0.18, 'square', 0.06, 110);
     }
   }
+  // ---------- LA MÚSICA DEL BAR: una rumbita de garito en 8 bits (Do mayor, 112 bpm, 8 compases en bucle) ----------
+  // Se programa compás a compás en el reloj de audio (como la del menú). Suena mientras estás en el bar; con la tragaperras
+  // abierta baja para que se oiga la máquina. Va por el volumen de la música.
+  const BarMusic = (() => {
+    const BPM = 112, BEAT = 60 / BPM, BARL = 4 * BEAT, LEVEL = 0.11, DUCK = 0.035;
+    const hz = n => 440 * Math.pow(2, (n - 69) / 12);
+    const CH = { C: [36, [60, 64, 67]], Am: [45, [60, 64, 69]], F: [41, [60, 65, 69]], G: [43, [59, 62, 67]], Dm: [38, [62, 65, 69]] };
+    const PROG = ['C', 'Am', 'F', 'G', 'C', 'Am', 'Dm', 'G'];
+    const MEL = [
+      [[0, 1, 76], [1, 0.5, 79], [1.5, 0.5, 76], [2, 1, 72], [3, 1, 74]], [[0, 1.5, 72], [1.5, 0.5, 69], [2, 1, 72], [3, 1, 76]],
+      [[0, 1, 77], [1, 0.5, 76], [1.5, 0.5, 74], [2, 2, 72]], [[0, 1, 74], [1, 1, 71], [2, 1, 67], [3, 1, 74]],
+      [[0, 1, 79], [1, 0.5, 81], [1.5, 0.5, 79], [2, 1, 76], [3, 1, 72]], [[0, 1, 76], [1, 1, 72], [2, 2, 69]],
+      [[0, 1, 74], [1, 0.5, 77], [1.5, 0.5, 81], [2, 1, 77], [3, 1, 74]], [[0, 1.5, 71], [1.5, 0.5, 74], [2, 2, 67]]
+    ];
+    let out = null, next = 0, bar = 0, on = false, oc = null;
+    function tone(type, f, t, dur, peak) {
+      if (!peak) return;
+      const o = oc.createOscillator(), g = oc.createGain(); o.type = type; o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+      o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.03);
+    }
+    function clap(t) {                                                // la palmita de la rumba (ruido corto)
+      const b = oc.createBuffer(1, Math.round(oc.sampleRate * 0.06), oc.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const src = oc.createBufferSource(), g = oc.createGain(), hp = oc.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800;
+      src.buffer = b; g.gain.value = 0.35; src.connect(hp); hp.connect(g); g.connect(out); src.start(t);
+    }
+    function schedule(t0, n) {
+      const [root, triad] = CH[PROG[n % 8]];
+      tone('triangle', hz(root), t0, BEAT * 0.9, 0.5); tone('triangle', hz(root + 7), t0 + BEAT * 1.5, BEAT * 0.45, 0.4); tone('triangle', hz(root), t0 + BEAT * 2, BEAT * 0.9, 0.5); tone('triangle', hz(root + 7), t0 + BEAT * 3.5, BEAT * 0.45, 0.4);   // el bajo
+      for (const b of [0.5, 1.5, 2.5, 3.5]) triad.forEach(m => tone('square', hz(m), t0 + b * BEAT, 0.11, 0.05));   // la guitarra rasgueada, a contratiempo
+      for (const b of [1, 3]) clap(t0 + b * BEAT); clap(t0 + 3.5 * BEAT);
+      MEL[n % 8].forEach(([b, d, m]) => tone('square', hz(m), t0 + b * BEAT, d * BEAT * 0.9, n >= 8 && n % 2 ? 0.0 : 0.09));   // la melodía (la 2ª vuelta, a ratos descansa)
+    }
+    function tick(want, duck) {
+      const GA = window.GameAudio; oc = GA && GA.context; if (!oc || oc.state !== 'running') return;
+      if (!out) { out = oc.createGain(); out.gain.value = 0; out.connect(GA.music || GA.master); }
+      const lvl = want ? (duck ? DUCK : LEVEL) : 0;
+      if (want && !on) { on = true; next = oc.currentTime + 0.1; bar = 0; }
+      out.gain.setTargetAtTime(lvl, oc.currentTime, want ? 0.4 : 0.25);
+      if (!want) { on = false; return; }
+      while (next < oc.currentTime + 0.6) { schedule(next, bar); next += BARL; bar = (bar + 1) % 16; }
+    }
+    return { tick, stop: () => tick(false) };
+  })();
   // ---------- EN EL BAR: la misión «Antes de apostar» (el tabaco de Daniel) y el señor que juega a la tragaperras ----------
   // Daniel quiere tabaco: hay que pedirle al camarero que active la máquina (lo hace con el mando, desde la barra); la
   // máquina enciende sus luces y, al acercarse a ella, Daniel se compra un paquete de Marlboro. Mientras dura la misión,
   // un señor mayor está pegado a la tragaperras (ocupada); al acabarla, se va.
   const SLOT_GUY = npcLook({ H: '#9a9a96', h: '#7a7a76', T: '#6a4a2a', t: '#5a3a1e', P: '#2a2a3a', K: '#1a1515', E: '#2a1a14', M: '#a86a5a' });   // chaqueta marrón, pelo canoso
-  const slotGuy = { x: 116, y: 82, state: 'gone', shout: null, next: 0, step: 0, phase: 0, dir: 'up' };
+  const slotGuy = { x: 116, y: 76, state: 'gone', left: false, shout: null, next: 0, step: 0, phase: 0, dir: 'up' };
   const SLOT_GUY_SOLID = { x: 111, y: 78, w: 0, h: 6 }; BAR.solid.push(SLOT_GUY_SOLID);
   const GUY_LINES = ['¡VAMOS, VAMOS!', '¡OTRA VEZ NO...!', 'ESTA ME DEBE UNA', '¡ESO ES, PAGA!', 'UNA MAS Y ME VOY'];
   const slotGuyOn = () => room === BAR && slotGuy.state !== 'gone';
@@ -7229,10 +7274,10 @@
   function barMissionTick(t, dt) {
     if (room !== BAR) return;
     // el señor de la tragaperras: juega mientras dura la misión; al acabarla, se levanta y se va por la puerta
-    if (slotGuy.state === 'gone' && missionOn('bar')) Object.assign(slotGuy, { state: 'play', x: 116, y: 82, dir: 'up' });
+    if (slotGuy.state === 'gone' && !jr.tabacoDone && !slotGuy.left) Object.assign(slotGuy, { state: 'play', x: 116, y: 76, dir: 'up' });   // ya está sentado jugando al entrar
     if (slotGuy.state === 'play') {
       if (t > slotGuy.next && !tabacoScene && !(sayAt != null)) { slotGuy.next = t + 4 + Math.random() * 5; slotGuy.shout = { t, text: GUY_LINES[Math.floor(Math.random() * GUY_LINES.length)] }; sfx(700 + Math.random() * 300, 0.05, 'square', 0.02, 900); }
-      if (!missionOn('bar')) Object.assign(slotGuy, { state: 'leave', step: 0, shout: { t, text: 'BAH, ME VOY' } });
+      if (jr.tabacoDone) Object.assign(slotGuy, { state: 'leave', step: 0, left: true, y: 82, shout: { t, text: 'BAH, ME VOY' } });   // se levanta y se va
     }
     if (slotGuy.state === 'leave') {                                 // a la puerta de la calle
       const path = [{ x: 124, y: 96 }, { x: 178, y: 200 }, { x: 178, y: 226 }], g = path[slotGuy.step];
@@ -7249,9 +7294,16 @@
       atTime(t + 1.4, () => { sfx(140, 0.12, 'square', 0.06, 70); });   // ¡clonc!, el paquete
       atTime(t + 2.4, () => say('Un Marlboro, como siempre.', 2.4, tNow + 0.1, tt => {
         jr.tabacoDone = true; dan.goto = null; tabacoScene = null; tabacoFx = null; renderTodo();
-        atTime(tt + 0.6, () => { completeMission('bar'); saveAt('llaves'); });
+        atTime(tt + 0.6, () => { completeMission('bar'); saveAt('llaves', true); });   // punto de guardado
       }, danWho));
     }
+  }
+  function drawSlotStool() {                                         // el taburete de la tragaperras: asiento rojo, pie cromado y aro
+    const sx = 116, sy = 86;
+    slEll(sx, sy, 6, 2, '#000', 0.3); slEll(sx, sy - 1, 5, 1.6, '#8a8e94');
+    PR(sx - 1, sy - 12, 2, 11, '#9aa0a6'); PR(sx - 1, sy - 12, 1, 11, '#e0e4e8');
+    ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(sx, sy - 5, 4.5, 1.5, 0, 0, Math.PI * 2); ctx.stroke();
+    slEll(sx, sy - 12, 6.5, 2.8, '#6a0a10'); slEll(sx, sy - 13, 6, 2.4, '#d4161e'); PP(sx - 3, sy - 14, '#ff8a8a');
   }
   function drawSlotGuy(t) {                                          // el señor, de espaldas, dándole a los botones
     const g = slotGuy; if (!slotGuyOn()) return;
@@ -7281,9 +7333,10 @@
   }
 
   // ---------- LAS TRAGAPERRAS: el motor (rodillos reales con sus tiras de símbolos, 10 líneas, tabla de pagos) ----------
-  // Dos juegos propios: FRUTAS LOCAS (frutas clásicas; el comodín se expande a todo el rodillo y multiplica x2, y los
-  // multiplicadores se multiplican entre sí) y TESORO DEL NILO (el escarabajo se expande; 3 pirámides = 12 giros gratis en
-  // los que cada escarabajo mejora el símbolo más bajo). Las probabilidades salen de las tiras: RTP ~95-96 % (simulado).
+  // Dos juegos propios: FRUTAS LOCAS (4x3, 81 formas; comodines x2/x4/x8, 4 comodines = 2000x) y JOYAS DEL FARAÓN (5x3, 10
+  // líneas, cartas y gemas, sin comodín ni scatter; con un premio de 4x o más se pueden comprar POWER SPINS a 4x la apuesta
+  // cada uno, o menos giros con multiplicador, en los que cae el SÍMBOLO MISTERIOSO apilado y se convierte en un mismo símbolo).
+  // Las probabilidades salen de las tiras de los rodillos (simuladas).
   const SLOT_LINES = [[1, 1, 1, 1, 1], [0, 0, 0, 0, 0], [2, 2, 2, 2, 2], [0, 1, 2, 1, 0], [2, 1, 0, 1, 2], [1, 0, 0, 0, 1], [1, 2, 2, 2, 1], [0, 0, 1, 2, 2], [2, 2, 1, 0, 0], [1, 2, 1, 0, 1]];
   const SLOT_BETS = [0.10, 0.20, 0.50, 1.00, 2.00];
   function slotStrip(counts, seed) {                                 // la tira de un rodillo: los símbolos repartidos sin que se junten iguales
@@ -7303,19 +7356,47 @@
       pay: { CH: [0.1, 0.4], LE: [0.1, 0.4], OR: [0.1, 0.4], PL: [0.1, 0.6], GR: [0.5, 2], ME: [0.5, 2], BE: [1, 4], SE: [2, 10] },   // x la apuesta, por forma (3 y 4 iguales). RTP ~95 % (1,5 M giros)
       reels: [0, 1, 2, 3].map(() => ({ CH: 6, LE: 6, OR: 6, PL: 6, GR: 4, ME: 4, BE: 3, SE: 2, W: 1 }))
     },
-    nilo: {
-      name: 'TESORO DEL NILO', wild: 'W', wildReels: [1, 2, 3], scatter: 'S', freeSpins: 12, scatPay: [2, 20, 200],
-      syms: ['T', 'J', 'Q', 'K', 'A', 'AN', 'CA', 'MA'],
-      ladder: ['T', 'J', 'Q', 'K', 'A', 'AN', 'CA', 'MA'],             // en los giros gratis cada escarabajo sube un peldaño
-      pay: { T: [5, 25, 100], J: [5, 25, 100], Q: [5, 25, 100], K: [5, 30, 120], A: [5, 30, 120], AN: [10, 40, 150], CA: [10, 50, 200], MA: [15, 75, 300] },
-      reels: [0, 1, 2, 3, 4].map(r => Object.assign({ T: 9, J: 9, Q: 8, K: 7, A: 6, AN: 4, CA: 3, MA: 2, S: r === 0 || r === 4 ? 2 : 1 }, r >= 1 && r <= 3 ? { W: 1 } : {}))
+    faraon: {
+      name: 'JOYAS DEL FARAON', wild: 'W', wildReels: [], power: true, mystery: 'M', scatter: 'S', scatPay: [2, 10, 50], bonus: 'B', maxWin: 10000,
+      syms: ['T', 'J', 'Q', 'K', 'A', 'SA', 'EM', 'RU', 'DI', 'W'],
+      royals: ['T', 'J', 'Q', 'K', 'A'],
+      pay: { T: [5, 25, 100], J: [5, 25, 100], Q: [5, 25, 100], K: [5, 30, 150], A: [5, 30, 150], SA: [10, 50, 300], EM: [10, 50, 300], RU: [15, 75, 400], DI: [20, 100, 500], W: [50, 500, 10000] },   // x la apuesta por línea (3, 4, 5)
+      pay2: { SA: 2, EM: 2, RU: 3, DI: 5 },                           // 2 iguales: solo las gemas
+      reels: [0, 1, 2, 3, 4].map(r => ({ T: 12, J: 9, Q: 6, K: 3, A: 3, SA: 2, EM: 2, RU: 1, DI: 1, W: 1, S: 1, B: r < 3 ? 3 : 0 })),   // juego base (las máscaras, solo en los 3 primeros)
+      freels: [0, 1, 2, 3, 4].map(() => ({ T: 12, J: 9, Q: 6, K: 3, A: 3, SA: 2, EM: 2, RU: 1, DI: 1, W: 1, S: 1 })),                // tiradas gratis (sin máscaras)
+      mStacks: 5, mBlk: 4, pPay: 1.04,                               // power spins: bloques de 4 misteriosos por rodillo. RTP total ~95,5 % (simulado)
+      mysW: { T: 4, J: 4, Q: 4, K: 3, A: 3, SA: 2, EM: 2, RU: 1.5, DI: 1 },   // en qué se convierte el misterioso
+      tiles: { spin: 12, mult: 9, start: 9 },                          // la Cámara de Piedra: 30 baldosas
+      expSyms: ['T', 'J', 'Q', 'K', 'A', 'SA', 'EM', 'RU', 'DI']      // los que puede elegir el Libro Sagrado
     }
   };
-  for (const id in SLOT_GAMES) { const G = SLOT_GAMES[id]; G.id = id; G.strips = G.reels.map((c, i) => slotStrip(c, 977 + i * 131 + id.length * 7)); }
+  // LA RUEDA FRUTAL: tragaperras clásica 3x3, 5 líneas (3 horizontales y 2 diagonales), sin comodín ni scatter. Con la
+  // PANTALLA LLENA (9 iguales) se pagan las 5 líneas y sale LA RUEDA: 3 sectores verdes (WIN) y 1 rojo (STOP); cada verde
+  // vuelve a pagar la pantalla llena y se apaga, hasta 3 veces o hasta caer en rojo.
+  SLOT_GAMES.rueda = {
+    name: 'LA RUEDA FRUTAL', wild: 'W', wildReels: [], full: true,
+    lines: [[0, 0, 0], [1, 1, 1], [2, 2, 2], [0, 1, 2], [2, 1, 0]],
+    syms: ['D7', 'ME', 'BE', 'PL', 'OR', 'CH', 'LE', 'GE'],
+    pay: { D7: [300], ME: [100], BE: [45], PL: [18], OR: [18], CH: [18], LE: [18], GE: [4] },   // x la apuesta por línea, por 3 iguales
+    reels: [0, 1, 2].map(() => ({ D7: 1, ME: 1, BE: 1, PL: 1, OR: 1, CH: 1, LE: 1, GE: 2 })), blk: [6, 5, 5, 4]   // muy apilados. RTP ~96 % (2 M giros; la rueda ~20 %)
+  };
+  function slotStripBlocks(counts, seed, sizes) {                  // tira con los símbolos APILADOS (bloques de 1 a 3 iguales)
+    const keys = slotStrip(counts, seed);                            // el orden de los bloques, sin dos bloques iguales seguidos
+    return keys.flatMap((k, i) => Array(sizes[(i * 7 + seed) % sizes.length]).fill(k));
+  }
+  function slBuild(G) {
+    const seed = i => 977 + i * 131 + G.id.length * 7;
+    G.strips = G.reels.map((c, i) => G.blk ? slotStripBlocks(c, seed(i), G.blk) : slotStrip(c, seed(i)));
+    if (G.freels) G.fstrips = G.freels.map((c, i) => slotStrip(c, seed(i) + 55));
+    if (G.mStacks) G.pstrips = (G.fstrips || G.strips).map((st, r) => {            // los power spins: las mismas tiras con bloques de 3 misteriosos
+      const a = st.slice(), n = G.mStacks, b = G.mBlk || 3; for (let k = 0; k < n; k++) a.splice(Math.floor((k + 0.5 + r * 0.13) * st.length / n) + k * b, 0, ...Array(b).fill('M')); return a; });
+  }
+  for (const id in SLOT_GAMES) { SLOT_GAMES[id].id = id; slBuild(SLOT_GAMES[id]); }
+  const slStripsOf = (G, fs) => (fs && fs.power && G.pstrips) ? G.pstrips : (fs && fs.free && G.fstrips) ? G.fstrips : G.strips;
   // un giro: dónde para cada rodillo, la ventana de 5x3, los comodines expandidos y lo que paga (en € con la apuesta total)
   function slotSpin(G, bet, fs, rnd = Math.random) {
-    const stops = G.strips.map(s => Math.floor(rnd() * s.length));
-    const grid = stops.map((p, r) => [0, 1, 2].map(i => G.strips[r][(p + i) % G.strips[r].length]));
+    const strips = slStripsOf(G, fs), stops = strips.map(s => Math.floor(rnd() * s.length));
+    const grid = stops.map((p, r) => [0, 1, 2].map(i => strips[r][(p + i) % strips[r].length]));
     return slotEval(G, grid, bet, fs, stops);
   }
   // 81 FORMAS (4x3): 3 o 4 iguales en rodillos seguidos desde la izquierda, en cualquier fila. Cada comodín de la forma
@@ -7342,28 +7423,55 @@
   }
   function slotEval(G, grid, bet, fs, stops) {
     if (G.ways) return slotEvalWays(G, grid, bet, stops);
-    const lineBet = bet / SLOT_LINES.length, res = { stops, grid, wins: [], total: 0, expand: [], mult: 1, scat: 0, newFs: 0, upgrades: 0 };
-    const view = grid.map(c => c.slice());
-    for (const r of G.wildReels) if (view[r].includes(G.wild)) { res.expand.push(r); view[r] = [G.wild, G.wild, G.wild]; if (G.mult) res.mult *= G.mult; }
-    if (fs && G.ladder) { res.upgrades = res.expand.length && fs.lvl < G.ladder.length - 1 ? 1 : 0; fs.lvl += res.upgrades; }   // un peldaño por giro con escarabajo
-    const up = s => (fs && G.ladder && G.ladder.indexOf(s) >= 0 && G.ladder.indexOf(s) < fs.lvl) ? G.ladder[fs.lvl] : s;
-    res.view = view.map(c => c.map(s => s === G.wild || s === G.scatter ? s : up(s)));
-    SLOT_LINES.forEach((L, li) => {                                  // de izquierda a derecha, 3 o más iguales (el comodín vale por cualquiera)
-      const row = L.map((y, r) => res.view[r][y]);
-      let sym = null; for (const s of row) { if (s === G.scatter) break; if (s !== G.wild) { sym = s; break; } }
-      if (!sym || !G.pay[sym]) return;
-      let n = 0; for (const s of row) { if (s === sym || s === G.wild) n++; else break; }
-      if (n < 3) return;
-      const m = (G.mult ? Math.pow(G.mult, row.slice(0, n).filter(s => s === G.wild).length) : 1);
-      const win = G.pay[sym][n - 3] * lineBet * m;
-      res.wins.push({ line: li, sym, n, win, m }); res.total += win;
-    });
-    if (G.scatter) {
-      res.scat = res.view.reduce((a, c) => a + c.filter(s => s === G.scatter).length, 0);
-      if (res.scat >= 3) { const w = G.scatPay[Math.min(res.scat, 5) - 3] * bet; res.total += w; res.wins.push({ line: -1, sym: G.scatter, n: res.scat, win: w }); res.newFs = !fs ? G.freeSpins : fs.re ? 0 : (fs.re = true, G.freeSpins); }   // en los giros gratis, se recargan una sola vez
+    const LNS = G.lines || SLOT_LINES, lineBet = bet / LNS.length, res = { stops, grid, wins: [], total: 0, expand: [], mult: 1, scat: 0, newFs: 0, upgrades: 0 };
+    let view = grid.map(c => c.slice());
+    if (G.mystery && grid.some(c => c.includes(G.mystery))) {         // el MISTERIOSO: todos se convierten en el mismo símbolo
+      const W0 = G.mysW, tot = Object.values(W0).reduce((a, b) => a + b, 0); let r0 = Math.random() * tot;
+      res.mys = Object.keys(W0).find(k => (r0 -= W0[k]) < 0) || 'T';
+      res.blackout = grid.every(c => c.every(x => x === G.mystery));   // ¡pantalla completa!
+      view = view.map(c => c.map(x => x === G.mystery ? res.mys : x));
     }
+    res.view = view;
+    const special = x => x === G.scatter || x === G.bonus || x === G.mystery;
+    if (G.full && grid.every(c => c.every(x => x === grid[0][0]))) res.full = grid[0][0];   // ¡PANTALLA LLENA!
+    LNS.forEach((L, li) => {                                         // de izquierda a derecha (el comodín vale por cualquier símbolo de pago)
+      const row = L.map((y, r) => view[r][y]);
+      if (G.bonus && row[0] === G.bonus && row[1] === G.bonus && row[2] === G.bonus) res.bonus = li;   // 3 máscaras en línea: ¡la Cámara de Piedra!
+      let best = null;
+      const tryPay = sym => {
+        let n = 0; for (const x of row) { if (x === sym || (x === G.wild && sym !== G.wild)) n++; else break; }
+        const v = n >= 3 ? G.pay[sym][n - 3] : n === 2 && G.pay2 && G.pay2[sym] ? G.pay2[sym] : 0;
+        if (v && (!best || v > best.v)) best = { sym, n, v };
+      };
+      if (row[0] === G.wild) tryPay(G.wild);                         // una línea de comodines paga por sí misma
+      const sym = row.find(x => x !== G.wild); if (sym && !special(sym) && G.pay[sym]) tryPay(sym);
+      if (best) { const win = best.v * lineBet; res.wins.push({ line: li, sym: best.sym, n: best.n, win, m: 1 }); res.total += win; }
+    });
+    if (G.scatter) {                                                 // el escarabajo: paga en cualquier sitio
+      res.scat = view.reduce((a, c) => a + c.filter(x => x === G.scatter).length, 0);
+      if (res.scat >= 3) {
+        const w = G.scatPay[Math.min(res.scat, 5) - 3] * bet; res.total += w; res.wins.push({ line: -1, sym: G.scatter, n: res.scat, win: w });
+        if (G.freeSpins) res.newFs = !fs ? G.freeSpins : fs.re ? 0 : (fs.re = true, G.freeSpins);
+      }
+    }
+    if (fs && fs.exp) {                                              // TIRADAS GRATIS: el símbolo expansivo ocupa sus rodillos y paga en las 10 líneas
+      const E = fs.exp, reels = view.map((c, r) => c.includes(E) ? r : -1).filter(r => r >= 0), need = (G.royals || []).includes(E) ? 3 : 2;
+      if (reels.length >= need) {
+        const v = reels.length >= 3 ? G.pay[E][reels.length - 3] : G.pay2[E] || 0, win = v * lineBet * LNS.length;
+        res.expSym = E; res.expReels = reels; res.wins.push({ line: -3, sym: E, n: reels.length, win, m: 1 }); res.total += win;
+      }
+    }
+    if (fs && fs.power && G.pPay) { res.total *= G.pPay; res.wins.forEach(w => { w.win *= G.pPay; }); }
+    if (fs && fs.mult > 1) { res.total *= fs.mult; res.wins.forEach(w => { w.win *= fs.mult; w.m = fs.mult; }); }   // el multiplicador (comprado o de la Cámara)
+    if (G.maxWin) res.total = Math.min(res.total, G.maxWin * bet);
     res.total = Math.round(res.total * 100) / 100;
     return res;
+  }
+  // la CÁMARA DE PIEDRA: 30 baldosas (+1 giro, +1 multiplicador o EMPEZAR), barajadas
+  function slotTiles(G, rnd = Math.random) {
+    const a = []; for (const k in G.tiles) for (let i = 0; i < G.tiles[k]; i++) a.push(k);
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
   }
   // ---------- EL DINERO: la cartera lleva billetes y monedas de verdad (jr.purse: { céntimos: cuántos }) ----------
   const COIN_V = [200, 100, 50, 20, 10, 5, 2, 1], BILL_V = [5000, 2000, 1000, 500], COIN_OK = [200, 100, 50, 20, 10];
@@ -7382,7 +7490,7 @@
   // GIRAR. Se juega con el CRÉDITO que metes (billetes o monedas de la cartera); COBRO lo devuelve en monedas a la cartera.
   let slotUI = null, walletUI = null;
   const SCR_H = 128;                                                 // alto de la pantalla; debajo, el panel
-  const slGeo = G => G.ways ? { x: 80, y: 28, cw: 40, ch: 24, n: 4 } : { x: 80, y: 28, cw: 32, ch: 24, n: 5 };
+  const slGeo = G => G.ways ? { x: 80, y: 28, cw: 40, ch: 24, n: 4 } : G.lines ? { x: 100, y: 28, cw: 40, ch: 24, n: 3 } : { x: 80, y: 28, cw: 32, ch: 24, n: 5 };
   const slMoney = c => (c / 100).toFixed(2).replace('.', ',') + ' €';
   const slCash = () => purseTotal();
   const GAMBLE_MAX = 5;                                              // como mucho 5 aciertos seguidos
@@ -7405,7 +7513,7 @@
   }
   function slotCollect() {                                           // lo pendiente (o lo que había en el riesgo) pasa al crédito
     const U = slotUI; if (!U) return;
-    const amt = U.gam ? U.gam.amt : U.pend || 0;
+    const amt = U.buy ? U.buy.amt : U.gam ? U.gam.amt : U.pend || 0; U.buy = null;
     if (amt > 0) { U.credit += amt; U.win = amt; U.got = { t: tNow, amt }; slotJingle(3); }
     U.pend = 0; U.gam = null;
   }
@@ -7419,16 +7527,17 @@
     for (let i = 0; i < Math.min(16, coins.length); i++) setTimeout(() => sfx(1800 + Math.random() * 900, 0.04, 'triangle', 0.03, 2400), i * 70);   // clinc, clinc...
   }
   function closeSlot() {
-    const U = slotUI; if (!U || U.spin || U.fs) return;
+    const U = slotUI; if (!U || U.spin || U.fs || U.pick || U.book || U.wheel) return;
     slotCashout(); slotUI = null; cv.style.cursor = ''; sfx(300, 0.08, 'square', 0.04, 180); saveAt('llaves');
   }
-  function slotMenu() { const U = slotUI; if (U.spin || U.fs || U.banner || U.gam) return; slotCollect(); U.sel = U.G && U.G.id === 'nilo' ? 1 : 0; U.scr = 'menu'; U.G = null; sfx(300, 0.06, 'square', 0.03, 200); }
+  function slotMenu() { const U = slotUI; if (U.spin || U.fs || U.banner || U.gam || U.buy || U.pick || U.book || U.wheel) return; slotCollect(); U.sel = Math.max(0, SL_IDS.indexOf(U.G && U.G.id)); U.scr = 'menu'; U.G = null; sfx(300, 0.06, 'square', 0.03, 200); }
   function slotEnter(id) {
     const G = SLOT_GAMES[id];
     Object.assign(slotUI, { scr: id, G, L: slGeo(G), pos: G.strips.map((s, r) => (r * 7) % s.length), res: null, spin: null, win: 0, pend: 0, gam: null, shownAt: 0, fs: null, lvlShown: 0, banner: null, info: false, coins: [] });
     sfx(660, 0.08, 'square', 0.04, 990);
   }
   const slBet = () => Math.round(SLOT_BETS[slotUI.bet] * 100);
+  const SL_IDS = ['frutas', 'faraon', 'rueda'];
   // --- meter dinero: el billete por su ranura, las monedas por la suya ---
   function slotInsert(v, from, t) {
     const U = slotUI, bill = isBill(v);
@@ -7447,7 +7556,7 @@
       S.stopAt = S.stopAt.map((T, r) => S.stopped[r] ? T : Math.min(T, e + 0.12 + 0.1 * k++));
       sfx(500, 0.06, 'square', 0.03, 300); return;
     }
-    if (U.banner || U.gam) return;
+    if (U.banner || U.gam || U.buy || U.pick || U.book || U.wheel) return;
     if (U.pend) slotCollect();                                       // girar con un premio pendiente: se cobra al crédito
     const bet = slBet(), free = U.fs && U.fs.left > 0, NR = U.L.n;
     if (!free) {
@@ -7455,8 +7564,13 @@
       U.credit -= bet;
     } else U.fs.left--;
     const res = slotSpin(U.G, bet / 100, U.fs);
-    const anticip = U.G.scatter ? res.grid.slice(0, 3).reduce((a, c) => a + c.filter(s => s === U.G.scatter).length, 0) >= 2 : false;
-    U.spin = { t0: t, res, from: U.pos.slice(), stopAt: [...Array(NR)].map((_, r) => 1.1 + r * 0.45 + (anticip && r >= 3 ? (r - 2) * 1.0 : 0)), stopped: [] };
+    const G0 = U.G, gr = res.grid, cnt = (sym, n) => gr.slice(0, n).filter(c => c.includes(sym)).length;
+    let ant = null;                                                  // desde qué rodillo hay tensión
+    if (G0.full && gr[0].every(x => x === gr[0][0]) && gr[1].every(x => x === gr[0][0])) ant = 2;   // ¡dos columnas iguales: puede ser pantalla llena!
+    else if (G0.bonus && cnt(G0.bonus, 2) === 2) ant = 2;            // dos máscaras: falta la tercera
+    else if (G0.scatter && gr.slice(0, 3).reduce((a, c) => a + c.filter(x => x === G0.scatter).length, 0) >= 2) ant = 3;
+    else if (G0.ways && cnt(G0.wild, 3) === 3) ant = 3;              // tres comodines: ¡el cuarto da 2000x!
+    U.spin = { t0: t, res, from: U.pos.slice(), ant, stopAt: [...Array(NR)].map((_, r) => 1.1 + r * 0.45 + (ant != null && r >= ant ? (r - ant + 1) * 1.3 : 0)), stopped: [] };
     U.res = null; U.win = 0; U.msg = null;
     sfx(220, 0.12, 'sawtooth', 0.03, 440);
   }
@@ -7469,18 +7583,45 @@
     U.coins = U.coins.filter(c => c.y < 200);
     if (U.spin) {
       const S = U.spin, e = t - S.t0;
-      U.G.strips.forEach((st, r) => {
+      slStripsOf(U.G, U.fs).forEach((st, r) => {
         const len = st.length, stop = S.res.stops[r], T = S.stopAt[r];
-        if (e >= T) { U.pos[r] = stop; if (!S.stopped[r]) { S.stopped[r] = true; sfx(160 + r * 20, 0.05, 'square', 0.05, 90); if (S.res.grid[r].includes(U.G.scatter || U.G.wild)) sfx(880, 0.12, 'triangle', 0.04, 1320); } return; }
+        if (e >= T) { U.pos[r] = stop; if (!S.stopped[r]) { S.stopped[r] = true; if (U.G.id === 'faraon') sfx(70 + r * 4, 0.1, 'triangle', 0.09, 38); else sfx(160 + r * 20, 0.05, 'square', 0.05, 90); if (S.res.grid[r].includes(U.G.scatter || U.G.wild)) sfx(880, 0.12, 'triangle', 0.04, 1320); } return; }
         const loops = Math.ceil(T * 9 / len) + 1, dist = ((S.from[r] - stop) % len + len) % len + loops * len, u = e / T, k = 1 - Math.pow(1 - u, 3);
-        U.pos[r] = S.from[r] - dist * k;
+        const prev = U.pos[r]; U.pos[r] = S.from[r] - dist * k;
+        if (Math.floor(prev) !== Math.floor(U.pos[r]) && t - (U.tickAt || 0) > 0.035) { U.tickAt = t; SND.tick(); }
       });
+      if (S.ant != null && S.stopped[S.ant - 1] && !S.antSnd) { S.antSnd = true; SND.anticip(S.stopAt[U.L.n - 1] - (t - S.t0)); }
       if (S.stopped.filter(Boolean).length === U.L.n) slotSettle(t);
     }
     if (U.banner && t > U.banner.until) { const b = U.banner; U.banner = null; if (b.then) b.then(t); }
     if (!U.spin && !U.banner && U.fs && U.res && t - U.shownAt > (U.res.total > 0 ? 2.2 : 1.0)) {   // giros gratis: van solos
       if (U.fs.left > 0) slotStart(t);
-      else { const tot = U.fs.won; U.fs = null; U.lvlShown = 0; U.banner = { text: 'PREMIO DE LOS GIROS', sub: slMoney(tot), until: t + 2.6 }; slotJingle(tot >= slBet() * 10 ? 6 : 3); }
+      else { const tot = U.fs.won, pw = U.fs.power, fr = U.fs.free; U.fs = null; U.lvlShown = 0; U.banner = { text: pw ? 'PREMIO POWER SPINS' : fr ? 'PREMIO TIRADAS GRATIS' : 'PREMIO DE LOS GIROS', sub: slMoney(tot), until: t + 2.6 }; slotJingle(tot >= slBet() * 10 ? 6 : 3); }
+    }
+    const Cn = U.count;                                              // el contador del premio, subiendo con su tintineo
+    if (Cn) { const u = clamp((t - Cn.t0) / Cn.dur, 0, 1); if (t - Cn.last > (Cn.big ? 0.04 : 0.06) && u < 1) { Cn.last = t; sfx(900 + u * 1400, 0.03, 'square', 0.016, 1000 + u * 1400); if (Cn.big) SND.coin(); } if (u >= 1 && !Cn.done) { Cn.done = true; sfx(1760, 0.18, 'triangle', 0.03, 1760); } if (t - Cn.t0 > Cn.dur + 1.5) U.count = null; }
+    const Wh = U.wheel;                                              // LA RUEDA: la luz da vueltas y frena; verde = cobra otra vez y se apaga
+    if (Wh && t > Wh.next) {
+      if (Wh.state === 'wait') { Wh.state = 'spin'; Wh.steps = 10 + Math.floor(Math.random() * 4) + Math.floor(Math.random() * 2) * 4; Wh.k = 0; Wh.next = t; }
+      else if (Wh.state === 'spin') {
+        Wh.cur = (Wh.cur + 1) % 4; Wh.k++; sfx(Wh.segs[Wh.cur] === 'W' ? 1200 : 700, 0.04, 'square', 0.03, 900);
+        if (Wh.k >= Wh.steps) {                                      // se para: ¿verde o rojo?
+          Wh.state = 'land'; Wh.next = t + 1.8;
+          if (Wh.segs[Wh.cur] === 'W') { Wh.segs[Wh.cur] = 'X'; Wh.wins++; Wh.total += Wh.amt; U.credit += Wh.amt; U.win = Wh.total; Wh.hit = true; SND.fanfare(Wh.wins * 3); if (Wh.wins === 3) SND.siren(2.4); }
+          else { Wh.hit = false; SND.aww(); }
+        } else Wh.next = t + 0.05 + Math.pow(Wh.k / Wh.steps, 2) * 0.32;   // cada vez más despacio
+      } else if (Wh.state === 'land') {
+        if (Wh.hit && Wh.wins < 3) { Wh.state = 'wait'; Wh.next = t + 0.6; }
+        else { U.wheel = null; U.banner = { text: Wh.wins === 3 ? '¡LAS TRES OPORTUNIDADES!' : 'FIN DE LA RUEDA', sub: 'TOTAL ' + slMoney(Wh.total), until: t + 2.6 }; slotJingle(Wh.wins ? 5 : 2); }
+      }
+    }
+    const K = U.pick;                                                // la Cámara: al salir EMPEZAR, el Libro Sagrado elige el símbolo
+    if (K && K.done && t > K.done && !U.book) { U.book = { t0: t, sym: U.G.expSyms[Math.floor(Math.random() * U.G.expSyms.length)] }; }
+    if (U.book && t - U.book.t0 < 2.6 && Math.floor((t - U.book.t0) * (14 - (t - U.book.t0) * 5)) !== U.book.k) { U.book.k = Math.floor((t - U.book.t0) * (14 - (t - U.book.t0) * 5)); sfx(600 + Math.random() * 400, 0.03, 'triangle', 0.025, 800); }
+    if (U.book && t - U.book.t0 > 3.6) {
+      const B0 = U.book, K0 = U.pick; U.book = null; U.pick = null;
+      U.fs = { left: K0.spins, won: 0, mult: K0.mult, free: true, exp: B0.sym, lvl: 0 };
+      U.banner = { text: '¡' + K0.spins + ' TIRADAS GRATIS!', sub: (K0.mult > 1 ? 'X' + K0.mult + ' - ' : '') + 'SIMBOLO EXPANSIVO: ' + SL_NAMES[B0.sym], until: t + 2.8 }; slotJingle(6);
     }
     const Gm = U.gam;                                                // el riesgo
     if (Gm && Gm.mode === 'ladder' && !Gm.done && t > Gm.next) { Gm.lit = 1 - Gm.lit; sfx(Gm.lit ? 880 : 440, 0.05, 'square', 0.025, Gm.lit ? 880 : 440); Gm.next = t + 0.14 + Math.random() * 0.08; }   // rápido y algo irregular
@@ -7494,12 +7635,35 @@
     const U = slotUI, S = U.spin, res = S.res; U.spin = null; U.res = res; U.shownAt = t;
     if (U.fs) U.lvlShown = U.fs.lvl;
     const won = Math.round(res.total * 100); U.win = won;
+    if (res.bonus != null && !U.fs) {                                // 3 MÁSCARAS EN LÍNEA: a la Cámara de Piedra (lo ganado en la tirada, al crédito)
+      U.credit += won; U.pick = { tiles: slotTiles(U.G), open: [], spins: 3, mult: 1, cur: 0, done: 0, at: t + 2.4 };
+      U.banner = { text: '¡LA CAMARA DE PIEDRA!', sub: '3 MASCARAS DEL FARAON', until: t + 2.4 };
+      [196, 147, 98].forEach((f, i) => setTimeout(() => sfx(f, 0.5, 'sawtooth', 0.05, f * 0.7), i * 220)); setTimeout(() => { SND.fanfare(0); SND.siren(1.6); }, 700); return;
+    }
+    if (res.mys) [440, 554, 659, 880, 1108].forEach((f, i) => setTimeout(() => sfx(f, 0.25, 'triangle', 0.035, f * 1.01), 800 + i * 70));   // el misterioso se revela: arpegio místico
+    if (res.full && !U.fs) {                                         // PANTALLA LLENA: se cobran las 5 líneas y sale la rueda
+      U.credit += won; U.win = won;
+      U.wheel = { segs: ['W', 'W', 'W', 'S'], amt: won, cur: 0, steps: 0, next: t + 2.6, state: 'wait', wins: 0, total: won, at: 0 };
+      U.banner = { text: '¡PANTALLA LLENA!', sub: slMoney(won) + ' - ¡A LA RUEDA!', until: t + 2.4 }; SND.big(0);
+      for (let i = 0; i < 40; i++) U.coins.push({ x: 160 + (Math.random() - 0.5) * 60, y: 70, vx: (Math.random() - 0.5) * 220, vy: -80 - Math.random() * 160 });
+      return;
+    }
+    if (res.expReels) setTimeout(() => { sfx(45, 0.7, 'sawtooth', 0.09, 28); sfx(70, 0.5, 'square', 0.05, 35); if (TOUCH && navigator.vibrate) try { navigator.vibrate(260); } catch (_) {} }, 600);   // temblor al expandirse
+    if (res.blackout) U.blackout = t;
     if (won > 0) {
       if (U.fs || res.newFs) { U.credit += won; if (U.fs) U.fs.won += won; }   // en los giros gratis va directo al crédito
+      else if (U.G.power && won >= slBet() * 4) U.buy = { amt: won, mi: 0, at: t };   // 4x o más: ¿cobrar o comprar POWER SPINS?
       else U.pend = won;                                             // si no: cobrar o arriesgar
-      const big = won >= slBet() * 10 && !U.fs; slotJingle(big ? 7 : Math.min(5, 2 + res.wins.length));
+      const big = won >= slBet() * 10 && !U.fs && !U.buy, ratio = won / slBet();
+      if (!U.fs) U.streak = (U.streak || 0) + 1;                     // ¡racha!: cada premio seguido suena un poco más alto
+      const base = Math.min(8, Math.max(0, (U.streak || 1) - 1)) + (U.fs ? 2 : 0);
+      if (ratio >= 10) SND.big(base); else if (ratio >= 2) SND.medium(base); else SND.small(base);
+      U.count = { to: won, t0: t, dur: ratio >= 10 ? 2.6 : ratio >= 2 ? 1.4 : 0.6, big: ratio >= 10, last: 0 };
+      if (U.streak >= 2 && !U.fs) U.streakAt = t;
       if (big) { U.banner = { text: '¡GRAN PREMIO!', sub: slMoney(won), until: t + 3.2 }; for (let i = 0; i < 40; i++) U.coins.push({ x: 160 + (Math.random() - 0.5) * 60, y: 90, vx: (Math.random() - 0.5) * 220, vy: -80 - Math.random() * 160 }); }
     }
+    if (won === 0 && !U.fs) { if (U.streak >= 2) sfx(220, 0.3, 'triangle', 0.03, 110); U.streak = 0; }   // se acabó la racha
+    if (won === 0 && S.ant != null) SND.aww();                       // ¡casi!
     if (res.expand.length) sfx(740, 0.25, 'triangle', 0.05, 1110);
     if (res.newFs) {
       const first = !U.fs; if (first) U.fs = { lvl: 0, left: 0, won: 0 };
@@ -7509,7 +7673,42 @@
     }
     if (U.credit < slBet() && !U.fs && won === 0) U.msg = { t, text: U.credit + slCash() < SLOT_BETS[0] * 100 ? 'TE HAS QUEDADO SIN DINERO' : 'METE MAS DINERO O BAJA LA APUESTA' };
   }
-  function slotJingle(n) { for (let i = 0; i < n; i++) setTimeout(() => sfx(523 * Math.pow(1.26, i % 4), 0.09, 'square', 0.035, 523 * Math.pow(1.26, i % 4) * 1.5), i * 90); }
+  // --- EL SONIDO DE LA MÁQUINA: melodías por notas, premios por tamaño, rachas que suben de tono, el "casi" y la sirena ---
+  const NOTE = n => 440 * Math.pow(2, (n - 69) / 12);
+  function slMel(notes, step, type, vol, base, len) {               // una melodía: notas MIDI (null = silencio)
+    notes.forEach((n, i) => { if (n == null) return; const f = NOTE(n + (base || 0)); setTimeout(() => sfx(f, step * (len || 1.6), type || 'square', vol || 0.035, f * 1.003), i * step * 1000); });
+  }
+  const SND = {
+    small: b => { slMel([79, 84], 0.08, 'square', 0.035, b); slMel([91], 0.16, 'triangle', 0.02, b); },                          // ¡ding-ding!
+    medium: b => { slMel([72, 76, 79, 84, 79, 84, 88], 0.075, 'square', 0.038, b); slMel([48, null, 55, null, 60], 0.15, 'triangle', 0.05, b); },
+    big: b => { slMel([60, 64, 67, 72, null, 67, 72, 76, 79, null, 84, 84, 84, 88], 0.095, 'square', 0.045, b); slMel([36, null, 43, null, 48, null, 43, null, 48], 0.19, 'triangle', 0.07, b); SND.siren(2.2); },
+    fanfare: b => { slMel([67, 72, 76, 79, null, 76, 79, null, 84], 0.11, 'square', 0.045, b); slMel([43, null, 48, null, 55, null, 60], 0.22, 'triangle', 0.06, b); },
+    siren: d => { for (let i = 0; i < d / 0.16; i++) setTimeout(() => sfx(i % 2 ? 1320 : 990, 0.15, 'square', 0.022, i % 2 ? 990 : 1320), i * 160); },   // ¡uiu-uiu!, el bote
+    aww: () => { slMel([67, 66, 65], 0.16, 'sawtooth', 0.03, 0, 1.2); setTimeout(() => sfx(NOTE(62), 0.6, 'sawtooth', 0.03, NOTE(55)), 500); },   // el "casi": uooooh...
+    anticip: d => { sfx(110, d, 'sawtooth', 0.022, 440); sfx(55, d, 'triangle', 0.05, 220); },                                          // tensión que sube
+    tick: () => sfx(2200 + Math.random() * 300, 0.012, 'square', 0.01, 1600),                                                       // el traqueteo del rodillo
+    coin: () => sfx(2300 + Math.random() * 700, 0.05, 'triangle', 0.028, 3000)
+  };
+  function slotJingle(n, base) { if (n >= 7) SND.big(base || 0); else if (n >= 5) SND.medium(base || 0); else SND.small(base || 0); }
+  function pickTile(i, t) {                                        // levantar una baldosa de la Cámara
+    const K = slotUI.pick; if (!K || K.done || t < K.at || K.open.includes(i)) return;
+    K.open.push(i); const v = K.tiles[i];
+    if (v === 'spin') { K.spins++; sfx(880, 0.12, 'triangle', 0.04, 1320); }
+    else if (v === 'mult') { K.mult++; sfx(660, 0.15, 'triangle', 0.04, 1320); setTimeout(() => sfx(990, 0.15, 'triangle', 0.04, 1500), 90); }
+    else { K.done = t + 1.4; slotJingle(5); }
+    sfx(120, 0.08, 'square', 0.05, 60);                              // la piedra, al levantarse
+    for (let k = 1; k <= 30; k++) { const j = (i + k) % 30; if (!K.open.includes(j)) { K.cur = j; break; } }
+  }
+  const POWER_MULTS = [1, 2, 3, 5];
+  const buyInfo = (U, mi) => { const m = POWER_MULTS[mi], cost = slBet() * 4 * m, n = Math.floor(U.buy.amt / cost); return { m, cost, n, rest: U.buy.amt - n * cost }; };
+  function buyPower(t) {                                             // comprar los power spins con el premio; lo que sobra, al crédito
+    const U = slotUI, B = U.buy; if (!B) return; const I = buyInfo(U, B.mi); if (!I.n) return;
+    U.buy = null; U.credit += I.rest;
+    U.fs = { left: I.n, won: 0, mult: I.m, power: true, lvl: 0 };
+    U.banner = { text: '¡POWER SPINS!', sub: I.n + (I.n === 1 ? ' GIRO' : ' GIROS') + (I.m > 1 ? ' CON X' + I.m : ''), until: t + 2.2 };
+    slotJingle(6);
+  }
+  function buyCycle() { const U = slotUI, B = U.buy; if (!B) return; for (let k = 1; k <= POWER_MULTS.length; k++) { const mi = (B.mi + k) % POWER_MULTS.length; if (buyInfo(U, mi).n) { B.mi = mi; break; } } sfx(500 + B.mi * 120, 0.05, 'square', 0.03, 700); }
   // --- el riesgo: carta roja/negra (x2) o la escalera (la luz salta entre el escalón de arriba y NADA; de habilidad) ---
   function gambleStart(mode, t) {
     const U = slotUI; if (!U.pend || U.spin || U.banner) return;
@@ -7520,12 +7719,12 @@
     const Gm = slotUI.gam; if (!Gm || Gm.mode !== 'card' || Gm.done) return;
     const suit = Math.floor(Math.random() * 4), rank = 'A23456789TJQK'[Math.floor(Math.random() * 13)], isRed = suit < 2;   // 0 ♥ 1 ♦ 2 ♣ 3 ♠
     Gm.card = { suit, rank }; Gm.hist.unshift(suit); Gm.hist.length = Math.min(Gm.hist.length, 6);
-    if (isRed === red) { Gm.amt *= 2; Gm.wins++; slotJingle(4); } else { Gm.amt = 0; sfx(160, 0.4, 'sawtooth', 0.05, 60); }
+    if (isRed === red) { Gm.amt *= 2; Gm.wins++; SND.medium(Gm.wins * 2); } else { Gm.amt = 0; SND.aww(); }
     Gm.done = t + 1.8;
   }
   function gambleLadder(t) {                                         // se queda lo que esté encendido al pulsar
     const Gm = slotUI.gam; if (!Gm || Gm.mode !== 'ladder' || Gm.done) return;
-    if (Gm.lit) { Gm.amt *= 2; Gm.wins++; slotJingle(4); } else { Gm.amt = 0; sfx(160, 0.4, 'sawtooth', 0.05, 60); }
+    if (Gm.lit) { Gm.amt *= 2; Gm.wins++; SND.medium(Gm.wins * 2); } else { Gm.amt = 0; SND.aww(); }
     Gm.done = t + 1.8;
   }
   // --- los botones de la máquina ---
@@ -7533,30 +7732,38 @@
   function btnRed(t) {                                               // ROJO: entrar al juego elegido / girar / parar la escalera / saltar el cartel
     const U = slotUI; pressFx('girar');
     if (U.wallet) U.wallet = false;
-    if (U.scr === 'menu') { slotEnter(U.sel ? 'nilo' : 'frutas'); return; }
+    if (U.scr === 'menu') { slotEnter(SL_IDS[U.sel]); return; }
     if (U.info) { U.info = false; return; }
+    if (U.pick) { if (!U.banner) pickTile(U.pick.cur, t); return; }
+    if (U.buy) { buyPower(t); return; }
     if (U.gam) { if (U.gam.mode === 'ladder') gambleLadder(t); return; }
     if (U.banner) { U.banner.until = Math.min(U.banner.until, t + 0.2); return; }
     slotStart(t);
   }
   function btnOrange() {                                             // NARANJA: el seleccionador de juegos
     const U = slotUI; pressFx('juego');
-    if (U.scr === 'menu') { U.sel = 1 - U.sel; return; }
+    if (U.scr === 'menu') { U.sel = (U.sel + 1) % SL_IDS.length; return; }
+    if (U.buy) { buyCycle(); return; }
+    if (U.pick) { const K = U.pick; for (let k = 1; k <= 30; k++) { const j = (K.cur + k) % 30; if (!K.open.includes(j)) { K.cur = j; break; } } return; }
     slotMenu();
   }
   function btnGreen() {                                              // VERDE: cobro (en el riesgo, se planta)
     const U = slotUI; pressFx('cobro');
+    if (U.pick || U.book || U.wheel) return;
+    if (U.buy) { slotCollect(); return; }
     if (U.gam) { if (!U.gam.done) slotCollect(); return; }
     if (U.spin || U.fs || U.banner) return;
     slotCashout();
   }
-  function betCycle() { const U = slotUI; if (U.spin || U.fs || U.gam) return; pressFx('apuesta'); U.bet = (U.bet + 1) % SLOT_BETS.length; }
+  function betCycle() { const U = slotUI; if (U.spin || U.fs || U.gam || U.buy || U.pick || U.book || U.wheel) return; pressFx('apuesta'); U.bet = (U.bet + 1) % SLOT_BETS.length; }
   // --- la pantalla (táctil) y el panel ---
   const SL_BTN = {
     back: { x: 4, y: 4, w: 36, h: 12 }, info: { x: 280, y: 4, w: 36, h: 12 },
-    card0: { x: 36, y: 27, w: 116, h: 84 }, card1: { x: 168, y: 27, w: 116, h: 84 },
+    card0: { x: 10, y: 27, w: 96, h: 84 }, card1: { x: 112, y: 27, w: 96, h: 84 }, card2: { x: 214, y: 27, w: 96, h: 84 },
     cobrar: { x: 82, y: 114, w: 48, h: 12 }, carta: { x: 134, y: 114, w: 48, h: 12 }, escal: { x: 186, y: 114, w: 56, h: 12 },
-    rojo: { x: 56, y: 104, w: 60, h: 16 }, negro: { x: 204, y: 104, w: 60, h: 16 }
+    rojo: { x: 56, y: 104, w: 60, h: 16 }, negro: { x: 204, y: 104, w: 60, h: 16 },
+    mx0: { x: 40, y: 46, w: 56, h: 30 }, mx1: { x: 102, y: 46, w: 56, h: 30 }, mx2: { x: 164, y: 46, w: 56, h: 30 }, mx3: { x: 226, y: 46, w: 56, h: 30 },
+    bcob: { x: 70, y: 96, w: 80, h: 15 }, bplay: { x: 170, y: 96, w: 80, h: 15 }
   };
   const slIn = (p, b) => p.x >= b.x && p.x < b.x + b.w && p.y >= b.y && p.y < b.y + b.h;
   function slotHit(p) {
@@ -7567,7 +7774,9 @@
     if (p.y >= SCR_H) return null;
     const pick = ks => ks.find(k => slIn(p, SL_BTN[k])) || null;
     if (U.info) return 'closeInfo';
-    if (U.scr === 'menu') return pick(['card0', 'card1', 'back']);
+    if (U.scr === 'menu') return pick(['card0', 'card1', 'card2', 'back']);
+    if (U.pick) { const i = PICK_RECTS.findIndex(r => slIn(p, r)); return i >= 0 && !U.pick.open.includes(i) ? 'tile' + i : null; }
+    if (U.buy) return pick(['mx0', 'mx1', 'mx2', 'mx3', 'bcob', 'bplay']);
     if (U.gam) return U.gam.done ? null : U.gam.mode === 'card' ? pick(['rojo', 'negro']) : null;
     if (U.pend && !U.spin && !U.banner) { const k = pick(['cobrar', 'carta', 'escal']); if (k) return k; }
     return pick(['back', 'info']);
@@ -7584,7 +7793,9 @@
     if (k === 'apuesta') return betCycle(); if (k === 'cartera') { pressFx('cartera'); U.wallet = !U.wallet; return; }
     if (U.wallet && p.y < SCR_H) { U.wallet = false; return; }       // tocar fuera de la cartera: se cierra
     if (U.info) { U.info = false; return; }
-    if (U.scr === 'menu') { if (k === 'card0' || k === 'card1') { const s = k === 'card1' ? 1 : 0; if (U.sel === s) slotEnter(s ? 'nilo' : 'frutas'); else { U.sel = s; sfx(420, 0.04, 'square', 0.03, 300); } } else if (k === 'back') closeSlot(); return; }
+    if (U.scr === 'menu') { if (k && k.startsWith('card')) { const s = +k[4]; if (U.sel === s) slotEnter(SL_IDS[s]); else { U.sel = s; sfx(420, 0.04, 'square', 0.03, 300); } } else if (k === 'back') closeSlot(); return; }
+    if (U.pick) { if (k && k.startsWith('tile') && !U.banner) { const i = +k.slice(4); U.pick.cur = i; pickTile(i, t); } return; }
+    if (U.buy) { if (k && k[0] === 'm' && k[1] === 'x') { const mi = +k[2]; if (buyInfo(U, mi).n) { U.buy.mi = mi; sfx(500 + mi * 120, 0.05, 'square', 0.03, 700); } } else if (k === 'bcob') slotCollect(); else if (k === 'bplay') buyPower(t); return; }
     if (U.gam) { if (k === 'rojo') gambleCard(true, t); else if (k === 'negro') gambleCard(false, t); return; }
     if (U.banner) { U.banner.until = Math.min(U.banner.until, t + 0.2); return; }
     if (k === 'cobrar') slotCollect(); else if (k === 'carta') gambleStart('card', t); else if (k === 'escal') gambleStart('ladder', t);
@@ -7607,8 +7818,10 @@
     if (code === 'KeyX') { btnGreen(); return true; }
     if (code === 'KeyB') { const v = BILL_V.find(v => purse()[v]); if (v) slotInsert(v, { x: 160, y: 60 }, t); return true; }
     if (code === 'KeyM') { const v = COIN_OK.find(v => purse()[v]); if (v) slotInsert(v, { x: 160, y: 60 }, t); return true; }
-    if (code === 'ArrowUp' || code === 'ArrowDown') { if (!U.spin && !U.fs && !U.gam) U.bet = clamp(U.bet + (code === 'ArrowUp' ? 1 : -1), 0, SLOT_BETS.length - 1); return true; }
+    if ((code === 'ArrowUp' || code === 'ArrowDown') && !U.pick) { if (!U.spin && !U.fs && !U.gam) U.bet = clamp(U.bet + (code === 'ArrowUp' ? 1 : -1), 0, SLOT_BETS.length - 1); return true; }
     if (U.scr === 'menu') { if (code === 'ArrowLeft' || code === 'ArrowRight') btnOrange(); return true; }
+    if (U.pick) { const K = U.pick, d = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -10, ArrowDown: 10 }[code]; if (d) K.cur = (K.cur + d + 30) % 30; return true; }
+    if (U.buy) { if (code === 'ArrowLeft' || code === 'ArrowRight') buyCycle(); else if (code === 'KeyC') slotCollect(); return true; }
     if (U.gam) { if (U.gam.mode === 'card') { if (code === 'ArrowLeft' || code === 'KeyR') gambleCard(true, t); else if (code === 'ArrowRight' || code === 'KeyN') gambleCard(false, t); } if (code === 'KeyC' && !U.gam.done) slotCollect(); return true; }
     if (U.pend && !U.spin && !U.banner) { if (code === 'KeyC') slotCollect(); else if (code === 'KeyR') gambleStart('card', t); else if (code === 'KeyE') gambleStart('ladder', t); }
     if (code === 'KeyI') { U.info = !U.info; return true; }
@@ -7668,6 +7881,29 @@
         slEll(x, y - 1, 5.5, 7, '#a87010'); slEll(x, y - 2, 5, 6.4, '#f4c838'); R(-4, -4, 3, 1, '#141418'); R(1, -4, 3, 1, '#141418'); PP(x - 5, y - 3, '#141418'); PP(x + 4, y - 3, '#141418'); R(-1, -2, 2, 3, '#c89020'); R(-2, 2, 4, 1, '#a83a2a'); R(-1, 5, 2, 5, '#2a4ab8'); R(-1, 5, 1, 5, '#f4c838'); break;
       case 'S': slPoly([[x, y - 12], [x + 13, y + 9], [x - 13, y + 9]], '#7a5a2a'); slPoly([[x, y - 11], [x + 12, y + 8], [x, y + 8]], '#c8984a'); slPoly([[x, y - 11], [x, y + 8], [x - 12, y + 8]], '#e8c070');
         R(-3, 1, 6, 7, '#2a1a0a'); R(-2, 2, 4, 6, '#4a2a0a'); slEll(x + 9, y - 10, 3, 3, '#ffd84a', 0.9); R(-13, 9, 26, 1, '#5a3a1a'); break;
+      case 'SA': slEll(x, y, 9.5, 10.5, '#06104a'); slEll(x, y, 8.5, 9.5, '#1a46c8'); slEll(x - 1, y - 2, 6, 6.5, '#3a6ae8'); slPoly([[x - 4, y - 7], [x + 4, y - 7], [x + 6, y - 2], [x - 6, y - 2]], '#7aa0ff'); R(-2, -6, 4, 2, '#c8dcff'); R(-5, 3, 3, 3, '#0e2a8a'); PP(x + 4, y - 8, '#ffffff'); break;
+      case 'EM': slPoly([[x - 5, y - 10], [x + 5, y - 10], [x + 10, y - 5], [x + 10, y + 5], [x + 5, y + 10], [x - 5, y + 10], [x - 10, y + 5], [x - 10, y - 5]], '#064a1a');
+        slPoly([[x - 4, y - 9], [x + 4, y - 9], [x + 9, y - 4], [x + 9, y + 4], [x + 4, y + 9], [x - 4, y + 9], [x - 9, y + 4], [x - 9, y - 4]], '#14a844'); R(-5, -6, 10, 12, '#2ad860'); R(-3, -4, 6, 8, '#6aff9a'); R(-3, -4, 6, 2, '#c8ffd8'); PP(x + 6, y - 7, '#ffffff'); break;
+      case 'RU': slEll(x, y + 1, 10, 9.5, '#4a0610'); slEll(x, y + 1, 9, 8.5, '#c8101e'); slPoly([[x - 6, y - 5], [x + 6, y - 5], [x + 9, y + 1], [x, y + 9], [x - 9, y + 1]], '#e8243a'); slPoly([[x - 4, y - 5], [x + 4, y - 5], [x + 2, y - 1], [x - 2, y - 1]], '#ff8a96'); PP(x - 5, y - 4, '#ffffff'); PP(x + 6, y - 6, '#ffffff'); break;
+      case 'DI': slPoly([[x - 12, y - 3], [x - 7, y - 10], [x + 7, y - 10], [x + 12, y - 3], [x, y + 12]], '#3a5a7a');
+        slPoly([[x - 11, y - 3], [x - 6, y - 9], [x + 6, y - 9], [x + 11, y - 3]], '#e8f4ff'); slPoly([[x - 11, y - 3], [x + 11, y - 3], [x, y + 10]], '#b8d4f0');
+        slPoly([[x - 5, y - 3], [x + 5, y - 3], [x, y + 10]], '#d8ecff'); R(-6, -9, 12, 1, '#ffffff'); R(-11, -3, 22, 1, '#ffffff', 0.8);
+        if (Math.sin((t || 0) * 4 + x) > 0.6) { PP(x + 7, y - 11, '#ffffff'); PP(x + 8, y - 12, '#ffffff', 0.6); } break;
+      case 'M': {                                                    // el MISTERIOSO: la placa de oro del faraón con su "?"
+        const tt = t || 0; R(-13, -11, 26, 22, '#3a2004'); R(-12, -10, 24, 20, '#a8780e'); R(-11, -9, 22, 18, '#f4c838'); R(-11, -9, 22, 2, '#fff0a0'); R(-11, 7, 22, 2, '#c8901a');
+        slPoly([[x, y - 7], [x + 8, y + 6], [x - 8, y + 6]], '#c8901a'); slPoly([[x, y - 6], [x + 6, y + 5], [x - 6, y + 5]], '#e8b830');   // una pirámide grabada
+        slTxt('?', x + 1, y - 5, '#3a1a00', 2, true); slTxt('?', x, y - 6, '#fff4c0', 2, true);
+        const sp = Math.floor(tt * 4) % 4; PP(x - 10 + sp * 6, y - 8, '#ffffff'); break; }
+      case 'D7': for (const dx of [-6, 6]) { slTxt('7', x + dx + 1, y - 9, '#3a0404', 2, true); slTxt('7', x + dx - 1, y - 10, '#ffd84a', 2, true); slTxt('7', x + dx, y - 10, '#e0101a', 2, true); } R(-9, -10, 2, 2, '#ffffff', 0.7); break;   // el DOBLE 7
+      case 'PY': {                                                    // la PIRÁMIDE DORADA (comodín)
+        const tt = t || 0; slPoly([[x, y - 12], [x + 14, y + 9], [x - 14, y + 9]], '#5a3a04'); slPoly([[x, y - 11], [x + 13, y + 8], [x, y + 8]], '#c8901a'); slPoly([[x, y - 11], [x, y + 8], [x - 13, y + 8]], '#f4c838');
+        for (let k = 0; k < 3; k++) PR(-10 + k * 3 + (k ? 0 : 0), 2 + k * 2, 20 - k * 6, 1, '#a8700a', 0.6);
+        slPoly([[x, y - 12], [x + 3, y - 7], [x - 3, y - 7]], Math.sin(tt * 5) > 0 ? '#ffffff' : '#fff0a0');   // la punta, brillando
+        R(-12, 8, 24, 6, '#5a0a0a'); R(-12, 8, 24, 1, '#c83a3a'); slTxt('WILD', x, 8, '#ffd84a', 1, true); break; }
+      case 'SC': {                                                    // el ESCARABAJO (scatter)
+        R(-1, -12, 2, 3, '#4a6a10'); slEll(x, y - 8, 4, 3, '#2a4a0a'); slEll(x, y - 8, 3, 2.2, '#4aa83a');
+        for (const s2 of [-1, 1]) { ctx.strokeStyle = '#2a3a0a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + s2 * 4, y - 3); ctx.lineTo(x + s2 * 9, y - 6); ctx.moveTo(x + s2 * 4, y + 1); ctx.lineTo(x + s2 * 10, y + 1); ctx.moveTo(x + s2 * 4, y + 5); ctx.lineTo(x + s2 * 9, y + 9); ctx.stroke(); }
+        slEll(x, y + 1, 7.5, 9, '#1a3a0a'); slEll(x - 3, y + 1, 3.6, 8, '#3a9a5a'); slEll(x + 3, y + 1, 3.6, 8, '#2a7a4a'); R(0, -6, 1, 15, '#0a2a0a'); R(-5, -3, 1, 5, '#a8ffc0'); PP(x + 4, y - 3, '#ffd84a'); PP(x - 4, y + 4, '#ffd84a'); break; }
       case 'WS': { // el escarabajo de oro (comodín del Nilo)
         R(-1, -12, 2, 3, '#8a6a10'); slEll(x, y - 8, 4, 3, '#8a6a10'); slEll(x, y - 8, 3, 2.2, '#f4c838');
         for (const s of [-1, 1]) { ctx.strokeStyle = '#8a6a10'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + s * 4, y - 3); ctx.lineTo(x + s * 9, y - 6); ctx.moveTo(x + s * 4, y + 1); ctx.lineTo(x + s * 10, y + 1); ctx.moveTo(x + s * 4, y + 5); ctx.lineTo(x + s * 9, y + 9); ctx.stroke(); }
@@ -7675,17 +7911,38 @@
         R(-12, 7, 24, 7, '#1a3a8a'); R(-12, 7, 24, 1, '#4a7ad8'); slTxt('WILD', x, 7, '#f4c838', 1, true); break; }
     }
   }
-  const slShow = (G, s) => (G.id === 'nilo' && s === 'W') ? 'WS' : s;
+  const SL_FAR = { W: 'PY', S: 'SC', B: 'MA' }, slShow = (G, s) => (G.id === 'faraon' && SL_FAR[s]) || (s === 'GE' ? 'EM' : s);
   function slBg(G, t) {
+    if (G.id === 'rueda') {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#5a0a0a'); g.addColorStop(1, '#140404'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      for (const y of [24, 108]) { PR(0, y, W, 2, '#c8ccd2', 0.5); PR(0, y, W, 1, '#ffffff', 0.4); }   // tiras cromadas
+      for (let i = 0; i < 9; i++) for (const sx of [14, 306]) slEll(sx, 30 + i * 9, 2, 2, Math.floor(t * 5 + i + sx) % 3 ? '#5a2a0a' : '#ffd84a');   // las bombillas de los lados
+      for (let i = 0; i < 4; i++) { const a = 0.2 + 0.1 * Math.sin(t * 2 + i); PR(36 + i * 6, 36, 2, 64, '#ffffff', a * 0.3); PR(266 + i * 6, 36, 2, 64, '#ffffff', a * 0.3); }
+      return;
+    }
     if (G.id === 'frutas') {
       const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0a1a6a'); g.addColorStop(0.6, '#04082a'); g.addColorStop(1, '#020414'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
       for (let i = 0; i < 9; i++) { const y = 20 + i * 12 + ((t * 8) % 12); PR(0, y, W, 1, '#2a5ae8', 0.12); }   // las rayas que bajan
       for (let i = 0; i < 24; i++) PR((i * 41 + 7) % W, (i * 23) % 100, 1, 1, '#a8c8ff', 0.3 + 0.3 * Math.sin(t * 3 + i));
-    } else {
-      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0a1430'); g.addColorStop(1, '#2a1a0a'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-      for (let i = 0; i < 40; i++) PR((i * 53) % W, (i * 29) % 60, 1, 1, '#f4f0d0', 0.3 + 0.3 * Math.sin(t * 2 + i));
-      slPoly([[20, 128], [58, 80], [96, 128]], '#3a2a14'); slPoly([[230, 128], [276, 70], [322, 128]], '#3a2a14');
-      for (let x = 4; x < W; x += 16) for (let y = 120; y < H; y += 12) PR(x + ((y / 12) % 2) * 8, y, 6, 1, '#c8984a', 0.12);
+    } else {                                                         // la TUMBA: paredes con jeroglíficos que brillan un poco y dos dioses arriba
+      const pw = slotUI && slotUI.fs && slotUI.fs.power;
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, pw ? '#2a1a06' : '#1a1008'); g.addColorStop(1, '#040302'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      for (let row = 0; row < 7; row++) for (let i = 0; i < 26; i++) {
+        const x = 4 + i * 12 + (row % 2) * 6, y = 6 + row * 17, h = (i * 7 + row * 3) % 5, a = 0.08 + 0.06 * Math.sin(t * 1.3 + i * 0.7 + row);
+        if (h === 0) { PR(x, y, 1, 6, '#c8984a', a); PR(x - 2, y + 1, 5, 1, '#c8984a', a); } else if (h === 1) { slEll(x, y + 3, 2, 2, '#c8984a', a); PR(x - 1, y + 5, 3, 1, '#c8984a', a); }
+        else if (h === 2) { PR(x - 2, y + 2, 5, 1, '#c8984a', a); PR(x, y, 1, 6, '#c8984a', a * 0.7); } else if (h === 3) { PR(x - 2, y, 4, 1, '#c8984a', a); PR(x - 2, y + 2, 4, 1, '#c8984a', a); PR(x - 2, y + 4, 4, 1, '#c8984a', a); }
+        else { slPoly([[x, y], [x + 3, y + 5], [x - 3, y + 5]], 'rgba(200,152,74,' + a + ')'); }
+      }
+      for (const [bx, f] of [[36, 1], [284, -1]]) {                    // los dioses con cabeza de chacal, de perfil
+        slPoly([[bx - 6 * f, 26], [bx - 6 * f, 14], [bx - 2 * f, 8], [bx - 3 * f, 1], [bx, 6], [bx + 1 * f, 0], [bx + 3 * f, 7], [bx + 11 * f, 11], [bx + 4 * f, 15], [bx + 5 * f, 26]], '#120a04');
+        PP(bx + 2 * f, 10, Math.sin(t * 2) > 0 ? '#ffd84a' : '#c8901a'); PR(bx - 6 * f + (f < 0 ? -11 : 0), 18, 11, 2, '#c8901a', 0.6);
+      }
+      if (pw) for (let i = 0; i < 14; i++) PR((i * 47 + t * 30) % W, (i * 31) % 120, 1, 1, '#ffd84a', 0.5);   // en los power spins, polvo de oro
+      for (const tx of [14, 306]) {                                   // las ANTORCHAS: soporte y fuego que baila
+        const ty = 64, gl = ctx.createRadialGradient(tx, ty - 8, 1, tx, ty - 8, 28); gl.addColorStop(0, 'rgba(255,170,60,' + (0.28 + 0.06 * Math.sin(t * 13)) + ')'); gl.addColorStop(1, 'rgba(255,120,30,0)'); ctx.fillStyle = gl; ctx.fillRect(tx - 28, ty - 36, 56, 56);
+        PR(tx - 1, ty - 2, 3, 14, '#4a2a10'); PR(tx - 3, ty - 3, 7, 3, '#6a4a20');
+        for (let k = 0; k < 7; k++) { const ph = (t * 2.2 + k * 0.37) % 1, fx = tx + Math.sin(t * 9 + k * 2) * 2 * (1 - ph), fy = ty - 4 - ph * 14; slEll(fx, fy, 3 * (1 - ph) + 0.5, 4 * (1 - ph) + 0.5, ph < 0.4 ? '#fff0a0' : ph < 0.7 ? '#ffa83a' : '#d8401a', 0.9 - ph * 0.6); }
+      }
     }
   }
   function slFrame(x, y, w, h, gold) { PR(x - 3, y - 3, w + 6, h + 6, '#000'); PR(x - 2, y - 2, w + 4, h + 4, gold ? '#c8901a' : '#8a8e94'); PR(x - 2, y - 2, w + 4, 1, gold ? '#ffe08a' : '#e8ecf0'); PR(x - 1, y - 1, w + 2, h + 2, '#2a1a08'); }
@@ -7696,17 +7953,17 @@
     slTxt(text, b.x + b.w / 2, b.y + Math.round(b.h / 2) - 3, on ? '#ffffff' : '#9a9aa2', 1, true, '#000');
   }
   const SL_GLOWC = {};
-  const SL_GLOW = { CH: '#ff2a3a', LE: '#ffe84a', OR: '#ff9a2a', PL: '#4a7aff', GR: '#9a6aff', ME: '#4aff6a', BE: '#ffd84a', SE: '#ff3a3a', W: '#ffd84a' };
+  const SL_GLOW = { FW: '#ffd84a', FS: '#e8b830', FB: '#4a7aff', SA: '#3a7aff', EM: '#3aff7a', RU: '#ff2a3a', DI: '#e8f4ff', M: '#ffd84a', T: '#c8a040', J: '#c8a040', Q: '#c8a040', K: '#c8a040', A: '#c8a040', CH: '#ff2a3a', LE: '#ffe84a', OR: '#ff9a2a', PL: '#4a7aff', GR: '#9a6aff', ME: '#4aff6a', BE: '#ffd84a', SE: '#ff3a3a', W: '#ffd84a' };
   function drawSymGlow(G, id, x, y, t) {                            // las frutas de los 90: con su brillo de neón alrededor
-    if (G.id !== 'frutas') { drawSym(slShow(G, id), x, y, t); return; }
-    let gc = SL_GLOWC[id];
+    if (G.id !== 'frutas' && G.id !== 'faraon') { drawSym(slShow(G, id), x, y, t); return; }
+    let gc = SL_GLOWC[G.id + id];
     if (!gc) {                                                       // el brillo se pinta una vez (shadowBlur es caro) y se reutiliza
-      gc = SL_GLOWC[id] = document.createElement('canvas'); gc.width = 48; gc.height = 40;   // un halo suave del color de la fruta
-      const g = gc.getContext('2d'), rg = g.createRadialGradient(24, 20, 2, 24, 20, 20), c = SL_GLOW[id] || '#ffffff';
+      gc = SL_GLOWC[G.id + id] = document.createElement('canvas'); gc.width = 48; gc.height = 40;   // un halo suave del color de la fruta
+      const g = gc.getContext('2d'), rg = g.createRadialGradient(24, 20, 2, 24, 20, 20), c = (G.id === 'faraon' && SL_GLOW['F' + id]) || SL_GLOW[id] || '#ffffff';
       rg.addColorStop(0, c + 'b0'); rg.addColorStop(0.45, c + '60'); rg.addColorStop(1, c + '00'); g.fillStyle = rg; g.fillRect(0, 0, 48, 40);
     }
     ctx.globalAlpha = 0.55; ctx.drawImage(gc, x - 22, y - 15, 44, 30); ctx.globalAlpha = 1;
-    drawSym(id, x, y, t);
+    drawSym(slShow(G, id), x, y, t);
   }
   const SUITS = ['.X.X.|XXXXX|XXXXX|.XXX.|..X..', '..X..|.XXX.|XXXXX|.XXX.|..X..', '..X..|.XXX.|X.X.X|XXXXX|..X..', '..X..|.XXX.|XXXXX|XXXXX|..X..'];
   function drawSuit(i, x, y, s) { SUITS[i].split('|').forEach((row, ry) => [...row].forEach((c, rx) => { if (c === 'X') PR(x + rx * s, y + ry * s, s, s, i < 2 ? '#d4161e' : '#141418'); })); }
@@ -7758,30 +8015,93 @@
     slTxt(TOUCH ? 'TOCA FUERA PARA CERRAR' : 'Q O ESC: CERRAR', 160, 122, '#c8c8d0', 1, true, '#000');
     ctx.restore();
   }
+  // --- acabados de máquina: bombillas que corren, cristal con reflejo, placas cromadas, rayos de premio ---
+  function slMarquee(x, y, w, h, t, step, c1, c2) {                  // bombillas alrededor de un rectángulo, en cadena
+    step = step || 8; const pts = [];
+    for (let i = 0; i <= w; i += step) pts.push([x + i, y]); for (let j = step; j <= h; j += step) pts.push([x + w, y + j]);
+    for (let i = w - step; i >= 0; i -= step) pts.push([x + i, y + h]); for (let j = h - step; j > 0; j -= step) pts.push([x, y + j]);
+    pts.forEach(([px, py], i) => { const on = (i + Math.floor(t * 10)) % 4 === 0; slEll(px, py, 1.6, 1.6, '#3a2008'); slEll(px, py, 1.1, 1.1, on ? (c1 || '#fff4a0') : (c2 || '#8a5a10')); if (on) slEll(px, py, 2.6, 2.6, '#ffe070', 0.25); });
+  }
+  function slSheen(x, y, w, h, t) {                                  // el cristal: un brillo diagonal que pasa de vez en cuando y un reflejo fijo
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    ctx.globalAlpha = 0.07; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w * 0.45, y); ctx.lineTo(x + w * 0.25, y + h); ctx.lineTo(x, y + h); ctx.fill();
+    const k = ((t * 0.35) % 2.2) - 0.6; ctx.globalAlpha = 0.18; ctx.beginPath(); ctx.moveTo(x + k * w, y); ctx.lineTo(x + k * w + 10, y); ctx.lineTo(x + k * w - 14, y + h); ctx.lineTo(x + k * w - 24, y + h); ctx.fill();
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+  function slPlate(x, y, w, h, c1, c2, edge) {                       // placa con canto cromado (o dorado) y relieve
+    PR(x - 2, y - 2, w + 4, h + 4, '#000', 0.6); PR(x - 1, y - 1, w + 2, h + 2, edge || '#c8ccd2'); PR(x - 1, y - 1, w + 2, 1, '#ffffff', 0.7); PR(x - 1, y + h, w + 2, 1, '#000', 0.4);
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, c1); g.addColorStop(1, c2); ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    PR(x, y, w, 1, '#ffffff', 0.18);
+  }
+  function slRays(cx, cy, t, col, n, r) {                            // rayos que giran detrás de un premio
+    n = n || 12; r = r || 120; ctx.save(); ctx.globalAlpha = 0.14; ctx.fillStyle = col;
+    for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + t * 0.6; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a - 0.12) * r, cy + Math.sin(a - 0.12) * r); ctx.lineTo(cx + Math.cos(a + 0.12) * r, cy + Math.sin(a + 0.12) * r); ctx.fill(); }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+  function slNeon(txt, x, y, col, sc, t) {                           // letras de neón: halo y algún parpadeo
+    const on = !(Math.sin(t * 13) > 0.97 || (Math.floor(t * 3) % 23 === 0 && Math.sin(t * 40) > 0));
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) slTxt(txt, x + dx, y + dy, col, sc, true);
+    ctx.globalAlpha = on ? 1 : 0.4; slTxt(txt, x, y, '#ffffff', sc, true); ctx.globalAlpha = 1;
+  }
+  function slSparkles(x, y, w, h, t, n) { for (let i = 0; i < (n || 10); i++) { const ph = (t * 1.3 + i * 0.37) % 1, px = x + ((i * 53) % w), py = y + ((i * 29 + t * 8) % h); if (ph < 0.5) { const a = 1 - ph * 2; PR(px, py - 1, 1, 3, '#ffffff', a); PR(px - 1, py, 3, 1, '#ffffff', a); } } }
   function drawSlotMenu(t) {
     const U = slotUI;
     const g = ctx.createLinearGradient(0, 0, 0, SCR_H); g.addColorStop(0, '#1a0a14'); g.addColorStop(1, '#0a0608'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, SCR_H);
-    for (let i = 0; i < 30; i++) PR(10 + i * 10, 2, 4, 2, Math.floor(t * 4 + i) % 3 ? '#5a1a1a' : '#ffd84a');   // las bombillas del marco
-    slTxt('ELIGE UN JUEGO', 160, 8, '#ffd84a', 2, true, '#5a0a0a');
-    [['frutas', SL_BTN.card0, '#0a1450', '#4a8aff'], ['nilo', SL_BTN.card1, '#0a2a6a', '#f4c838']].forEach(([id, b, c1, c2], i) => {
+    for (let i = 0; i < 8; i++) PR(0, 20 + i * 13, W, 6, '#ffffff', 0.012);                    // las rayas de la pantalla
+    slMarquee(3, 3, W - 6, SCR_H - 8, t, 8);
+    slNeon('ELIGE UN JUEGO', 160, 8, '#ff3a8a', 2, t);
+    [['frutas', SL_BTN.card0, '#0a1450', '#4a8aff'], ['faraon', SL_BTN.card1, '#2a1a06', '#f4c838'], ['rueda', SL_BTN.card2, '#f4ecd8', '#c8ccd2']].forEach(([id, b, c1, c2], i) => {
       const G = SLOT_GAMES[id], sel = U.sel === i, blink = Math.floor(t * 4) % 2;
       if (sel) PR(b.x - 4, b.y - 4, b.w + 8, b.h + 8, blink ? '#ffffff' : '#ff8a1a');
       PR(b.x - 2, b.y - 2, b.w + 4, b.h + 4, c2); PR(b.x, b.y, b.w, b.h, c1);
       ctx.save(); ctx.beginPath(); ctx.rect(b.x, b.y, b.w, b.h); ctx.clip();
-      const y = b.y - 9;
-      if (id === 'frutas') { drawSymGlow(G, 'SE', b.x + 58, y + 34, t); drawSymGlow(G, 'CH', b.x + 24, y + 40, t); drawSymGlow(G, 'W', b.x + 92, y + 40, t); drawSymGlow(G, 'GR', b.x + 58, y + 60, t); }
-      else { drawSym('S', b.x + 58, y + 36, t); drawSym('WS', b.x + 26, y + 42, t); drawSym('MA', b.x + 92, y + 42, t); drawSym('AN', b.x + 58, y + 62, t); }
+      const y = b.y - 9, cx = b.x + b.w / 2;
+      if (id === 'frutas') { drawSymGlow(G, 'SE', cx, y + 34, t); drawSymGlow(G, 'CH', cx - 30, y + 40, t); drawSymGlow(G, 'W', cx + 30, y + 40, t); drawSymGlow(G, 'GR', cx, y + 60, t); }
+      else if (id === 'faraon') { drawSymGlow(G, 'DI', cx, y + 34, t); drawSymGlow(G, 'RU', cx - 30, y + 42, t); drawSymGlow(G, 'M', cx + 30, y + 42, t); drawSymGlow(G, 'EM', cx, y + 60, t); }
+      else { drawSym('D7', cx, y + 34, t); drawSym('ME', cx - 30, y + 44, t); drawSym('BE', cx + 30, y + 44, t); drawSym('CH', cx, y + 60, t); }
       ctx.restore();
+      slSheen(b.x, b.y, b.w, 62, t + i * 0.7);                       // el cristal de cada tarjeta
+      PR(b.x, b.y, b.w, 1, '#ffffff', 0.4); PR(b.x, b.y, 1, b.h, '#ffffff', 0.2);
+      if (sel) slSparkles(b.x, b.y, b.w, 60, t, 6);
       if (!sel) PR(b.x, b.y, b.w, b.h, '#000', 0.35);
       PR(b.x, b.y + 62, b.w, 22, '#000', 0.6); slTxt(G.name, b.x + b.w / 2, b.y + 64, '#ffffff', 1, true, '#000');
-      slTxt(id === 'frutas' ? '81 FORMAS - X2 X4 X8' : '12 GIROS GRATIS', b.x + b.w / 2, b.y + 74, c2, 1, true);
+      slTxt(id === 'frutas' ? '81 FORMAS' : id === 'faraon' ? 'POWER SPINS' : 'RUEDA X3', b.x + b.w / 2, b.y + 74, id === 'rueda' ? '#ffd84a' : c2, 1, true);
     });
     slTxt('NARANJA: CAMBIAR   ROJO: JUGAR', 160, 117, '#c8c8d0', 1, true, '#000');
     slButton(SL_BTN.back, 'SALIR', '#8a1a1a', true, U.hover === 'back');
   }
+  function drawBuy(t) {                                             // ¿cobrar o comprar POWER SPINS?
+    const U = slotUI, B = U.buy;
+    const g = ctx.createLinearGradient(0, 0, 0, SCR_H); g.addColorStop(0, '#2a1a06'); g.addColorStop(1, '#0a0602'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, SCR_H);
+    slRays(160, 14, t, '#ffd84a', 16, 200); slPlate(8, 3, 304, 120, '#2a1a08', '#0e0804', '#e8b830'); slMarquee(10, 5, 300, 116, t, 10);
+    slTxt('¡PREMIO! ' + slMoney(B.amt), 160, 8, '#ffd84a', 2, true, '#5a2a04');
+    slTxt('COBRALO O COMPRA POWER SPINS (4X LA APUESTA CADA UNO)', 160, 26, '#e8d8b0', 1, true);
+    slTxt('MENOS GIROS, MAS MULTIPLICADOR', 160, 35, '#c8a060', 1, true);
+    POWER_MULTS.forEach((m, i) => {
+      const b = SL_BTN['mx' + i], I = buyInfo(U, i), on = I.n > 0, sel = B.mi === i;
+      if (sel) PR(b.x - 2, b.y - 2, b.w + 4, b.h + 4, Math.floor(t * 4) % 2 ? '#ffffff' : '#ff8a1a');
+      PR(b.x, b.y, b.w, b.h, on ? '#3a2408' : '#1a1410'); PR(b.x + 1, b.y + 1, b.w - 2, 1, '#c8984a', on ? 0.8 : 0.2);
+      slTxt('X' + m, b.x + b.w / 2, b.y + 4, on ? '#ffd84a' : '#5a4a3a', m > 1 ? 2 : 2, true, '#000');
+      slTxt(on ? I.n + (I.n === 1 ? ' GIRO' : ' GIROS') : 'NO LLEGA', b.x + b.w / 2, b.y + 20, on ? '#ffffff' : '#5a4a3a', 1, true);
+    });
+    const I = buyInfo(U, B.mi);
+    slTxt(I.n + (I.n === 1 ? ' GIRO X' : ' GIROS X') + I.m + '  -  CADA GIRO ' + slMoney(I.cost) + (I.rest ? '  -  SOBRAN ' + slMoney(I.rest) : ''), 160, 84, '#e8d8b0', 1, true);
+    slButton(SL_BTN.bcob, 'COBRAR', '#1a8a2a', true, U.hover === 'bcob'); slButton(SL_BTN.bplay, 'POWER SPINS', '#c8101a', true, U.hover === 'bplay');
+    slTxt('NARANJA: MULTIPLICADOR   ROJO: JUGAR   VERDE: COBRAR', 160, 115, '#8a7a5a', 1, true);
+  }
   function drawGamble(t) {
     const U = slotUI, Gm = U.gam;
-    const g = ctx.createLinearGradient(0, 0, 0, SCR_H); g.addColorStop(0, '#0a0a3a'); g.addColorStop(1, '#14041a'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, SCR_H);
+    if (Gm.mode === 'card') {                                        // EL TAPETE: fieltro verde con su textura, el mazo y el ribete
+      const g = ctx.createRadialGradient(160, 64, 10, 160, 64, 200); g.addColorStop(0, '#1a7a3a'); g.addColorStop(1, '#063a16'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, SCR_H);
+      for (let y = 0; y < SCR_H; y += 6) for (let x = (y / 6) % 2 * 3; x < W; x += 6) PP(x, y, '#000', 0.08);
+      ctx.strokeStyle = 'rgba(255,230,160,0.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(160, 74, 128, 44, 0, 0, Math.PI * 2); ctx.stroke();
+      for (let k = 0; k < 5; k++) { PR(206 + k, 52 - k, 30, 44, '#000', 0.3); PR(205 + k, 51 - k, 30, 44, '#f4f4f0'); PR(207 + k, 53 - k, 26, 40, k === 4 ? '#c8101a' : '#a80a14'); }   // el mazo
+      for (let y = 0; y < 38; y += 4) for (let x = (y / 4) % 2 * 2; x < 24; x += 4) PR(212 + x, 50 + y, 2, 2, '#ffffff', 0.25);
+      for (const [cx2, cy2, c] of [[78, 96, '#c8101a'], [86, 92, '#1a4ab8'], [70, 92, '#141418']]) { slEll(cx2, cy2 + 1, 7, 3, '#000', 0.3); slEll(cx2, cy2, 7, 3, c); slEll(cx2, cy2 - 1, 5, 2, '#ffffff', 0.5); slEll(cx2, cy2 - 1, 3, 1.2, c); }   // fichas
+    } else {                                                         // LA ESCALERA: mueble oscuro con marco cromado
+      const g = ctx.createLinearGradient(0, 0, 0, SCR_H); g.addColorStop(0, '#1a0a2a'); g.addColorStop(1, '#08040e'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, SCR_H);
+      slPlate(86, 18, 148, 96, '#121226', '#08080e'); slMarquee(84, 16, 152, 100, t, 8);
+    }
     if (Gm.mode === 'card') {
       slTxt('RIESGO: ¿ROJA O NEGRA?', 160, 4, '#ffd84a', 2, true, '#5a0a0a');
       slTxt('EN JUEGO: ' + slMoney(Gm.amt), 160, 22, '#ffffff', 1, true, '#000');
@@ -7799,7 +8119,7 @@
       slTxt('ULTIMAS', 30, 24, '#8a8aa8', 1, true); Gm.hist.forEach((s, i) => { PR(16 + (i % 3) * 10, 34 + Math.floor(i / 3) * 10, 8, 8, '#f8f8f4'); drawSuit(s, 17 + (i % 3) * 10, 35 + Math.floor(i / 3) * 10, 1); });
       slTxt('ACIERTOS ' + Gm.wins + '/' + GAMBLE_MAX, 272, 24, '#8a8aa8', 1, true);
       if (!Gm.done) { slButton(SL_BTN.rojo, TOUCH ? 'ROJA' : '< ROJA', '#c8101a', true, U.hover === 'rojo'); slButton(SL_BTN.negro, TOUCH ? 'NEGRA' : 'NEGRA >', '#2a2a32', true, U.hover === 'negro'); }
-      slTxt('VERDE: PLANTARSE', 160, 122, '#8ac88a', 1, true);
+      slTxt('VERDE: PLANTARSE', 160, 116, '#c8f0c8', 1, true, '#000');
     } else {
       slTxt('RIESGO: LA ESCALERA', 160, 4, '#ffd84a', 2, true, '#5a0a0a');
       const base = Gm.amt > 0 ? Gm.amt / Math.pow(2, Gm.wins) : Gm.base0, steps = GAMBLE_MAX + 1; Gm.base0 = base;
@@ -7850,7 +8170,7 @@
     const sb = (b, txt, c1, on) => { const d = pr(on) ? 1 : 0; PR(b.x, b.y + 2, b.w, b.h, '#000', 0.6); PR(b.x, b.y + d, b.w, b.h, c1); PR(b.x, b.y + d, b.w, 1, '#ffffff', 0.35); slTxt(txt, b.x + b.w / 2, b.y + d + 3, '#ffffff', 1, true, '#000'); };
     sb(MP.apuesta, 'APUESTA', '#2a4ab8', 'apuesta'); sb(MP.cartera, 'CARTERA', '#7a4a22', 'cartera');
     // COBRO: el verde, rectangular
-    const K = MP.cobro, dk = pr('cobro') ? 2 : 0, canCob = (U.credit > 0 || U.pend || U.gam) && !U.spin && !U.fs;
+    const K = MP.cobro, dk = pr('cobro') ? 2 : 0, canCob = (U.credit > 0 || U.pend || U.gam || U.buy) && !U.spin && !U.fs;
     PR(K.x, K.y + 3, K.w, K.h, '#000', 0.6); PR(K.x, K.y + dk, K.w, K.h, '#0e5a1a'); PR(K.x + 2, K.y + 2 + dk, K.w - 4, K.h - 6, canCob ? '#2ac83a' : '#1a7a26');
     PR(K.x + 2, K.y + 2 + dk, K.w - 4, 2, '#a8ffb0', 0.6); if (canCob) PR(K.x, K.y + dk, K.w, K.h, '#ffffff', 0.08 + 0.08 * Math.sin(t * 5));
     slTxt('COBRO', K.x + K.w / 2, K.y + 12 + dk, '#ffffff', 1, true, '#0a3a0a');
@@ -7877,6 +8197,7 @@
     const U = slotUI; if (!U) return;
     ctx.save(); ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;
     ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, SCR_H); ctx.clip();
+    if (U.res && U.res.expReels && !U.spin) { const e = t - U.shownAt; if (e > 0.6 && e < 1.1) ctx.translate(Math.round((Math.random() - 0.5) * 4), Math.round((Math.random() - 0.5) * 4)); }   // ¡tiembla!
     if (U.scr === 'menu') drawSlotMenu(t); else drawSlotGame(t);
     if (U.msg && tNow - U.msg.t < 2.5 && U.scr === 'menu') { PR(40, 100, 240, 12, '#000', 0.8); slTxt(U.msg.text, 160, 103, '#ff6a6a', 1, true); }
     ctx.restore();
@@ -7887,62 +8208,89 @@
     ctx.restore();
   }
   function slReelSym(U, r, idx) {
-    const st = U.G.strips[r], s = st[((idx % st.length) + st.length) % st.length];
+    const st = slStripsOf(U.G, U.fs), s0 = st[r][((idx % st[r].length) + st[r].length) % st[r].length];
+    if (s0 === 'M' && U.res && U.res.mys && !U.spin && tNow - U.shownAt > 0.8) return U.res.mys;   // el misterioso, ya convertido
+    const s = s0;
     if (U.fs && U.G.ladder && s !== 'W' && s !== 'S') { const i = U.G.ladder.indexOf(s); if (i >= 0 && i < U.lvlShown) return U.G.ladder[U.lvlShown]; }
     return s;
   }
-  const SL_NAMES = { CH: 'CEREZAS', LE: 'LIMONES', OR: 'NARANJAS', PL: 'CIRUELAS', GR: 'UVAS', ME: 'SANDIAS', BE: 'CAMPANAS', SE: 'SIETES', W: 'COMODINES' };
+  const SL_NAMES = { T: 'DIECES', J: 'JOTAS', Q: 'REINAS', K: 'REYES', A: 'ASES', SA: 'ZAFIROS', EM: 'ESMERALDAS', RU: 'RUBIES', DI: 'DIAMANTES', S: 'ESCARABAJOS', CH: 'CEREZAS', LE: 'LIMONES', OR: 'NARANJAS', PL: 'CIRUELAS', GR: 'UVAS', ME: 'SANDIAS', BE: 'CAMPANAS', SE: 'SIETES', W: 'COMODINES' };
   function drawSlotGame(t) {
-    const U = slotUI, G = U.G, L = U.L, NR = L.n, RW = L.cw * NR, RH = L.ch * 3, gold = G.id === 'nilo';
+    const U = slotUI, G = U.G, L = U.L, NR = L.n, RW = L.cw * NR, RH = L.ch * 3, gold = G.id === 'faraon';
     slBg(G, t);
-    if (U.fs) { slTxt('GIROS GRATIS ' + (U.fs.left) + ' MAS', 160, 8, '#4aff6a', 2, true, '#000'); }
+    if (U.fs && U.fs.power) slTxt('POWER SPINS: ' + U.fs.left + (U.fs.mult > 1 ? '  X' + U.fs.mult : ''), 160, 8, '#ffd84a', 2, true, '#5a2a04');
+    else if (U.fs && U.fs.free) { slTxt('TIRADAS GRATIS: ' + U.fs.left + (U.fs.mult > 1 ? '  X' + U.fs.mult : ''), 160, 8, '#4aff6a', 2, true, '#0a2a04'); PR(L.x + RW + 6, L.y, 34, 40, '#000', 0.6); drawSymGlow(G, U.fs.exp, L.x + RW + 23, L.y + 14, t); slTxt('EXPANS.', L.x + RW + 23, L.y + 30, '#ffd84a', 1, true); }
+    else if (U.fs) { slTxt('GIROS GRATIS ' + (U.fs.left) + ' MAS', 160, 8, '#4aff6a', 2, true, '#000'); }
     else if (gold) slTxt(G.name, 160, 8, '#f4c838', 2, true, '#1a0a00');
+    else if (G.id === 'rueda') slTxt(G.name, 160, 8, '#ffd84a', 2, true, '#8a0a0a');
     else { slTxt(G.name, 160, 8, '#ffffff', 2, true, '#1a3aa8'); }
     if (G.ways) for (const sx of [L.x - 26, L.x + RW + 8]) {           // los carteles de los lados: 81 FORMAS
       PR(sx, L.y, 18, RH, '#0a1a6a'); PR(sx + 1, L.y + 1, 16, RH - 2, '#1a3ab8'); PR(sx + 1, L.y + 1, 16, 1, '#8ab0ff');
       slTxt('81', sx + 9, L.y + 4, '#ffd84a', 1, true, '#000');
       [...'FORMAS'].forEach((c, i) => slTxt(c, sx + 9, L.y + 16 + i * 9, '#e8f0ff', 1, true));
     }
-    slFrame(L.x, L.y, RW, RH, !G.ways);
+    slFrame(L.x, L.y, RW, RH, gold);
+    if (G.id === 'rueda') { PR(L.x - 4, L.y - 4, RW + 8, RH + 8, '#8a8e94'); PR(L.x - 4, L.y - 4, RW + 8, 2, '#f4f8fc'); PR(L.x - 4, L.y + RH + 2, RW + 8, 2, '#4a4e54'); PR(L.x - 1, L.y - 1, RW + 2, RH + 2, '#2a2a30'); }   // el marco cromado
     if (G.ways) { PR(L.x - 2, L.y - 2, RW + 4, RH + 4, '#2a5ae8'); PR(L.x - 2, L.y - 2, RW + 4, 1, '#a8c8ff'); }
-    PR(L.x, L.y, RW, RH, gold ? '#f4ead0' : '#060c2a');
+    PR(L.x, L.y, RW, RH, gold ? '#0c0806' : G.id === 'rueda' ? '#f4ecd8' : '#060c2a');
     ctx.save(); ctx.beginPath(); ctx.rect(L.x, L.y, RW, RH); ctx.clip();
     const S = U.spin;
     for (let r = 0; r < NR; r++) {
       const x = L.x + r * L.cw, p = U.pos[r], base = Math.floor(p), fr = p - base, moving = S && !S.stopped[r];
-      if (!gold) { const g = ctx.createLinearGradient(0, L.y, 0, L.y + RH); g.addColorStop(0, '#0a1450'); g.addColorStop(0.5, '#101e6a'); g.addColorStop(1, '#0a1450'); ctx.fillStyle = g; ctx.fillRect(x + 1, L.y, L.cw - 2, RH); }
-      else if (r % 2) PR(x, L.y, L.cw, RH, '#000', 0.04);
+      { const g = ctx.createLinearGradient(0, L.y, 0, L.y + RH); if (gold) { g.addColorStop(0, '#120a04'); g.addColorStop(0.5, '#24160a'); g.addColorStop(1, '#120a04'); } else if (G.id === 'rueda') { g.addColorStop(0, '#d8ccb0'); g.addColorStop(0.5, '#fffaf0'); g.addColorStop(1, '#d8ccb0'); } else { g.addColorStop(0, '#0a1450'); g.addColorStop(0.5, '#101e6a'); g.addColorStop(1, '#0a1450'); } ctx.fillStyle = g; ctx.fillRect(x + 1, L.y, L.cw - 2, RH); }
       for (let i = -1; i <= 3; i++) {
         const cy = L.y + (i - fr) * L.ch + L.ch / 2;
         drawSymGlow(G, slReelSym(U, r, base + i), x + L.cw / 2, Math.round(cy), t);
       }
-      if (moving) { PR(x, L.y, L.cw, RH, gold ? '#ffffff' : '#4a7aff', gold ? 0.25 : 0.2); for (let k = 0; k < 6; k++) PR(x + 3, L.y + ((k * 14 + t * 400) % RH), L.cw - 6, 1, '#ffffff', 0.4); }
-      if (r) PR(x, L.y, 1, RH, gold ? '#c8984a' : '#2a4ab8');
+      if (moving && S.ant != null && r >= S.ant && S.stopped[S.ant - 1]) { const a = 0.5 + 0.5 * Math.sin(t * 18); PR(x, L.y, L.cw, RH, '#ffd84a', 0.12 + 0.15 * a); }   // ¡tensión! el rodillo que falta brilla
+      if (moving) { PR(x, L.y, L.cw, RH, gold ? '#c8984a' : G.id === 'rueda' ? '#ffffff' : '#4a7aff', gold ? 0.15 : G.id === 'rueda' ? 0.4 : 0.2); for (let k = 0; k < 6; k++) PR(x + 3, L.y + ((k * 14 + t * 400) % RH), L.cw - 6, 1, '#ffffff', 0.4); }
+      if (r) PR(x, L.y, 1, RH, gold ? '#5a3a14' : G.id === 'rueda' ? '#b8ac90' : '#2a4ab8');
+      if (U.res && U.res.mys && !S) for (let i = 0; i < 3; i++) if (slStripsOf(G, U.fs)[r][((U.pos[r] + i) % slStripsOf(G, U.fs)[r].length)] === 'M') { const e = tNow - U.shownAt; if (e < 0.8) PR(x + 1, L.y + i * L.ch, L.cw - 2, L.ch, '#ffffff', 0.25 + 0.25 * Math.sin(e * 30)); else if (e < 1.3) PR(x + 1, L.y + i * L.ch, L.cw - 2, L.ch, '#ffd84a', 0.4 * (1.3 - e) / 0.5); }   // el misterioso se transforma
     }
     if (U.res && !S) for (const r of U.res.expand) {                  // los comodines que se expanden a todo el rodillo (Nilo)
       const x = L.x + r * L.cw, u = clamp((t - U.shownAt) / 0.6, 0, 1), hh = RH * u, yy = L.y + (RH - hh) / 2;
       PR(x + 1, yy, L.cw - 2, hh, '#1a3a8a'); PR(x + 2, yy + 1, L.cw - 4, hh - 2, '#2a4ab8');
       if (u >= 1) { drawSym('WS', x + L.cw / 2, L.y + RH / 2 - 4, t); slTxt('WILD', x + L.cw / 2, L.y + RH - 12, '#ffffff', 1, true, '#000'); PR(x + 1, L.y, L.cw - 2, RH, '#ffffff', 0.12 + 0.1 * Math.sin(t * 8)); }
     }
+    if (U.res && !S && U.res.expReels) {                              // EL SÍMBOLO EXPANSIVO crece y ocupa el rodillo entero
+      const e = t - U.shownAt;
+      if (e > 0.6) for (const r of U.res.expReels) {
+        const x = L.x + r * L.cw, u = clamp((e - 0.6) / 0.3, 0, 1), hh = RH * u, yy = L.y + (RH - hh) / 2;
+        PR(x + 1, yy, L.cw - 2, hh, '#3a2404'); PR(x + 2, yy + 1, L.cw - 4, hh - 2, '#6a4410');
+        if (u >= 1) { for (let i = 0; i < 3; i++) drawSymGlow(G, U.res.expSym, x + L.cw / 2, L.y + i * L.ch + L.ch / 2, t); PR(x + 1, L.y, L.cw - 2, RH, '#ffd84a', 0.1 + 0.08 * Math.sin(t * 8)); }
+      }
+    }
+    { const g = ctx.createLinearGradient(0, L.y, 0, L.y + RH); g.addColorStop(0, 'rgba(0,0,0,0.45)'); g.addColorStop(0.18, 'rgba(0,0,0,0)'); g.addColorStop(0.82, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.45)'); ctx.fillStyle = g; ctx.fillRect(L.x, L.y, RW, RH); }   // el cilindro: oscuro arriba y abajo
+    slSheen(L.x, L.y, RW, RH, t);                                    // el cristal
     ctx.restore();
+    if (!G.ways) {                                                   // las pestañas de las líneas, a los dos lados
+      const LNS = G.lines || SLOT_LINES, n = LNS.length, th = RH / n, wl = U.res && !S && U.res.wins.length ? U.res.wins[Math.floor((t - U.shownAt) / 1.8) % U.res.wins.length].line : -9;
+      const cols = ['#ff3a3a', '#3aa8ff', '#4aff6a', '#ffd84a', '#ff8a2a', '#c86aff', '#3affe8', '#ff6ac8', '#a8ff3a', '#ffffff'];
+      for (let i = 0; i < n; i++) for (const sx of [L.x - 9, L.x + RW + 3]) {
+        const on = wl === i; PR(sx, L.y + i * th + 0.5, 6, th - 1, on ? cols[i] : '#1a1a20'); PR(sx + 1, L.y + i * th + 1, 4, Math.max(1, th - 2), cols[i], on ? 1 : 0.45);
+        if (n <= 5) slTxt(String(i + 1), sx + 3, L.y + i * th + th / 2 - 3, on ? '#000' : '#ffffff', 1, true);
+      }
+    }
     // los premios, uno tras otro
     let lbl = null;
-    if (U.res && !S && U.res.wins.length) {
+    if (U.res && !S && !U.wheel && U.res.wins.length && (!U.res.mys || t - U.shownAt > 0.9)) {
       const wins = U.res.wins, k = Math.floor((t - U.shownAt) / 1.8) % wins.length, w = wins[k], money = slMoney(Math.round(w.win * 100));
       if (w.cells) {                                                  // 81 formas: las casillas que cuentan
         const col = SL_GLOW[w.sym] || '#ffffff', on = Math.sin(t * 10) > -0.3;
         w.cells.forEach((c, r) => c.forEach((v, i) => { if (v && on) { ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(L.x + r * L.cw + 1.5, L.y + i * L.ch + 1.5, L.cw - 3, L.ch - 3); } }));
         lbl = w.sym === G.wild ? `4 COMODINES: 2000X  ${money}` : `${w.n} ${SL_NAMES[w.sym]}, ${w.ways} ${w.ways > 1 ? 'FORMAS' : 'FORMA'}${w.m > 1 ? ' (X' + w.m + ')' : ''}  ${money}`;
+      } else if (w.line === -3) {                                    // el símbolo expansivo: sus rodillos enteros
+        lbl = `${w.n} RODILLOS DE ${SL_NAMES[w.sym]} EN 10 LINEAS${w.m > 1 ? ' X' + w.m : ''}  ${money}`;
       } else if (w.line >= 0) {
-        const Ln = SLOT_LINES[w.line], col = ['#ff3a3a', '#3aa8ff', '#4aff6a', '#ffd84a', '#ff8a2a', '#c86aff', '#3affe8', '#ff6ac8', '#a8ff3a', '#ffffff'][w.line];
-        ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.beginPath(); Ln.forEach((row, r) => { const px = L.x + r * L.cw + L.cw / 2, py = L.y + row * L.ch + L.ch / 2; r ? ctx.lineTo(px, py) : ctx.moveTo(L.x - 4, py); }); ctx.lineTo(L.x + RW + 4, L.y + Ln[4] * L.ch + L.ch / 2); ctx.stroke();
+        const Ln = (G.lines || SLOT_LINES)[w.line], col = ['#ff3a3a', '#3aa8ff', '#4aff6a', '#ffd84a', '#ff8a2a', '#c86aff', '#3affe8', '#ff6ac8', '#a8ff3a', '#ffffff'][w.line];
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.beginPath(); Ln.forEach((row, r) => { const px = L.x + r * L.cw + L.cw / 2, py = L.y + row * L.ch + L.ch / 2; r ? ctx.lineTo(px, py) : ctx.moveTo(L.x - 4, py); }); ctx.lineTo(L.x + RW + 4, L.y + Ln[Ln.length - 1] * L.ch + L.ch / 2); ctx.stroke();
         ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke();
         for (let r = 0; r < w.n; r++) { ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(L.x + r * L.cw + 1.5, L.y + Ln[r] * L.ch + 1.5, L.cw - 3, L.ch - 3); }
         PR(L.x - 14, L.y + Ln[0] * L.ch + L.ch / 2 - 5, 12, 10, col); slTxt(String(w.line + 1), L.x - 8, L.y + Ln[0] * L.ch + L.ch / 2 - 3, '#000', 1, true);
         lbl = `LINEA ${w.line + 1}: ${w.n} IGUALES  ${money}`;
       } else {
         for (let r = 0; r < NR; r++) for (let i = 0; i < 3; i++) if (U.res.view[r][i] === G.scatter) { ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 1; ctx.strokeRect(L.x + r * L.cw + 1.5, L.y + i * L.ch + 1.5, L.cw - 3, L.ch - 3); }
-        lbl = `${w.n} PIRAMIDES  ${money}`;
+        lbl = `${w.n} ESCARABAJOS  ${money}`;
       }
     }
     const pendUI = U.pend && !S && !U.banner && !U.gam;
@@ -7963,22 +8311,106 @@
     slButton(SL_BTN.back, 'SALIR', '#8a1a1a', !U.spin && !U.fs, U.hover === 'back'); slButton(SL_BTN.info, 'INFO', '#2a5a8a', !U.spin, U.hover === 'info');
     for (const c of U.coins) { slEll(c.x, c.y, 3, 3, '#8a5a0a'); slEll(c.x, c.y, 2.3, 2.3, '#ffd84a'); }
     if (U.banner) {
-      const b = U.banner; PR(0, 52, W, 50, '#000', 0.78); PR(0, 52, W, 1, '#ffd84a'); PR(0, 101, W, 1, '#ffd84a');
+      const b = U.banner; PR(0, 0, W, SCR_H, '#000', 0.35); slRays(160, 77, t, '#ffd84a', 14, 170); slPlate(20, 52, 280, 50, '#3a0a14', '#14040a', '#ffd84a'); slMarquee(22, 54, 276, 46, t, 9); slSparkles(24, 56, 272, 42, t, 14);
       slTxt(b.text, 160, 62, Math.floor(t * 6) % 2 ? '#ffd84a' : '#ffffff', 2, true, '#5a0a0a'); if (b.sub) slTxt(b.sub, 160, 84, '#ffffff', b.sub.length > 12 ? 1 : 2, true, '#000');
     }
     if (U.gam) drawGamble(t);
+    if (U.buy) drawBuy(t);
+    if (U.count && !U.banner && !U.gam && !U.buy && !U.wheel) {       // el premio, contando hacia arriba
+      const Cn = U.count, u = clamp((t - Cn.t0) / Cn.dur, 0, 1), v = Math.round(Cn.to * (1 - Math.pow(1 - u, 2))), done = u >= 1;
+      slPlate(112, 10, 96, 15, done ? '#3a2a04' : '#140a02', '#0a0602', '#ffd84a'); slTxt('+' + slMoney(v), 160, 14, done && Math.floor(t * 6) % 2 ? '#ffffff' : '#ffd84a', 1, true, '#000');
+    }
+    if (U.streakAt && t - U.streakAt < 1.8 && U.streak >= 2) {        // ¡RACHA xN!
+      const e = t - U.streakAt, y = 34 - e * 8; ctx.globalAlpha = Math.min(1, 2 - e); slTxt('¡RACHA X' + U.streak + '!', 44, y, ['#ffd84a', '#ff6a3a', '#4aff6a', '#4ad8ff'][U.streak % 4], 1, true, '#000'); ctx.globalAlpha = 1;
+    }
+    if (U.blackout && t - U.blackout < 3) { PR(0, 40, W, 30, '#000', 0.7); slTxt('¡BLACKOUT!', 160, 48, Math.floor(t * 8) % 2 ? '#ffd84a' : '#ffffff', 2, true, '#5a2a04'); }
+    if (U.pick && !U.banner) drawPick(t);
+    if (U.wheel && !U.banner) drawWheel(t);
+    if (U.book) drawBook(t);
+  }
+  function drawWheel(t) {                                            // LA RUEDA: 4 sectores (3 verdes WIN, 1 rojo STOP) con su aro de bombillas
+    const U = slotUI, Wh = U.wheel, cx = 160, cy = 68, R0 = 42;
+    PR(0, 0, W, SCR_H, '#000', 0.8); slRays(cx, cy, t, Wh.state === 'land' && Wh.hit ? '#7aff8a' : '#ffd84a', 16, 170);
+    slNeon('OPORTUNIDAD ' + Math.min(3, Wh.wins + 1) + ' DE 3', 160, 4, '#ff3a3a', 2, t);
+    slEll(cx + 2, cy + 3, R0 + 10, R0 + 10, '#000', 0.5); slEll(cx, cy, R0 + 10, R0 + 10, '#5a3a0a'); slEll(cx, cy, R0 + 9, R0 + 9, '#c8901a'); slEll(cx - 2, cy - 2, R0 + 7, R0 + 7, '#f4c838', 0.6); slEll(cx, cy, R0 + 5, R0 + 5, '#3a2006');   // el aro dorado
+    for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2; slEll(cx + Math.cos(a) * (R0 + 7), cy + Math.sin(a) * (R0 + 7), 1.6, 1.6, Math.floor(t * 6 + i) % 2 ? '#ffd84a' : '#5a3a0a'); }   // las bombillas
+    slEll(cx, cy, R0 + 3, R0 + 3, '#c8ccd2'); slEll(cx, cy, R0 + 1, R0 + 1, '#2a2a30');
+    Wh.segs.forEach((sg, i) => {
+      const a0 = -Math.PI / 2 + i * Math.PI / 2, a1 = a0 + Math.PI / 2, lit = i === Wh.cur && (Wh.state !== 'wait' || Math.floor(t * 4) % 2);
+      ctx.fillStyle = sg === 'W' ? (lit ? '#7aff8a' : '#1aa82a') : (lit ? '#ff5a5a' : '#6a0a0a');
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R0, a0 + 0.03, a1 - 0.03); ctx.closePath(); ctx.fill();
+      const am = (a0 + a1) / 2; slTxt(sg === 'W' ? 'WIN' : 'STOP', cx + Math.cos(am) * R0 * 0.58, cy + Math.sin(am) * R0 * 0.58 - 3, sg === 'W' ? '#ffffff' : '#ffb0b0', 1, true, '#000');
+    });
+    { const g = ctx.createRadialGradient(cx - 10, cy - 14, 2, cx, cy, R0); g.addColorStop(0, 'rgba(255,255,255,0.22)'); g.addColorStop(0.6, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,0.35)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R0, 0, Math.PI * 2); ctx.fill(); }   // el relieve
+    slEll(cx, cy, 9, 9, '#5a5e64'); slEll(cx, cy, 8, 8, '#c8ccd2'); slEll(cx - 2, cy - 2, 3, 3, '#ffffff', 0.7);
+    { const a = -Math.PI / 2 + Wh.cur * Math.PI / 2 + Math.PI / 4, px = cx + Math.cos(a) * (R0 + 15), py = cy + Math.sin(a) * (R0 + 15);   // la flecha que señala el sector
+      slPoly([[px + Math.cos(a) * 1, py + Math.sin(a) * 1], [px - Math.cos(a) * 9 + Math.cos(a + 1.57) * 5, py - Math.sin(a) * 9 + Math.sin(a + 1.57) * 5], [px - Math.cos(a) * 9 - Math.cos(a + 1.57) * 5, py - Math.sin(a) * 9 - Math.sin(a + 1.57) * 5]].map(([x0, y0]) => [x0 + Math.cos(a) * 0, y0]), '#ffffff'); }
+    slTxt('PREMIO: ' + slMoney(Wh.amt), 52, 40, '#ffffff', 1, true, '#000'); slTxt('GANADO: ' + slMoney(Wh.total), 268, 40, '#4aff6a', 1, true, '#000');
+    if (Wh.state === 'land') slTxt(Wh.hit ? '¡WIN! +' + slMoney(Wh.amt) : 'STOP', 160, 116, Wh.hit ? '#4aff6a' : '#ff4a4a', 1, true, '#000');
+    else slTxt('VERDE: VUELVE A PAGAR LA PANTALLA LLENA', 160, 116, '#c8c8d0', 1, true);
+  }
+  const PICK_RECTS = [...Array(30)].map((_, i) => ({ x: 12 + (i % 10) * 30, y: 30 + Math.floor(i / 10) * 30, w: 27, h: 27 }));
+  function drawPick(t) {                                             // LA CÁMARA DE PIEDRA
+    const U = slotUI, K = U.pick;
+    const g = ctx.createLinearGradient(0, 0, 0, SCR_H); g.addColorStop(0, '#2a1e12'); g.addColorStop(1, '#0a0604'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, SCR_H);
+    for (const tx of [4, 316]) { const gl = ctx.createRadialGradient(tx, 60, 2, tx, 60, 60); gl.addColorStop(0, 'rgba(255,160,60,' + (0.22 + 0.05 * Math.sin(t * 11)) + ')'); gl.addColorStop(1, 'rgba(255,120,30,0)'); ctx.fillStyle = gl; ctx.fillRect(tx - 60, 0, 120, 128); }
+    slTxt('LA CAMARA DE PIEDRA', 160, 3, '#ffd84a', 2, true, '#3a1a04');
+    slTxt('TIRADAS: ' + K.spins, 70, 19, '#4aff6a', 1, true, '#000'); slTxt('MULTIPLICADOR: X' + K.mult, 230, 19, '#ffd84a', 1, true, '#000');
+    PICK_RECTS.forEach((r, i) => {
+      const op = K.open.includes(i), v = K.tiles[i];
+      PR(r.x + 1, r.y + 2, r.w, r.h, '#000', 0.5);
+      if (!op) {
+        PR(r.x, r.y, r.w, r.h, '#6a5a44'); PR(r.x + 1, r.y + 1, r.w - 2, r.h - 2, '#8a7a5e'); PR(r.x + 1, r.y + 1, r.w - 2, 1, '#b8a888'); PR(r.x + 1, r.y + r.h - 2, r.w - 2, 1, '#4a3e2e');
+        const h = (i * 7) % 4, cx = r.x + r.w / 2, cy = r.y + r.h / 2;   // un jeroglífico grabado
+        if (h === 0) { PR(cx - 1, cy - 6, 2, 12, '#4a3e2e'); PR(cx - 5, cy - 2, 10, 2, '#4a3e2e'); } else if (h === 1) { slEll(cx, cy - 2, 4, 4, '#4a3e2e'); PR(cx - 4, cy + 4, 8, 2, '#4a3e2e'); }
+        else if (h === 2) { slPoly([[cx, cy - 6], [cx + 6, cy + 5], [cx - 6, cy + 5]], '#4a3e2e'); } else { PR(cx - 5, cy - 4, 10, 2, '#4a3e2e'); PR(cx - 5, cy, 10, 2, '#4a3e2e'); PR(cx - 5, cy + 4, 10, 2, '#4a3e2e'); }
+      } else {
+        PR(r.x, r.y, r.w, r.h, '#140c06'); PR(r.x + 1, r.y + 1, r.w - 2, r.h - 2, v === 'start' ? '#5a0a0a' : v === 'mult' ? '#3a2a04' : '#0a3a14');
+        if (v === 'spin') { slTxt('+1', r.x + r.w / 2, r.y + 5, '#4aff6a', 1, true, '#000'); slTxt('GIRO', r.x + r.w / 2, r.y + 15, '#a8ffb0', 1, true); }
+        else if (v === 'mult') { slTxt('X+1', r.x + r.w / 2, r.y + 5, '#ffd84a', 1, true, '#000'); slTxt('MULT', r.x + r.w / 2, r.y + 15, '#fff0a0', 1, true); }
+        else { slTxt('YA', r.x + r.w / 2, r.y + 5, '#ffffff', 1, true, '#000'); slTxt('VA', r.x + r.w / 2, r.y + 15, '#ffffff', 1, true, '#000'); }
+      }
+      if (i === K.cur && !K.done && Math.floor(t * 4) % 2) { ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 1; ctx.strokeRect(r.x - 0.5, r.y - 0.5, r.w + 1, r.h + 1); }
+    });
+    slTxt(K.done ? '¡EMPIEZA EL BONO!' : TOUCH ? 'TOCA LAS PIEDRAS HASTA QUE SALGA YA VA' : 'ROJO: LEVANTAR   NARANJA / FLECHAS: ELEGIR', 160, 120, K.done ? '#ffffff' : '#c8b088', 1, true, '#000');
+  }
+  function drawBook(t) {                                             // EL LIBRO SAGRADO elige el símbolo expansivo
+    const U = slotUI, B = U.book, e = t - B.t0, G = U.G;
+    PR(0, 0, W, SCR_H, '#000', 0.82);
+    slTxt('EL LIBRO SAGRADO', 160, 6, '#ffd84a', 2, true, '#3a1a04');
+    PR(96, 26, 128, 84, '#3a1a06'); PR(98, 28, 60, 80, '#e8d8b0'); PR(162, 28, 60, 80, '#e8d8b0'); PR(158, 28, 4, 80, '#8a6a3a');   // el libro abierto
+    for (let k = 0; k < 6; k++) { PR(104, 36 + k * 11, 48, 1, '#a89870', 0.6); PR(168, 36 + k * 11, 48, 1, '#a89870', 0.6); }
+    const sym = e < 2.6 ? G.expSyms[Math.floor(e * (14 - e * 5)) % G.expSyms.length] : B.sym;
+    PR(105, 46, 46, 40, '#140c06'); drawSymGlow(G, sym, 128, 66, t);
+    if (e >= 2.6) { PR(105, 46, 46, 40, '#ffd84a', 0.15 + 0.1 * Math.sin(t * 10)); slTxt('SIMBOLO', 192, 50, '#5a2a04', 1, true); slTxt('EXPANSIVO', 192, 60, '#5a2a04', 1, true); slTxt(SL_NAMES[B.sym], 192, 74, '#8a1a0a', 1, true); }
+    else slTxt('ELIGIENDO...', 192, 62, '#5a2a04', 1, true);
   }
   function drawSlotInfo(t) {
-    const U = slotUI, G = U.G, bet = slBet(), ns = G.ways ? [4, 3] : [5, 4, 3], mul = G.ways ? 1 : 0.1;
+    const U = slotUI, G = U.G, bet = slBet(), ns = G.ways ? [4, 3] : G.lines ? [3] : [5, 4, 3], mul = G.ways ? 1 : 1 / (G.lines || SLOT_LINES).length;
     PR(0, 0, W, H, '#0a0608', 0.94); slTxt('PREMIOS (APUESTA ' + slMoney(bet) + ')', 160, 6, '#ffd84a', 1, true, '#000');
-    G.syms.slice().reverse().forEach((s, i) => {
-      const col = i % 2, row = Math.floor(i / 2), x = 14 + col * 150, y = 32 + row * 26;
-      PR(x, y - 12, 32, 24, G.id === 'nilo' ? '#f4ead0' : '#0a1450'); drawSymGlow(G, s, x + 16, y, t); const p = G.pay[s];
+    if (G.id === 'faraon') {                                         // 5 columnas: el símbolo arriba y sus premios debajo
+      G.syms.slice().reverse().forEach((s, i) => {
+        const x = 4 + (i % 5) * 63, y = 18 + Math.floor(i / 5) * 50, p = G.pay[s];
+        PR(x + 18, y, 26, 22, '#120a04'); drawSymGlow(G, s, x + 31, y + 11, t);
+        [5, 4, 3].forEach((n, k) => slTxt(n + 'X ' + slMoney(Math.round(p[n - 3] * bet * mul)).replace(' €', ''), x + 31, y + 24 + k * 8, k ? '#e8e0d0' : '#ffd84a', 1, true));
+      });
+    }
+    const nc = 2, list = G.id === 'faraon' ? [] : G.syms.slice().reverse();
+    list.forEach((s, i) => {
+      const col = i % nc, row = Math.floor(i / nc), x = nc === 3 ? 6 + col * 106 : 14 + col * 150, y = (nc === 3 ? 28 : 32) + row * (nc === 3 ? 22 : 26);
+      PR(x, y - 12, 32, 24, G.id === 'faraon' ? '#120a04' : G.id === 'rueda' ? '#f4ecd8' : '#0a1450'); drawSymGlow(G, s, x + 16, y, t); const p = G.pay[s];
       ns.forEach((n, k) => slTxt(n + 'X ' + slMoney(Math.round(p[n - 3] * bet * mul)), x + 38, y - 12 + k * 8 + (G.ways ? 4 : 0), k ? '#e8e0d0' : '#ffd84a', 1));
     });
-    if (G.ways) { slTxt('81 FORMAS: 3 O 4 IGUALES DESDE LA IZQUIERDA (POR FORMA)', 160, 136, '#ffffff', 1, true); slTxt('COMODIN X2: SUSTITUYE Y MULTIPLICA X2, X4, X8', 160, 145, '#ffffff', 1, true); slTxt('4 COMODINES: 2000 VECES LA APUESTA', 160, 154, '#ffd84a', 1, true); }
-    else { slTxt('ESCARABAJO (RODILLOS 2-4): COMODIN QUE SE EXPANDE', 160, 136, '#ffffff', 1, true); slTxt('3/4/5 PIRAMIDES: X2/X20/X200 Y 12 GIROS GRATIS', 160, 145, '#ffffff', 1, true); slTxt('EN LOS GIROS, CADA ESCARABAJO MEJORA UN SIMBOLO', 160, 154, '#ffffff', 1, true); }
-    slTxt((G.ways ? 'RTP 95 %' : '10 LINEAS. RTP 96,5 %') + '. PREMIO: COBRAR O ARRIESGAR', 160, 168, '#8a8a96', 1, true);
+    if (G.id === 'rueda') { slTxt('5 LINEAS: 3 HORIZONTALES Y 2 DIAGONALES, 3 IGUALES', 160, 130, '#ffffff', 1, true); slTxt('PANTALLA LLENA: PAGA LAS 5 LINEAS Y SALE LA RUEDA', 160, 139, '#ffd84a', 1, true); slTxt('(3 VERDES Y 1 ROJO): CADA VERDE PAGA OTRA VEZ, HASTA 3', 160, 148, '#ffd84a', 1, true); }
+    else if (G.ways) { slTxt('81 FORMAS: 3 O 4 IGUALES DESDE LA IZQUIERDA (POR FORMA)', 160, 136, '#ffffff', 1, true); slTxt('COMODIN X2: SUSTITUYE Y MULTIPLICA X2, X4, X8', 160, 145, '#ffffff', 1, true); slTxt('4 COMODINES: 2000 VECES LA APUESTA', 160, 154, '#ffd84a', 1, true); }
+    else {
+      slTxt('PIRAMIDE: COMODIN. 3/4/5 ESCARABAJOS: 2/10/50X', 160, 120, '#ffffff', 1, true);
+      slTxt('3 MASCARAS EN LINEA: LA CAMARA DE PIEDRA', 160, 129, '#ffffff', 1, true);
+      slTxt('(TIRADAS GRATIS CON SIMBOLO EXPANSIVO)', 160, 138, '#ffffff', 1, true);
+      slTxt('PREMIO DE 4X O MAS: COBRAR O POWER SPINS', 160, 147, '#ffd84a', 1, true);
+      slTxt('(4X CADA UNO, CON EL MISTERIOSO APILADO)', 160, 156, '#ffd84a', 1, true);
+    }
+    slTxt(G.ways ? 'RTP 95 %. PREMIO: COBRAR O ARRIESGAR' : G.lines ? 'RTP 96 %. PREMIO: COBRAR O ARRIESGAR' : '10 LINEAS. RTP 95,5 %. VOLATILIDAD ALTA', 160, 168, '#8a8a96', 1, true);
   }
   // el icono de la CARTERA, al lado del móvil: abre la cartera (en la máquina, la de la máquina)
   function paintWalletIcon(b) {
@@ -8038,6 +8470,8 @@
     dctx.restore();
   }
   function lndLights(t, power, lvl) {
+    { const fl = 0.16 + 0.02 * Math.sin(t * 50) * (Math.sin(t * 0.7) > 0.95 ? 1 : 0), gl = ctx.createRadialGradient(160, 40, 6, 160, 90, 150);   // la lámpara del rellano: luz fría de fluorescente
+      gl.addColorStop(0, `rgba(235,240,230,${fl})`); gl.addColorStop(1, 'rgba(235,240,230,0)'); ctx.fillStyle = gl; ctx.fillRect(0, 0, W, H); }
     const WN = LND_DEF.WIN, g = ctx.createLinearGradient(0, 16, 0, 72);
     g.addColorStop(0, `rgba(220,232,245,${0.12 * lvl})`); g.addColorStop(1, 'rgba(220,232,245,0)');
     ctx.fillStyle = g; poly([[WN.x, 16], [WN.x + WN.w, 16], [WN.x + WN.w + 20, 72], [WN.x - 16, 72]]);
@@ -8412,6 +8846,9 @@
     if (rm === STR) { dan.x = P.x + 14; dan.y = P.y + 2; dan.dir = 'down'; trail.length = 0; }   // Daniel sale con él
     if (rm === LOB && lift.state === 'arrived') { lift.state = 'lobClose'; lift.t0 = t; sfx(200, 0.9, 'sawtooth', 0.012, 140); }   // el ascensor se cierra detrás
     if (rm === ELV && lift.state === 'open') { lift.state = 'closing'; lift.t0 = t; sfx(200, 0.9, 'sawtooth', 0.012, 140); }   // se cierra la puerta de abajo
+    if (rm === LND && !jr.lndLine) {                                  // al salir al rellano: ¡aquí sí hay luz!
+      jr.lndLine = true; say('¿Aquí hay luz? Solo se me ha ido la luz en casa... qué broma más pesada.', 3.6, t + 0.6);
+    }
     if (rm === MOM && story.scream && !story.smell) { story.smell = true; say('Qué olor tan raro, ¿se ha estropeado el baño?', 3.0, t + 0.5); }
     if (rm === BATH && story.smell && !story.bath) {
       story.bath = true;
@@ -8505,7 +8942,9 @@
     ctx.restore();
     if (roll && !clockShow.ticked) { clockShow.ticked = true; const GA = window.GameAudio; if (GA) { GA.blip(1200, 0.04, 'square', 0.03, 1200); setTimeout(() => GA.blip(1600, 0.05, 'square', 0.03, 1600), 120); } }
   }
-  function saveAt(atName) {
+  let saveToast = null;                                             // "PARTIDA GUARDADA": el disquete en la esquina
+  function saveAt(atName, show) {
+    if (show) saveToast = tNow;
     if (window.PDSave) window.PDSave.save({ at: atName, jr: Object.assign({}, jr, { clothes: jr.clothes.slice() }), player: { x: P.x, y: P.y, dir: P.dir, ang: P.ang, room: room.name }, phone: window.PDPhone ? window.PDPhone.snapshot() : null });
   }
 
@@ -8521,7 +8960,7 @@
     const power = powerAt(t);                                            // luz eléctrica (1 = encendida); la del día no depende de ella
     outageSounds(t); autosave(t); fuseTick(t); runLater(t);
     const jrBlack = jrTick(t); furnTick(t, dt); liftTick(t); blockedChecks(t); lobbyTick(t);
-    const hsBlack = Math.max(hsTick(t, dt), shopTick(t, dt)); danTick(dt); npcTick(t, dt); streetEdges(t); barTick(t, dt); slotTick(t, dt); hudWalletTick();   // el saludo y la calle                                           // en su cuarto: cambiarse funde a negro un momento
+    const hsBlack = Math.max(hsTick(t, dt), shopTick(t, dt)); danTick(dt); npcTick(t, dt); streetEdges(t); barTick(t, dt); slotTick(t, dt); hudWalletTick(); BarMusic.tick(room === BAR, !!slotUI);   // el saludo y la calle                                           // en su cuarto: cambiarse funde a negro un momento
     camTick(dt);
     ctx.setTransform(RES, 0, 0, RES, -Math.round(camX * RES), -Math.round(camY * RES)); ctx.imageSmoothingEnabled = false;   // en px lógicos del mundo (con la cámara)   // a partir de aquí, en px lógicos
 
@@ -8563,11 +9002,11 @@
     // OSCURIDAD como capa aparte: las luces que de verdad iluminan (linterna, claridad de la sala en la entrada) la
     // RECORTAN, así se ve el suelo, las paredes y las puertas con sus colores; encima solo va un tinte suave de cada luz.
     // Sin luz eléctrica: penumbra en la sala (son las 4 de la tarde); en la entrada, sin ventanas, oscuridad casi total
-    const beam = flashOn && room !== STR && room !== BAR ? beamLayer(P.x + Math.cos(P.ang) * 5, P.y - 8 + Math.sin(P.ang) * 3, P.ang, 0.96 + 0.04 * Math.sin(t * 23)) : null;
+    const beam = flashOn && room !== STR && room !== BAR && room !== LND && room !== LOB ? beamLayer(P.x + Math.cos(P.ang) * 5, P.y - 8 + Math.sin(P.ang) * 3, P.ang, 0.96 + 0.04 * Math.sin(t * 23)) : null;
     dctx.globalCompositeOperation = 'source-over'; dctx.clearRect(0, 0, darkCv.width, darkCv.height);
     // cuarto de la madre: entra el día por el balcón abierto (penumbra); baño: sin ventana grande, casi a oscuras
     dctx.fillStyle = inSala ? `rgba(10,5,4,${0.22 + 0.26 * (1 - power)})` : room === MOM || room === JR ? `rgba(8,4,4,${0.24 + 0.34 * (1 - power)})`
-      : room === STR || room === BAR ? 'rgba(0,0,0,0)' : room === ELV ? 'rgba(6,6,8,0.14)' : room === LND || room === LOB ? 'rgba(3,3,4,0.86)' : room === BATH ? `rgba(3,2,2,${0.3 + 0.6 * (1 - power)})` : room === BALC ? 'rgba(8,4,4,0.06)' : `rgba(3,2,2,${0.3 + 0.66 * (1 - power)})`;   // el balcón es fuera: de día
+      : room === STR || room === BAR ? 'rgba(0,0,0,0)' : room === ELV ? 'rgba(6,6,8,0.14)' : room === LND || room === LOB ? 'rgba(4,4,6,0.16)' : room === BATH ? `rgba(3,2,2,${0.3 + 0.6 * (1 - power)})` : room === BALC ? 'rgba(8,4,4,0.06)' : `rgba(3,2,2,${0.3 + 0.66 * (1 - power)})`;   // el balcón es fuera: de día
     dctx.fillRect(0, 0, darkCv.width, darkCv.height);
     dctx.globalCompositeOperation = 'destination-out';
     if (beam) { dctx.drawImage(beam, 0, 0); dctx.drawImage(beam, 0, 0); }          // dos veces: cerca del móvil se ve casi como de día
@@ -8655,6 +9094,15 @@
     if (slotUI) drawSlot(t);
     if (walletUI) drawWalletOverlay(t);
     drawClockShow(t);                                                // el aviso de la hora, por encima de todo
+    if (saveToast != null && t - saveToast < 3) {                     // PARTIDA GUARDADA, con su disquete que parpadea
+      const e = t - saveToast, a = Math.min(1, e / 0.3, (3 - e) / 0.5), k = textK(), PDx = window.PD, x = 6 * RES, y = (H - 22) * RES;
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = a;
+      ctx.fillStyle = 'rgba(14,9,8,0.85)'; ctx.fillRect(x, y, 16 * k + (PDx ? PDx.measure('PARTIDA GUARDADA') * k : 0) + 6 * k, 13 * k);
+      const fx = x + 3 * k, fy = y + 2 * k, q = (xx, yy, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(fx + xx * k, fy + yy * k, w * k, h * k); };
+      q(0, 0, 9, 9, '#2a4ab8'); q(2, 0, 5, 3, '#c8ccd2'); q(5, 0, 1, 2, '#2a4ab8'); q(1, 5, 7, 4, '#f4f4f0'); if (Math.floor(e * 4) % 2) q(7, 1, 1, 1, '#4aff6a');
+      if (PDx) PDx.drawText(ctx, 'PARTIDA GUARDADA', x + 14 * k, y + 3 * k, '#e8e0d0', k);
+      ctx.restore();
+    }
 
     // ayuda de controles: se va al empezar a moverse
     if (moved && movedAt == null) movedAt = t;
@@ -8685,7 +9133,7 @@
     room = SALA; swap = null; later = [];
     box1 = 'here'; cut = null; if (!HALL.solid.includes(HALL_BOX1)) HALL.solid.push(HALL_BOX1);         // la caja vuelve delante del cuadro de luz
     panel = false; panelCloseAt = null; difUp = false; difTripAt = null; fuse = 'idle'; back = null; brkUp.forEach((_, i) => { brkUp[i] = i !== 9; });   // cuadro de luz como al principio
-    Object.assign(story, { scream: false, smell: false, bath: false }); missions = []; tabacoScene = null; tabacoFx = null; slotGuy.state = 'gone'; dan.goto = null; clockShow = null; fp = null; popup = null; Object.assign(lift, { state: 'idle', floor: 0, pending: false }); for (const k in fstate) delete fstate[k];
+    Object.assign(story, { scream: false, smell: false, bath: false }); missions = []; tabacoScene = null; tabacoFx = null; slotGuy.state = 'gone'; slotGuy.left = false; dan.goto = null; clockShow = null; fp = null; popup = null; Object.assign(lift, { state: 'idle', floor: 0, pending: false }); for (const k in fstate) delete fstate[k];
     jrAct = null; const jrDone = from === 'llaves'; Object.assign(jr, { dressed: jrDone, bed: jrDone, clothes: [jrDone, jrDone, jrDone], tidy: jrDone, wallet: jrDone, purse: jrDone ? { 500: 1 } : {}, tabaco: 0, tabacoDone: false, card: false, keys: false, keyGot: false, keySpot: null, met: false, tried: [] });
     if (jrDone && opts.jr) Object.assign(jr, opts.jr, { clothes: (opts.jr.clothes || jr.clothes).slice() });
     if (jrDone && opts.jr && opts.jr.keys === undefined && jr.wallet) jr.keys = true;
@@ -8721,7 +9169,7 @@
     t0 = performance.now() / 1000; last = performance.now();
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   }
-  function stop() { running = false; cancelAnimationFrame(raf); cv.hidden = true; keys.clear(); stopBuzz(); joyEnd(); joyEl.hidden = true; if (todoEl) todoEl.hidden = true; }
+  function stop() { BarMusic.stop(); running = false; cancelAnimationFrame(raf); cv.hidden = true; keys.clear(); stopBuzz(); joyEnd(); joyEl.hidden = true; if (todoEl) todoEl.hidden = true; }
   window.PDRoom = { start, stop, get running() { return running; }, get player() { return { x: P.x, y: P.y, dir: P.dir, room: room.name }; } };
 })();
 </script>
