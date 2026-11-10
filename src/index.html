@@ -3861,7 +3861,7 @@
   const BAR_DEF = {
     w: 400, h: 240,
     caps: [{ x: 10, y: 26, w: 130, h: 6 }, { x: 10, y: 26, w: 6, h: 196 }, { x: 390, y: 0, w: 6, h: 122 },
-      { x: 250, y: 116, w: 50, h: 6 }, { x: 348, y: 116, w: 48, h: 6 }, { x: 250, y: 116, w: 6, h: 106 },
+      { x: 250, y: 116, w: 52, h: 6 }, { x: 346, y: 116, w: 50, h: 6 }, { x: 250, y: 116, w: 6, h: 106 },
       { x: 10, y: 216, w: 150, h: 6 }, { x: 196, y: 216, w: 60, h: 6 },
       { x: 134, y: 0, w: 6, h: 32 }, { x: 134, y: 0, w: 262, h: 2 }],
     faces: [{ x: 16, y: 32, w: 118, h: 28 }, { x: 140, y: 2, w: 250, h: 18 }],
@@ -3870,14 +3870,36 @@
     TOBACCO: { x: 68, w: 30 }, SLOT: { x: 102, w: 28 }, MACH_Y: 30, MACH_F: 72,   // las máquinas: arriba de su frente y su pie
     COUNTER: { x: 140, w: 250, y: 42 }, TV: { x: 26, y: 68, w: 30, h: 18 },
     TERMS: [{ x: 20, y: 104 }, { x: 20, y: 152 }], TABLES: [{ x: 104, y: 112 }, { x: 104, y: 174 }, { x: 196, y: 174 }],
-    PILLAR: { x: 140, y: 136, s: 10 }, DOOR: { x: 160, w: 36 }, DOOR2: { x: 300, w: 48 }, SIGN: { x: 270, y: 90, w: 108, h: 16 }
+    PILLAR: { x: 140, y: 136, s: 10 }, DOOR: { x: 160, w: 36 }, DOOR2: { x: 302, w: 44 }, SIGN: { x: 270, y: 90, w: 108, h: 16 }
   };
   const BAR = {
     name: 'bar', w: BAR_DEF.w, h: BAR_DEF.h, walk: BAR_DEF.walk, floor: BAR_DEF.floor, lit: BAR_DEF.floor.concat(BAR_DEF.faces),
     solid: [{ x: 66, y: 62, w: 66, h: 11 }, { x: BAR_DEF.PILLAR.x, y: BAR_DEF.PILLAR.y, w: BAR_DEF.PILLAR.s, h: BAR_DEF.PILLAR.s }]
       .concat(BAR_DEF.TABLES.map(T => ({ x: T.x - 14, y: T.y - 8, w: 28, h: 12 })))   // máquinas, pilar, máquinas de apuestas y mesas
   };
-  const ROOMS = { sala: SALA, entrada: HALL, madre: MOM, bano: BATH, balcon: BALC, juanjo: JR, rellano: LND, ascensor: ELV, portal: LOB, calle: STR, bar: BAR };
+  const APU_DEF = {                                                  // LA ZONA DE APUESTAS, según el plano (a escala; más grande que la pantalla: cámara)
+    w: 372, h: 410,
+    caps: [{ x: 10, y: 0, w: 355, h: 4 }, { x: 10, y: 0, w: 6, h: 409 }, { x: 359, y: 0, w: 6, h: 409 },   // los muros de fuera (enteros)
+      { x: 16, y: 118, w: 147, h: 6 }, { x: 159, y: 118, w: 4, h: 48 },                                      // arriba del cuartito-barra y el remate
+      { x: 16, y: 163, w: 77, h: 6 }, { x: 87, y: 163, w: 6, h: 77 },                                        // el bloque del bar (debajo del cuartito)
+      { x: 16, y: 234, w: 13, h: 6 }, { x: 73, y: 234, w: 14, h: 6 },                                        // la pared de abajo del bar, con su puerta en medio
+      { x: 10, y: 397, w: 193, h: 6 }, { x: 257, y: 397, w: 108, h: 6 }],                                    // abajo, con la puerta de la calle
+    faces: [{ x: 16, y: 4, w: 343, h: 26 }],
+    floor: [{ x: 16, y: 30, w: 343, h: 88 }, { x: 163, y: 118, w: 196, h: 6 }, { x: 93, y: 124, w: 266, h: 116 }, { x: 16, y: 240, w: 343, h: 157 }],
+    walk: [{ x: 17, y: 33, w: 341, h: 84 }, { x: 163, y: 117, w: 195, h: 279 }, { x: 98, y: 124, w: 61, h: 46 }, { x: 94, y: 166, w: 70, h: 91 }, { x: 17, y: 257, w: 147, h: 139 }],
+    BLOCK: { x: 16, y: 169, w: 71, h: 65 },                          // el bloque del bar (4,99 m²): no se entra
+    ROOMB: { x: 16, y: 124, w: 68, h: 39 },                          // el cuartito (1,79 m²): la barra, con la alacena y la empleada dentro
+    DOOR_BAR: { x: 29, w: 44, y: 240, h: 16 }, DOOR_ST: { x: 210, w: 40 },   // la puerta del bar: doble, grande, de cristal y centrada
+    BARRA: { x: 85, y: 124, w: 12, h: 39 }, ALC: { x: 97, y: 124, w: 62 }, STAFF: { x: 70, y: 152 },   // el mostrador ES la pared; la empleada, dentro
+    PRIV: { x: 93, y: 275, w: 5, h: 70 },
+    SLOTS: [{ yb: 304 }, { yb: 326 }, { yb: 348 }, { yb: 370 }]   // a 1 m de la puerta y con hueco junto a la pared de abajo (para más máquinas)
+  };
+  const APU = {
+    name: 'apuestas', w: APU_DEF.w, h: APU_DEF.h, walk: APU_DEF.walk, floor: APU_DEF.floor, lit: APU_DEF.floor.concat(APU_DEF.faces),
+    solid: [{ x: 84, y: 124, w: 13, h: 45 }, { x: 159, y: 118, w: 4, h: 48 }, { x: 92, y: 275, w: 7, h: 84 }]
+      .concat(APU_DEF.SLOTS.map(M => ({ x: 16, y: M.yb - 13, w: 30, h: 12 })))   // el mueble y la botonera   // la barra, el remate, el altillo y las máquinas
+  };
+  const ROOMS = { apuestas: APU, sala: SALA, entrada: HALL, madre: MOM, bano: BATH, balcon: BALC, juanjo: JR, rellano: LND, ascensor: ELV, portal: LOB, calle: STR, bar: BAR };
   let room = SALA;
   const inRects = (rs, x, y) => rs.some(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
   const boxOf = rs => ({ x0: Math.min(...rs.map(r => r.x)), y0: Math.min(...rs.map(r => r.y)), x1: Math.max(...rs.map(r => r.x + r.w)), y1: Math.max(...rs.map(r => r.y + r.h)) });
@@ -4115,7 +4137,7 @@
     const v = vig.getContext('2d'), g = v.createRadialGradient(W / 2, H / 2 + 6, 70, W / 2, H / 2 + 6, 200);
     g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.6, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0.85)');
     v.fillStyle = g; v.fillRect(0, 0, W, H);
-    buildHall(); buildBalc(); buildMom(); buildBath(); buildJr(); buildLnd(); buildElv(); buildLob(); buildStreetScene(); buildBar();   // el balcón antes que el cuarto: el cuarto lo ve por la puerta
+    buildHall(); buildBalc(); buildMom(); buildBath(); buildJr(); buildLnd(); buildElv(); buildLob(); buildStreetScene(); buildBar(); buildApu();   // el balcón antes que el cuarto: el cuarto lo ve por la puerta
   }
 
   // ---------- fondo de la ENTRADA: paredes, suelo y puertas (sin muebles todavía) ----------
@@ -4990,8 +5012,8 @@
       R(D2.x - 3, yy - 2, D2.w + 6, 10, '#2a2a2e'); R(D2.x - 2, yy - 1, 2, 8, '#b8bcc2'); R(D2.x + D2.w, yy - 1, 2, 8, '#b8bcc2');   // el marco
       for (let k = 0; k < 2; k++) {
         const x = D2.x + k * (D2.w / 2), w = D2.w / 2;
-        R(x, yy, w, 6, '#8a9096'); R(x + 1, yy + 1, w - 2, 4, '#e6e8e4'); R(x + 1, yy + 1, w - 2, 1, '#ffffff');
-        for (let xx = x + 3; xx < x + w - 2; xx += 4) R(xx, yy + 2, 2, 2, '#c8202a');               // las rayas rojas
+        R(x, yy, w, 6, '#6a7076'); R(x + 1, yy + 1, w - 2, 4, '#9ab8c8'); R(x + 1, yy + 1, w - 2, 1, '#e8f4f8'); R(x + 3, yy + 2, 3, 1, '#ffffff', 0.6);   // el cristal
+        R(x + 1, yy + 3, w - 2, 1, '#c8202a', 0.8);                   // la franja roja
         R(k ? x + 2 : x + w - 4, yy - 1, 2, 3, '#c8ccd2'); R(k ? x + 2 : x + w - 4, yy - 1, 2, 1, '#ffffff');   // los tiradores
       }
       R(D2.x + D2.w / 2 - 1, yy, 2, 6, '#6a7076');
@@ -5402,7 +5424,8 @@
     { const f = furnNear(); if (f && inBox(tp, f.rect, 3) && openFurn(f)) { e.preventDefault(); return; } }   // tocar un mueble al lado
     if (liftCallNear() && inBox(tp, { x: 70, y: 48, w: 44, h: 26 }, 2) && callLift()) { e.preventDefault(); return; }
     if (barActTap(tp)) { e.preventDefault(); return; }   // en el bar: el camarero, la máquina de tabaco
-    if (slotNear() && inBox(tp, { x: BAR_DEF.SLOT.x - 2, y: BAR_DEF.MACH_Y - 8, w: BAR_DEF.SLOT.w + 8, h: BAR_DEF.MACH_F - BAR_DEF.MACH_Y + 8 }, 2) && openSlot()) { e.preventDefault(); return; }   // tocar la tragaperras   // el botón del ascensor                  // en su cuarto: el armario, la cama, la ropa, la cartera
+    if (slotNear() && room === APU && inBox(tp, { x: 16, y: APU_DEF.SLOTS[apuSlotIdx()].yb - 44, w: 32, h: 46 }, 2) && openSlot()) { e.preventDefault(); return; }   // tocar una de las 4
+    if (slotNear() && room === BAR && inBox(tp, { x: BAR_DEF.SLOT.x - 2, y: BAR_DEF.MACH_Y - 8, w: BAR_DEF.SLOT.w + 8, h: BAR_DEF.MACH_F - BAR_DEF.MACH_Y + 8 }, 2) && openSlot()) { e.preventDefault(); return; }   // tocar la tragaperras   // el botón del ascensor                  // en su cuarto: el armario, la cama, la ropa, la cartera
     // con teclado/ratón el clic NO mueve: solo interacciones (muebles, botones…). En táctil, el joystick.
   });
   cv.addEventListener('pointermove', e => {
@@ -5483,13 +5506,22 @@
     hallJ: { kind: 'v1', x: 269, hole: 266, y0: 61, y1: 81, dir: -1, beyond: '#5a4630' },   // la del cuarto de Juanjo (pared derecha de la entrada)...
     hallExit: { kind: 'h1', x: 126, y: 170, w: 26, beyond: '#141416' },   // la puerta de la calle (de casa al rellano)...
     lndW: { kind: 'v1', x: 37, hole: 34, y0: 90, y1: 112, dir: 1, beyond: '#2a2a2e' },   // ...y la misma, desde el rellano
-    liftL: { kind: 'hole' }, liftC: { kind: 'hole' }, liftB: { kind: 'hole' }, portalS: { kind: 'hole' }, streetN: { kind: 'hole' }, barS: { kind: 'hole' }, shopL: { kind: 'hole' },                // el ascensor: sus puertas se pintan aparte
+    liftL: { kind: 'hole' }, liftC: { kind: 'hole' }, liftB: { kind: 'hole' }, portalS: { kind: 'hole' }, streetN: { kind: 'hole' }, barS: { kind: 'hole' }, shopL: { kind: 'hole' }, barD2: { kind: 'h2', x: 302, y: 116, w: 44, beyond: '#12060a' }, apuN: { kind: 'front2', x: 29, y: 240, w: 44, h: 16, beyond: '#3a1a10' }, apuS: { kind: 'hole' }, shopR: { kind: 'hole' },                // el ascensor: sus puertas se pintan aparte
     jrW: { kind: 'v1', x: 87, hole: 84, y0: JR_DEF.DOOR.y, y1: JR_DEF.DOOR.y + JR_DEF.DOOR.h, dir: 1, beyond: '#3a3630' }   // ...y la misma, desde dentro
   };
-  SALA.doors = [DOORS.salaE, DOORS.salaN]; BALC.doors = [DOORS.balcE, DOORS.balcS]; HALL.doors = [DOORS.hallW, DOORS.hallMom, DOORS.hallJ, DOORS.hallExit]; LND.doors = [DOORS.lndW, DOORS.liftL]; ELV.doors = [DOORS.liftC]; LOB.doors = [DOORS.liftB, DOORS.portalS]; STR.doors = [DOORS.streetN, DOORS.shopL]; BAR.doors = [DOORS.barS];
+  APU.doors = [DOORS.apuN];
+  SALA.doors = [DOORS.salaE, DOORS.salaN]; BALC.doors = [DOORS.balcE, DOORS.balcS]; HALL.doors = [DOORS.hallW, DOORS.hallMom, DOORS.hallJ, DOORS.hallExit]; LND.doors = [DOORS.lndW, DOORS.liftL]; ELV.doors = [DOORS.liftC]; LOB.doors = [DOORS.liftB, DOORS.portalS]; STR.doors = [DOORS.streetN, DOORS.shopL]; BAR.doors = [DOORS.barS, DOORS.barD2];
   BAR.exits = [{ door: DOORS.barS, to: STR, arrive: DOORS.shopL, out: { y: 222 }, path: { y: [64, 80] },   // del bar a la calle, por la misma puerta
     test: () => P.dir === 'down' && P.y >= 212 && P.x > BAR_DEF.DOOR.x + 2 && P.x < BAR_DEF.DOOR.x + BAR_DEF.DOOR.w - 2,
     place: () => { shopDoors[0].open = true; shopDoors[0].o = 1; return { x: 352, dir: 'down', ang: Math.PI / 2 }; } }];
+  BAR.exits.push({ door: DOORS.barD2, to: APU, arrive: DOORS.apuN, out: { y: 126 }, path: { y: [260, 272] },   // del bar a la zona de apuestas, por la puerta doble
+    test: () => P.dir === 'down' && P.y >= 112 && P.x > BAR_DEF.DOOR2.x + 4 && P.x < BAR_DEF.DOOR2.x + BAR_DEF.DOOR2.w - 4, place: () => ({ x: 51, dir: 'down', ang: Math.PI / 2 }) });
+  APU.exits = [
+    { door: DOORS.apuN, to: BAR, arrive: DOORS.barD2, out: { y: 250 }, path: { y: [114, 104] },   // la puerta doble, de vuelta al bar
+      test: () => P.dir === 'up' && P.y <= 262 && P.y > 240 && P.x > APU_DEF.DOOR_BAR.x + 4 && P.x < APU_DEF.DOOR_BAR.x + APU_DEF.DOOR_BAR.w - 4, place: () => ({ x: BAR_DEF.DOOR2.x + BAR_DEF.DOOR2.w / 2, dir: 'up', ang: -Math.PI / 2 }) },
+    { door: DOORS.apuS, to: STR, arrive: DOORS.shopR, out: { y: 408 }, path: { y: [64, 80] },   // la de la calle (la puerta derecha de la fachada)
+      test: () => P.dir === 'down' && P.y >= 392 && P.x > APU_DEF.DOOR_ST.x + 4 && P.x < APU_DEF.DOOR_ST.x + APU_DEF.DOOR_ST.w - 4,
+      place: () => { shopDoors[1].open = true; shopDoors[1].o = 1; return { x: STR_DEF.DOOR2.x + STR_DEF.DOOR2.w / 2, dir: 'down', ang: Math.PI / 2 }; } }];
   LOB.exits = [{ door: DOORS.portalS, to: STR, arrive: DOORS.streetN, out: { y: 204 }, path: { y: [80, 90] },   // por la verja, a la calle (tras el saludo)
     test: () => jr.met && !hs && P.dir === 'down' && P.y >= 186 && P.x > 26 && P.x < 74, place: () => ({ x: 208, dir: 'down', ang: Math.PI / 2 }) }];
   STR.exits = [{ door: DOORS.streetN, to: LOB, arrive: DOORS.portalS, out: { y: 72 }, path: { y: [200, 186] },   // y de vuelta al portal
@@ -5602,6 +5634,28 @@
           ctx.fillStyle = face; ctx.fillRect(d.x + (d.glass ? 1 : 0), d.y + 1, Math.max(1, pw - (d.glass ? 2 : 0)), d.h - 2);
           ctx.fillStyle = hi; ctx.fillRect(d.x, d.y + 1, pw, 1);
           if (pw > 5) { ctx.fillStyle = '#b8943a'; ctx.fillRect(d.x + pw - 3, d.y + Math.floor(d.h / 2), 2, 1); }
+        }
+      } else if (a > 0 && d.kind === 'front2') {                    // DOBLE en la pared del fondo: cada hoja se estrecha hacia su bisagra
+        ctx.fillRect(d.x, d.y, d.w, d.h);
+        const half = d.w / 2, c = Math.cos(th), pw = Math.max(1, Math.round(half * c)), thick = Math.max(1, Math.min(3, Math.round((1 - c) * 4)));
+        for (const [hx, dir] of [[d.x, 1], [d.x + d.w, -1]]) {
+          const x0 = dir > 0 ? hx : hx - pw;
+          ctx.fillStyle = '#6a7076'; ctx.fillRect(x0, d.y, pw, d.h);
+          ctx.fillStyle = '#a9c2cc'; ctx.fillRect(x0 + 1, d.y + 1, Math.max(1, pw - 2), d.h - 2);
+          ctx.fillStyle = '#e2eef2'; ctx.fillRect(x0 + 1, d.y + 1, Math.max(1, pw - 2), 1);
+          ctx.fillStyle = '#c8202a'; ctx.fillRect(x0 + 1, d.y + 7, Math.max(1, pw - 2), 1);
+          if (c < 0.995) { ctx.fillStyle = '#3a3e44'; ctx.fillRect(dir > 0 ? x0 + pw : x0 - thick, d.y, thick, d.h); ctx.fillStyle = `rgba(0,0,0,${(0.12 + (1 - c) * 0.28).toFixed(2)})`; ctx.fillRect(dir > 0 ? x0 + pw + thick : x0 - thick - 4, d.y, 4, d.h); }   // el canto y su sombra
+          if (pw > 4) { ctx.fillStyle = '#c8ccd2'; ctx.fillRect(dir > 0 ? x0 + pw - 3 : x0 + 1, d.y + 4, 2, 7); }   // el tirador
+        }
+      } else if (a > 0 && d.kind === 'h2') {                        // DOBLE en una pared de abajo: las dos hojas giran hacia dentro (arriba)
+        ctx.fillRect(d.x, d.y, d.w, 6);
+        const half = d.w / 2;
+        for (const [hx, dir] of [[d.x, 1], [d.x + d.w, -1]]) {
+          const ex = hx + dir * Math.cos(th) * half, ey = d.y + 3 - Math.sin(th) * half;
+          ctx.strokeStyle = '#3a3e44'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(hx, d.y + 3); ctx.lineTo(ex, ey); ctx.stroke();
+          ctx.strokeStyle = '#a9c2cc'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(hx, d.y + 3); ctx.lineTo(ex, ey); ctx.stroke();
+          ctx.strokeStyle = 'rgba(235,245,250,0.9)'; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(hx + (ex - hx) * 0.3, d.y + 3 + (ey - d.y - 3) * 0.3); ctx.lineTo(hx + (ex - hx) * 0.5, d.y + 3 + (ey - d.y - 3) * 0.5); ctx.stroke();
+          ctx.fillStyle = '#c8ccd2'; ctx.fillRect(Math.round(ex - dir * Math.cos(th) * 3) - 1, Math.round(ey + Math.sin(th) * 3) - 1, 2, 2);   // el tirador
         }
       } else if (a > 0 && d.kind === 'h1') {                        // en una pared de abajo: el hueco y la hoja girando hacia dentro (arriba)
         ctx.fillRect(d.x, d.y, d.w, 6);
@@ -6756,7 +6810,7 @@
   const dan = { x: 220, y: 90, dir: 'down', moving: false, phase: 0 };
   const trail = [];                                                  // por dónde ha ido Juanjo (Daniel le sigue unos pasos detrás)
   function danTick(dt) {
-    if (room !== STR && room !== BAR) return;
+    if (room !== STR && room !== BAR && room !== APU) return;
     const last = trail[trail.length - 1];
     if (!last || Math.hypot(P.x - last.x, P.y - last.y) > 1) trail.push({ x: P.x, y: P.y });
     if (trail.length > 400) trail.shift();
@@ -6922,10 +6976,10 @@
         if (missionOn('bajar')) completeMission('bajar');
         saveAt('llaves');
         if (!jr.tabacoDone) atTime(t + 3.8, () => say('Espera, antes necesito tabaco. Dile al camarero que encienda la máquina.', 3.4, tNow + 0.1, tt => { addMission('bar'); saveAt('llaves'); }, () => ({ x: dan.x, y: dan.y })));
-      } else {                                                       // la derecha (la zona de apuestas), más adelante: vuelve a la acera
-        Object.assign(P, { x: Dr.x + Dr.w / 2, y: 86, dir: 'down', ang: Math.PI / 2, moving: false, phase: 0, tx: null });
-        Object.assign(dan, { x: P.x + 14, y: 88 }); trail.length = 0;
-        popup = { t, text: 'La zona de apuestas, muy pronto.' };
+      } else {                                                       // la derecha: A LA ZONA DE APUESTAS (Daniel detrás)
+        room = APU; camRoom = null; shopDoors[1].open = false; shopDoors[1].o = 0;
+        Object.assign(P, { x: 230, y: 384, dir: 'up', ang: -Math.PI / 2, moving: false, phase: 0, tx: null });
+        Object.assign(dan, { x: 230, y: 393, dir: 'up', moving: false }); trail.length = 0;
       }
     }
     if (s >= 2.8) { shopIn = null; return 0; }
@@ -7181,10 +7235,175 @@
     if (room !== BAR) return;
     barmanTick(t, dt);                                               // el camarero, a lo suyo
     barMissionTick(t, dt);
-    const D2 = BAR_DEF.DOOR2;
-    if (!swap && P.moving && P.dir === 'down' && P.y >= 113 && P.x > D2.x && P.x < D2.x + D2.w && t > edgeCool) {
-      edgeCool = t + 3; popup = { t, text: 'La zona de apuestas, muy pronto.' }; sfx(150, 0.18, 'square', 0.06, 110);
+  }
+  // ---------- LA ZONA DE APUESTAS (plano del usuario): moqueta negra y roja, paredes negras brillantes con franjas rojas y
+  // muchos LEDs. Arriba a la izquierda, la puerta doble que viene del bar; arriba, el tabique de la BARRA con su barra
+  // redonda; a la izquierda, contra la pared, las 4 TRAGAPERRAS (medio modernas, cada una con su color) tras el ALTILLO de
+  // privacidad; abajo, la entrada desde la calle (la puerta derecha de la casa de apuestas). Más grande que la pantalla.
+  let apuBg = null, apuMachCv = null;
+  const slEllB = (b, x, y, rx, ry, c) => { b.fillStyle = c; b.beginPath(); b.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); b.fill(); };
+  function buildApu() {
+    const D = APU_DEF;
+    apuBg = document.createElement('canvas'); apuBg.width = D.w; apuBg.height = D.h;
+    const b = apuBg.getContext('2d');
+    const R = (x, y, w, h, c, a) => { b.globalAlpha = a == null ? 1 : a; b.fillStyle = c; b.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); b.globalAlpha = 1; };
+    const ell = (x, y, rx, ry, c, a) => { b.globalAlpha = a == null ? 1 : a; b.fillStyle = c; b.beginPath(); b.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); b.fill(); b.globalAlpha = 1; };
+    const panel = (x, y, w, h) => { const g = b.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#16161c'); g.addColorStop(1, '#08080c'); b.fillStyle = g; b.fillRect(x, y, w, h); for (let xx = x; xx < x + w; xx += 24) { R(xx, y, 1, h, '#2a2a34'); R(xx + 4, y + 2, 6, h - 5, '#ffffff', 0.04); } };   // pared negra brillante
+    R(0, 0, D.w, D.h, '#030203');
+    // LA MOQUETA: negra con dibujos rojos, en toda la sala
+    b.save(); b.beginPath(); for (const F of D.floor) b.rect(F.x, F.y, F.w, F.h); b.clip();
+    R(0, 0, D.w, D.h, '#12060a');
+    for (let y = 30; y < D.h; y += 16) for (let x = 16; x < D.w; x += 16) {
+      const o = ((y - 30) / 16) % 2 ? 8 : 0, cx = x + 8 + o, cy = y + 8;
+      b.fillStyle = '#4a0a12'; b.beginPath(); b.moveTo(cx, cy - 5); b.lineTo(cx + 5, cy); b.lineTo(cx, cy + 5); b.lineTo(cx - 5, cy); b.closePath(); b.fill();
+      R(cx - 1, cy - 1, 2, 2, '#9a1626'); ell(cx - 8, cy - 8, 2.2, 2.2, '#5a0a14'); R(cx - 9, cy - 9, 1, 1, '#c82a3a', 0.7);
+      R(cx + 3, cy - 7, 3, 1, '#3a060c'); R(cx - 6, cy + 6, 3, 1, '#3a060c');
     }
+    for (let i = 0; i < 700; i++) R(16 + (i * 37) % 343, 30 + (i * 53) % 367, 1, 1, i % 3 ? '#000' : '#2a0a10', 0.4);
+    b.restore();
+    // LA PARED DE ARRIBA: negra brillante, franja roja (la tira de LEDs se enciende en cada fotograma) y dos pantallas de cuotas
+    const Wf = D.faces[0]; panel(Wf.x, Wf.y, Wf.w, Wf.h);
+    R(Wf.x, Wf.y + 17, Wf.w, 4, '#a80a14'); R(Wf.x, Wf.y + 17, Wf.w, 1, '#ff4a5a'); R(Wf.x, Wf.y + 20, Wf.w, 1, '#5a0408'); R(Wf.x, Wf.y + Wf.h - 2, Wf.w, 2, '#000', 0.6);
+    for (const sx of [130, 262]) { R(sx - 1, Wf.y + 3, 50, 14, '#000'); R(sx, Wf.y + 4, 48, 12, '#0a1a3a'); R(sx, Wf.y + 4, 48, 2, '#c8101a'); for (let k = 0; k < 3; k++) { R(sx + 2, Wf.y + 7 + k * 3, 22, 1, '#c8d0e0'); R(sx + 30, Wf.y + 7 + k * 3, 5, 2, '#ffd84a'); R(sx + 38, Wf.y + 7 + k * 3, 5, 2, '#4aff6a'); } }
+    // EL CUARTITO Y EL BAR (bloques cerrados que entran en la sala): techo oscuro
+    const BK = D.BLOCK; R(BK.x, BK.y, BK.w, BK.h, '#000');           // el bar, por dentro: no se ve (negro)
+    // el hueco de la BARRA: su pared del fondo, negra con franja roja
+    const AL = D.ALC; panel(AL.x, AL.y, AL.w, 16); R(AL.x, AL.y + 10, AL.w, 3, '#a80a14'); R(AL.x, AL.y + 10, AL.w, 1, '#ff4a5a');
+    // EL CUARTITO ES LA BARRA: suelo de baldosa, la pared del fondo lisa (negra con su franja roja), la ALACENA en la pared
+    // OESTE (baldas vistas desde arriba, con vasos, tazas y bolsas de monedas) y el MOSTRADOR encajado en el hueco de la pared
+    // que da a la sala (sin pisar los muros ni salirse)
+    const RB = D.ROOMB; R(RB.x, RB.y, RB.w, RB.h, '#1a1a1e');
+    for (let y = RB.y + 12; y < RB.y + RB.h; y += 6) for (let x = RB.x; x < RB.x + RB.w; x += 6) R(x, y, 5, 5, ((x + y) / 6) % 2 ? '#26262c' : '#1e1e24');
+    panel(RB.x, RB.y, RB.w, 12); R(RB.x, RB.y + 7, RB.w, 2, '#a80a14'); R(RB.x, RB.y + 7, RB.w, 1, '#ff4a5a');
+    R(RB.x, RB.y + 12, RB.w, 2, '#000', 0.4);                       // la sombra de la pared en el suelo
+    R(RB.x, RB.y + 12, 11, RB.h - 12, '#2a1e14'); R(RB.x + 10, RB.y + 12, 1, RB.h - 12, '#4a3a28');   // LA ALACENA (pared oeste): mueble de madera oscura
+    for (let k = 0; k < 4; k++) { const sy = RB.y + 14 + k * 6; R(RB.x + 1, sy + 5, 9, 1, '#8a8e94');   // sus baldas, con lo que hay encima
+      for (let j = 0; j < 3; j++) { const ix = RB.x + 2 + j * 3; if (k === 3) { R(ix, sy + 1, 2, 3, '#7a6a3a'); R(ix, sy + 1, 1, 1, '#c8a040'); } else if ((j + k) % 2) { slEllB(b, ix + 1, sy + 2.5, 1.2, 1.2, '#d8e4ec'); } else { R(ix, sy + 1, 2, 3, '#f4f0e8'); R(ix + 1, sy + 1, 1, 1, '#6a3a1a'); } } }
+    R(RB.x + 30, RB.y + 30, 10, 6, '#3a3a40'); R(RB.x + 31, RB.y + 30, 8, 1, '#6a6a76');            // la caja fuerte del cambio, en el suelo
+    // EL MOSTRADOR: tablero de acero cepillado con canto y faldón rojos, encajado entre los muros
+    const BR = D.BARRA; R(BR.x - 1, BR.y, BR.w + 2, BR.h, '#000');
+    { const g = b.createLinearGradient(BR.x, 0, BR.x + BR.w, 0); g.addColorStop(0, '#8a8e94'); g.addColorStop(0.45, '#e8ecf0'); g.addColorStop(1, '#a8acb2'); b.fillStyle = g; b.fillRect(BR.x, BR.y, BR.w - 2, BR.h); }
+    for (let y = BR.y + 1; y < BR.y + BR.h; y += 2) R(BR.x + 1, y, BR.w - 4, 1, '#ffffff', 0.08);   // el cepillado del acero
+    R(BR.x, BR.y, 1, BR.h, '#5a5e64'); R(BR.x + BR.w - 3, BR.y, 1, BR.h, '#eef0f2');
+    R(BR.x + BR.w - 2, BR.y, 2, BR.h, '#c41a22'); R(BR.x + BR.w - 2, BR.y, 1, BR.h, '#ff5a62');      // el canto rojo, hacia la sala
+    R(BR.x + 1, BR.y + 3, 7, 7, '#1e1e22'); R(BR.x + 2, BR.y + 4, 5, 2, '#0a2a0a'); R(BR.x + 3, BR.y + 4, 2, 1, '#4aff6a'); R(BR.x + 2, BR.y + 7, 5, 2, '#c8a040'); R(BR.x + 3, BR.y + 9, 3, 1, '#000');   // la máquina del CAMBIO (con su bandeja)
+    R(BR.x + 2, BR.y + 14, 5, 6, '#2a2a2e'); R(BR.x + 3, BR.y + 15, 3, 2, '#6ab8ff'); R(BR.x + 3, BR.y + 18, 3, 1, '#8a8e94');   // el datáfono
+    slEllB(b, BR.x + 4.5, BR.y + 25, 2, 2, '#c8ccd2'); R(BR.x + 4, BR.y + 24, 1, 1, '#ffffff');         // el timbre
+    R(BR.x + 2, BR.y + 30, 4, 5, '#d8e4ec', 0.55); R(BR.x + 2, BR.y + 30, 4, 1, '#ffffff', 0.8); R(BR.x + 3, BR.y + 32, 1, 1, '#c8a040');   // el bote de las propinas
+    // la pared de abajo del bar, con LA PUERTA DOBLE que lleva al bar (cristal opaco con sus rayas rojas)
+    const DB = D.DOOR_BAR; panel(BK.x, DB.y, BK.w, DB.h); R(BK.x, DB.y + DB.h - 4, BK.w, 2, '#a80a14');
+    R(DB.x - 2, DB.y, DB.w + 4, DB.h, '#b8bcc2'); R(DB.x - 1, DB.y, DB.w + 2, DB.h, '#3a3e44');           // el marco de aluminio
+    for (let k = 0; k < 2; k++) {                                     // LAS DOS HOJAS de cristal
+      const x = DB.x + k * DB.w / 2, w = DB.w / 2;
+      R(x, DB.y + 1, w, DB.h - 1, '#6a7076'); R(x + 1, DB.y + 1, w - 2, DB.h - 2, '#9ab8c8'); R(x + 2, DB.y + 2, w - 4, DB.h - 4, '#c8dce6', 0.85);
+      R(x + 3, DB.y + 2, 2, DB.h - 4, '#ffffff', 0.5); R(x + 7, DB.y + 2, 1, DB.h - 4, '#ffffff', 0.3); R(x + 1, DB.y + 7, w - 2, 1, '#c8202a');
+      R(k ? x + 2 : x + w - 4, DB.y + 4, 2, 7, '#c8ccd2'); R(k ? x + 2 : x + w - 4, DB.y + 4, 1, 7, '#ffffff');   // los tiradores, en medio
+    }
+    R(DB.x + DB.w / 2 - 1, DB.y + 1, 2, DB.h - 1, '#4a4e54');
+    // los muros (tapas negras con brillo y filo rojo)
+    for (const c of D.caps) R(c.x - 1, c.y - 1, c.w + 2, c.h + 2, '#000');                         // 1: el contorno de todos
+    for (const c of D.caps) { const g = b.createLinearGradient(0, c.y, 0, c.y + c.h); g.addColorStop(0, '#24242c'); g.addColorStop(1, '#101016'); b.fillStyle = g; b.fillRect(c.x, c.y, c.w, c.h); }   // 2: el relleno, unido
+    for (const c of D.caps) { if (c.w > c.h) { R(c.x, c.y + 1, c.w, 1, '#ffffff', 0.08); R(c.x, c.y + c.h - 1, c.w, 1, '#6a0a12'); } else { R(c.x + 1, c.y, 1, c.h, '#ffffff', 0.06); R(c.x + c.w - 1, c.y, 1, c.h, '#6a0a12'); } }   // 3: brillo y filo rojo
+    // LA PUERTA DE LA CALLE (abajo): cristal con su marco y el felpudo
+    const DS = D.DOOR_ST; R(DS.x - 2, D.h - 13, DS.w + 4, 8, '#2a2a2e'); R(DS.x, D.h - 12, DS.w, 6, '#8a9096'); R(DS.x + 1, D.h - 11, DS.w - 2, 4, '#c8d8e0', 0.7); R(DS.x + DS.w / 2 - 1, D.h - 12, 2, 6, '#6a7076');
+    R(DS.x + 4, D.h - 22, DS.w - 8, 8, '#1a1a1e'); for (let x = DS.x + 6; x < DS.x + DS.w - 6; x += 3) R(x, D.h - 21, 1, 6, '#2a2a32');
+    // EL ALTILLO DE PRIVACIDAD: panel negro brillante (el LED se enciende en cada fotograma)
+    const PV = D.PRIV; R(PV.x - 1, PV.y - 1, PV.w + 2, PV.h + 2, '#000'); R(PV.x, PV.y, PV.w, PV.h, '#1a1a22'); R(PV.x, PV.y, 1, PV.h, '#4a4a56');
+    R(PV.x - 1, PV.y + PV.h, PV.w + 2, 14, '#000'); { const g = b.createLinearGradient(0, PV.y + PV.h, 0, PV.y + PV.h + 13); g.addColorStop(0, '#24242c'); g.addColorStop(1, '#0a0a0e'); b.fillStyle = g; b.fillRect(PV.x, PV.y + PV.h, PV.w, 13); }
+  }
+  // las tragaperras: la cara se pinta de frente en un lienzo y se tuerce hacia la sala ("/"), con su costado y su taburete
+  const APU_ACC = ['#ff2a8a', '#2ad8ff', '#ffd82a', '#4aff6a'];
+  function apuMachFace(i, t) {                                       // la cara de frente (18 x 32): copete, pantalla, botonera y base
+    if (!apuMachCv) apuMachCv = offCv(18, 32);
+    const g = apuMachCv.getContext('2d'), R = (x, y, w, h, c, a) => { g.globalAlpha = a == null ? 1 : a; g.fillStyle = c; g.fillRect(x, y, w, h); g.globalAlpha = 1; };
+    const A = APU_ACC[i]; g.clearRect(0, 0, 18, 32);
+    R(0, 0, 18, 7, '#0a0a0e'); R(1, 1, 16, 5, '#1a0a1a');
+    for (let k = 0; k < 4; k++) R(2 + k * 4, 2, 3, 3, (Math.floor(t * 6) + k + i) % 3 ? A : '#ffffff', (Math.floor(t * 6) + k + i) % 3 ? 0.85 : 1);
+    R(0, 7, 18, 13, '#16161c'); R(0, 7, 1, 13, A); R(17, 7, 1, 13, A); R(2, 8, 14, 11, '#0a0820');
+    const cols = ['#d4161e', '#ffd84a', '#4aff6a', '#4a8aff', '#ff8a2a', '#c86aff'];
+    for (let c = 0; c < 3; c++) { const off = Math.floor(t * 2.5 + c * 1.7 + i * 2); for (let r = 0; r < 3; r++) R(3 + c * 4, 9 + r * 3, 3, 2, cols[(off + r + c) % 6]); }
+    if (Math.sin(t * 2 + i * 1.3) > 0.85) R(2, 12, 14, 1, '#ffffff', 0.9);
+    R(2, 8, 1, 5, '#ffffff', 0.2);
+    R(0, 20, 18, 5, '#2a2a32'); R(0, 20, 18, 1, '#6a6a76'); ['#ffd84a', '#4a8aff'].forEach((c, k) => R(2 + k * 4, 22, 3, 2, c)); R(12, 21, 4, 3, '#d4161e');
+    R(0, 25, 18, 7, '#0e0e12'); R(0, 25, 1, 5, A); R(17, 25, 1, 5, A); R(3, 26, 6, 2, '#2a2a32'); R(4, 27, 4, 1, '#4aff6a');
+    R(0, 30, 18, 2, '#8a8e94'); R(0, 30, 18, 1, '#c8ccd2');
+    return apuMachCv;
+  }
+  function drawStool(sx, sy) {                                       // taburete: asiento rojo, pie cromado y aro
+    slEll(sx, sy, 6, 2, '#000', 0.3); slEll(sx, sy - 1, 5, 1.6, '#8a8e94');
+    PR(sx - 1, sy - 12, 2, 11, '#9aa0a6'); PR(sx - 1, sy - 12, 1, 11, '#e0e4e8');
+    ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(sx, sy - 5, 4.5, 1.5, 0, 0, Math.PI * 2); ctx.stroke();
+    slEll(sx, sy - 12, 6.5, 2.8, '#6a0a10'); slEll(sx, sy - 13, 6, 2.4, '#d4161e'); PP(sx - 3, sy - 14, '#ff8a8a');
+  }
+  function drawApuMachine(i, t) {                                   // de perfil, mirando al este: espalda en la pared y pantallas hacia la sala
+    const M = APU_DEF.SLOTS[i], yb = M.yb, A = APU_ACC[i], x0 = 17, on = 0.6 + 0.4 * Math.sin(t * 4 + i);
+    const X = v => x0 + v, Y = v => yb - v;                          // x hacia la sala, y hacia arriba
+    ctx.save(); ctx.translate(0, yb); ctx.scale(1, 0.78); ctx.translate(0, -yb);   // algo más bajas, para que se vean todas en fila
+    { const gl = ctx.createRadialGradient(X(28), Y(18), 2, X(28), Y(18), 26); gl.addColorStop(0, A + '55'); gl.addColorStop(1, A + '00'); ctx.fillStyle = gl; ctx.fillRect(X(0), Y(46), 56, 52); }   // la luz de las pantallas
+    PR(X(-1), Y(2), 27, 4, '#000', 0.45);                            // la sombra
+    // la base: mueble negro con el frente redondeado, el LED de abajo y el billetero
+    PR(X(0), Y(14), 21, 14, '#0c0c10'); PR(X(0), Y(14), 21, 1, '#3a3a44'); PR(X(19), Y(13), 2, 12, '#1c1c22'); PR(X(20), Y(12), 1, 10, '#4a4a56');
+    PR(X(0), Y(3), 21, 1, A, on); PR(X(2), Y(10), 14, 5, A, 0.12); PR(X(2), Y(10), 14, 1, A, 0.4);   // el LED y el vinilo de abajo
+    PR(X(17), Y(10), 3, 4, '#2a2a32'); PR(X(18), Y(9), 1, 2, '#4aff6a');                            // el billetero
+    // el mueble de las pantallas: costado con su vinilo en diagonal y el canto cromado
+    slPoly([[X(0), Y(14)], [X(17), Y(14)], [X(14), Y(36)], [X(0), Y(36)]], '#18181e');
+    slPoly([[X(1), Y(18)], [X(9), Y(30)], [X(12), Y(30)], [X(4), Y(18)]], A + '55'); slPoly([[X(4), Y(18)], [X(12), Y(30)], [X(13), Y(28)], [X(6), Y(18)]], A + '22');   // la franja del vinilo
+    ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(17.5), Y(14)); ctx.lineTo(X(14.5), Y(36)); ctx.stroke();   // el canto cromado
+    ctx.strokeStyle = A; ctx.globalAlpha = on; ctx.beginPath(); ctx.moveTo(X(16.5), Y(14)); ctx.lineTo(X(13.5), Y(36)); ctx.stroke(); ctx.globalAlpha = 1;   // y su LED
+    // LA PANTALLA GRANDE, vista de canto: el marco y la luz de los rodillos que se mueve
+    slPoly([[X(17), Y(15)], [X(21), Y(15)], [X(18), Y(35)], [X(14), Y(35)]], '#06060a');
+    const cols = ['#d4161e', '#ffd84a', '#4aff6a', '#4a8aff', '#ff8a2a', '#c86aff'];
+    for (let k = 0; k < 5; k++) { const yy = 16 + ((k * 4 + t * 14 + i * 3) % 19), xo = (yy - 15) * 0.15; PR(X(18.5 - xo), Y(yy), 2, 2, cols[(k + i) % 6], 0.9); }
+    PR(X(20), Y(17), 1, 1, '#ffffff', 0.7);
+    // la botonera: repisa con relieve que sale hacia el jugador, con sus botones encendidos
+    slPoly([[X(15), Y(17)], [X(29), Y(15)], [X(29), Y(12)], [X(15), Y(13)]], '#24242c');
+    slPoly([[X(15), Y(17)], [X(29), Y(15)], [X(28), Y(14)], [X(15), Y(16)]], '#c8ccd2');
+    PR(X(28), Y(15), 1, 3, '#eef0f2');
+    [['#d4161e', 18], ['#ffd84a', 21], ['#4aff6a', 24], ['#4a8aff', 26]].forEach(([c, x], k) => { PP(X(x), Y(16 - Math.round((x - 15) * 0.13)), c); if (Math.sin(t * 5 + k + i) > 0.6) PP(X(x), Y(17 - Math.round((x - 15) * 0.13)), '#ffffff'); });
+    // la pantalla de arriba (la segunda) y el copete luminoso con la baliza
+    PR(X(1), Y(44), 13, 8, '#14141a'); PR(X(1), Y(44), 13, 1, '#3a3a44');
+    slPoly([[X(14), Y(44)], [X(16), Y(44)], [X(16), Y(37)], [X(14), Y(37)]], Math.floor(t * 3 + i) % 2 ? A : '#ffffff');   // su pantalla, de canto
+    PR(X(0), Y(51), 16, 7, '#0a0a0e'); PR(X(1), Y(50), 14, 5, A, 0.75); PR(X(1), Y(50), 14, 1, '#ffffff', 0.5);   // el copete, encendido
+    for (let k = 0; k < 4; k++) PR(X(2 + k * 3), Y(48), 2, 2, (Math.floor(t * 6) + k + i) % 3 ? '#ffffff' : '#000', 0.7);   // sus luces corriendo
+    const bea = Math.floor(t * 3 + i * 0.7) % 2; slEll(X(8), Y(53), 2.2, 1.6, bea ? '#ff3a3a' : '#5a0a0a'); if (bea) slEll(X(8), Y(53), 4, 3, '#ff3a3a', 0.25);   // la baliza
+    ctx.restore();
+  }
+  function drawApuLife(t) {                                          // los LEDs que corren por las paredes y las máquinas
+    const D = APU_DEF, Wf = D.faces[0];
+    for (let x = Wf.x + 2; x < Wf.x + Wf.w; x += 4) { const h = ((x / 4 + t * 12) % 36) / 36; PR(x, Wf.y + 2, 2, 2, `hsl(${Math.round(h * 360)},100%,60%)`); }   // la tira de arriba, arcoíris que corre
+    PR(Wf.x, Wf.y + 17, Wf.w, 4, '#ff3a4a', 0.15 + 0.12 * Math.sin(t * 3));
+    for (const sx of [120, 262]) if (Math.sin(t * 2.3 + sx) > 0.4) PR(sx + 30, Wf.y + 7 + (Math.floor(t * 2 + sx) % 3) * 3, 13, 2, '#ffffff', 0.4);   // las cuotas cambian
+    const AL = D.ALC; for (let x = AL.x + 24; x < AL.x + AL.w; x += 3) PR(x, AL.y + 10, 2, 2, Math.floor(x / 3 + t * 10) % 6 < 2 ? '#ff4a5a' : '#5a0a12');   // el fondo de la barra
+    for (let x = 17; x < 87; x += 3) if (x < D.DOOR_BAR.x - 3 || x > D.DOOR_BAR.x + D.DOOR_BAR.w + 2) PR(x, D.DOOR_BAR.y + 12, 2, 2, Math.floor(x / 3 - t * 10) % 6 < 2 ? '#ff4a5a' : '#5a0a12');   // la pared del bar
+    const BR = D.BARRA; PR(BR.x + BR.w - 2, BR.y, 2, BR.h, '#ff3a4a', 0.3 + 0.3 * Math.sin(t * 4));   // el canto de la barra, respirando
+    const PV = D.PRIV; for (let y = PV.y + 2; y < PV.y + PV.h; y += 3) PR(PV.x + 2, y, 1, 2, `hsl(${Math.round(((y / 3 - t * 14) % 36 + 36) % 36 * 10)},100%,60%)`);   // el altillo
+    PR(PV.x, PV.y + PV.h + 4, PV.w, 2, '#ff2a3a', 0.6 + 0.4 * Math.sin(t * 5));
+    for (let i = 0; i < 4; i++) drawApuMachine(i, t);
+  }
+  function apuActors(front) {
+    const list = APU_DEF.SLOTS.map(M => ({ y: M.yb - 2, f: () => drawStool(52, M.yb - 2) }));
+    list.push({ y: APU_DEF.STAFF.y, f: () => drawApuStaff(tNow) });
+    list.push({ y: dan.y, f: () => drawActor(JJ_DAN, dan.x, dan.y, dan.dir, dan.moving, dan.phase) });
+    list.filter(a => front ? a.y > P.y : a.y <= P.y).sort((a, b) => a.y - b.y).forEach(a => a.f());
+  }
+  function apuLights(t, power, lvl) {                                // el resplandor rojo de los LEDs sobre la moqueta
+    const g = ctx.createLinearGradient(0, 30, 0, 90); g.addColorStop(0, 'rgba(255,40,60,0.14)'); g.addColorStop(1, 'rgba(255,40,60,0)'); ctx.fillStyle = g; ctx.fillRect(16, 30, 343, 60);
+    { const BR = APU_DEF.BARRA, gb = ctx.createRadialGradient(BR.x + BR.w, BR.y + 24, 2, BR.x + BR.w, BR.y + 24, 40); gb.addColorStop(0, 'rgba(255,60,80,0.18)'); gb.addColorStop(1, 'rgba(255,60,80,0)'); ctx.fillStyle = gb; ctx.fillRect(BR.x - 20, BR.y - 16, 80, 80); }
+    APU_DEF.SLOTS.forEach((M, i) => { const gl = ctx.createRadialGradient(50, M.yb - 6, 2, 50, M.yb - 6, 34); gl.addColorStop(0, APU_ACC[i] + '30'); gl.addColorStop(1, APU_ACC[i] + '00'); ctx.fillStyle = gl; ctx.fillRect(6, M.yb - 34, 70, 68); });
+    const PV = APU_DEF.PRIV, gp = ctx.createRadialGradient(PV.x + 2, PV.y + PV.h / 2, 2, PV.x + 2, PV.y + PV.h / 2, 60); gp.addColorStop(0, 'rgba(200,80,255,0.12)'); gp.addColorStop(1, 'rgba(200,80,255,0)'); ctx.fillStyle = gp; ctx.fillRect(PV.x - 60, PV.y, 120, PV.h);
+  }
+  const APU_STAFF = npcLook({ H: '#2a1a12', h: '#3a2418', T: '#c41a22', t: '#8a0c12', P: '#141418', K: '#0e0e10', E: '#2a1a14', M: '#b0605a' }, { hairLong: true, thin: true });
+  const apuStaff = { dir: 'right', t: 0 };
+  function drawApuStaff(t) {
+    const S = APU_DEF.STAFF;
+    if (t - apuStaff.t > 3 + (Math.sin(t) + 1) * 2) { apuStaff.t = t; apuStaff.dir = ['right', 'down', 'right', 'up'][Math.floor(t) % 4]; }   // mira a la sala, al frente o a la caja
+    drawActor(APU_STAFF, S.x, S.y, apuStaff.dir, false, 0);
+    if (apuStaff.dir === 'up' && Math.sin(t * 8) > 0) PP(S.x + 3, S.y - 12, '#c8a040');   // contando monedas
+  }
+  function apuSlotIdx() {                                            // ¿al lado de qué tragaperras está?
+    if (room !== APU) return -1;
+    let best = -1, bd = 99; APU_DEF.SLOTS.forEach((M, i) => { const d = Math.abs(P.y - (M.yb - 5)); if (P.x < 60 && d < 8 && d < bd) { best = i; bd = d; } });   // pegado a la máquina, junto a su taburete
+    return best;
   }
   // ---------- LA MÚSICA DEL BAR: una rumbita de garito en 8 bits (Do mayor, 112 bpm, 8 compases en bucle) ----------
   // Se programa compás a compás en el reloj de audio (como la del menú). Suena mientras estás en el bar; con la tragaperras
@@ -7501,6 +7720,7 @@
   };
   const inC = (p, c, pad) => Math.hypot(p.x - c.cx, p.y - c.cy) <= c.r + (pad || 0);
   function slotNear() {
+    if (room === APU) return !swap && !fp && !panel && !slotUI && !walletUI && apuSlotIdx() >= 0;   // una de las 4 de la zona de apuestas
     if (room !== BAR || swap || fp || panel || slotUI || walletUI || slotGuyOn() || tabacoScene) return false;
     const S = BAR_DEF.SLOT; return P.x > S.x - 6 && P.x < S.x + S.w + 6 && P.y < BAR_DEF.MACH_F + 14;
   }
@@ -8844,6 +9064,7 @@
   }
   function onArrive(rm, t) {                                         // al entrar en una habitación
     if (rm === STR) { dan.x = P.x + 14; dan.y = P.y + 2; dan.dir = 'down'; trail.length = 0; }   // Daniel sale con él
+    if (rm === APU || rm === BAR) { dan.x = P.x + 14; dan.y = P.y; trail.length = 0; }          // y entra con él
     if (rm === LOB && lift.state === 'arrived') { lift.state = 'lobClose'; lift.t0 = t; sfx(200, 0.9, 'sawtooth', 0.012, 140); }   // el ascensor se cierra detrás
     if (rm === ELV && lift.state === 'open') { lift.state = 'closing'; lift.t0 = t; sfx(200, 0.9, 'sawtooth', 0.012, 140); }   // se cierra la puerta de abajo
     if (rm === LND && !jr.lndLine) {                                  // al salir al rellano: ¡aquí sí hay luz!
@@ -8960,18 +9181,19 @@
     const power = powerAt(t);                                            // luz eléctrica (1 = encendida); la del día no depende de ella
     outageSounds(t); autosave(t); fuseTick(t); runLater(t);
     const jrBlack = jrTick(t); furnTick(t, dt); liftTick(t); blockedChecks(t); lobbyTick(t);
-    const hsBlack = Math.max(hsTick(t, dt), shopTick(t, dt)); danTick(dt); npcTick(t, dt); streetEdges(t); barTick(t, dt); slotTick(t, dt); hudWalletTick(); BarMusic.tick(room === BAR, !!slotUI);   // el saludo y la calle                                           // en su cuarto: cambiarse funde a negro un momento
+    const hsBlack = Math.max(hsTick(t, dt), shopTick(t, dt)); danTick(dt); npcTick(t, dt); streetEdges(t); barTick(t, dt); slotTick(t, dt); hudWalletTick(); BarMusic.tick(room === BAR || room === APU, !!slotUI);   // el saludo y la calle                                           // en su cuarto: cambiarse funde a negro un momento
     camTick(dt);
     ctx.setTransform(RES, 0, 0, RES, -Math.round(camX * RES), -Math.round(camY * RES)); ctx.imageSmoothingEnabled = false;   // en px lógicos del mundo (con la cámara)   // a partir de aquí, en px lógicos
 
     const inSala = room === SALA;
-    ctx.drawImage(inSala ? bg : room === HALL ? hallBg : room === MOM ? momBg : room === BALC ? balcBg : room === JR ? jrBg : room === LND ? lndBg : room === ELV ? elvBg : room === LOB ? lobBg : room === STR ? strBg : room === BAR ? barBg : bathBg, 0, 0);
+    ctx.drawImage(inSala ? bg : room === HALL ? hallBg : room === MOM ? momBg : room === BALC ? balcBg : room === JR ? jrBg : room === LND ? lndBg : room === ELV ? elvBg : room === LOB ? lobBg : room === STR ? strBg : room === BAR ? barBg : room === APU ? apuBg : bathBg, 0, 0);
     drawDoorSwing(t);                                                // la puerta abriéndose o cerrándose al cruzarla
     if (room === MOM) drawCurtains(t);                               // las cortinas de la puerta del balcón, movidas por el aire
     if (room === JR) drawJr(t);
     if (room === LND || room === ELV) drawBuilding(t);
     if (room === LOB) drawLobby(t);
     if (room === STR) { drawStreetSigns(t); drawShopDoors(t); }
+    if (room === APU) drawApuLife(t);
     if (room === BAR) drawBarLife(t);                                // el bar: la tele, la tragaperras y las máquinas              // el edificio: las puertas del ascensor y sus pantallitas                                      // su cuarto: la cama, la ropa del suelo, la cartera y el armario
     if (room === BALC) { trafficTick(t, dt); drawStreet(t); }        // la calle: el coche azul con las cuatro intermitentes y el tráfico
     if (inSala) {                                                    // reflejo del espejo: la luz no deja ver nada dentro
@@ -8992,9 +9214,9 @@
         drawPuff(P.x + 17, P.y - 1, CUT.fall, cst.s); drawPuff(T.x + HALL_DEF.BOX1.w / 2, T.fy + 4, CUT.land, cst.s);
       }
     } else {
-      if (room === STR) streetActors(false); if (room === BAR) barActors(false);                         // en la calle: la gente y Daniel, de detrás a delante
+      if (room === STR) streetActors(false); if (room === BAR) barActors(false); if (room === APU) apuActors(false);                         // en la calle: la gente y Daniel, de detrás a delante
       if (!hsPastGate()) drawPlayer();                               // si ya pasó la verja, se pinta con Daniel (orden por y)
-      if (room === STR) { streetActors(true); streetTraffic(t, dt); } if (room === BAR) { barActors(true); drawBarTV(tNow); }
+      if (room === STR) { streetActors(true); streetTraffic(t, dt); } if (room === BAR) { barActors(true); drawBarTV(tNow); } if (room === APU) apuActors(true);
     }
     if (room === LOB) { drawGate(t); drawHandshake(t); }             // la verja y Daniel; el saludo
 
@@ -9002,11 +9224,11 @@
     // OSCURIDAD como capa aparte: las luces que de verdad iluminan (linterna, claridad de la sala en la entrada) la
     // RECORTAN, así se ve el suelo, las paredes y las puertas con sus colores; encima solo va un tinte suave de cada luz.
     // Sin luz eléctrica: penumbra en la sala (son las 4 de la tarde); en la entrada, sin ventanas, oscuridad casi total
-    const beam = flashOn && room !== STR && room !== BAR && room !== LND && room !== LOB ? beamLayer(P.x + Math.cos(P.ang) * 5, P.y - 8 + Math.sin(P.ang) * 3, P.ang, 0.96 + 0.04 * Math.sin(t * 23)) : null;
+    const beam = flashOn && room !== STR && room !== BAR && room !== APU && room !== LND && room !== LOB ? beamLayer(P.x + Math.cos(P.ang) * 5, P.y - 8 + Math.sin(P.ang) * 3, P.ang, 0.96 + 0.04 * Math.sin(t * 23)) : null;
     dctx.globalCompositeOperation = 'source-over'; dctx.clearRect(0, 0, darkCv.width, darkCv.height);
     // cuarto de la madre: entra el día por el balcón abierto (penumbra); baño: sin ventana grande, casi a oscuras
     dctx.fillStyle = inSala ? `rgba(10,5,4,${0.22 + 0.26 * (1 - power)})` : room === MOM || room === JR ? `rgba(8,4,4,${0.24 + 0.34 * (1 - power)})`
-      : room === STR || room === BAR ? 'rgba(0,0,0,0)' : room === ELV ? 'rgba(6,6,8,0.14)' : room === LND || room === LOB ? 'rgba(4,4,6,0.16)' : room === BATH ? `rgba(3,2,2,${0.3 + 0.6 * (1 - power)})` : room === BALC ? 'rgba(8,4,4,0.06)' : `rgba(3,2,2,${0.3 + 0.66 * (1 - power)})`;   // el balcón es fuera: de día
+      : room === STR || room === BAR || room === APU ? 'rgba(0,0,0,0)' : room === ELV ? 'rgba(6,6,8,0.14)' : room === LND || room === LOB ? 'rgba(4,4,6,0.16)' : room === BATH ? `rgba(3,2,2,${0.3 + 0.6 * (1 - power)})` : room === BALC ? 'rgba(8,4,4,0.06)' : `rgba(3,2,2,${0.3 + 0.66 * (1 - power)})`;   // el balcón es fuera: de día
     dctx.fillRect(0, 0, darkCv.width, darkCv.height);
     dctx.globalCompositeOperation = 'destination-out';
     if (beam) { dctx.drawImage(beam, 0, 0); dctx.drawImage(beam, 0, 0); }          // dos veces: cerca del móvil se ve casi como de día
@@ -9030,7 +9252,7 @@
     }
     ctx.save(); ctx.globalCompositeOperation = 'screen';
     const showLights = !(cst && cst.bars > 0.3);                     // con el foco de circo encendido, nada más brilla
-    if (!inSala) { if (showLights) (room === HALL ? hallLights : room === MOM ? momLights : room === BALC ? balcLights : room === JR ? jrLights : room === LND ? lndLights : room === ELV ? elvLights : room === LOB ? lobLights : room === STR ? strLights : room === BAR ? barLights : bathLights)(t, power, lvl); }
+    if (!inSala) { if (showLights) (room === HALL ? hallLights : room === MOM ? momLights : room === BALC ? balcLights : room === JR ? jrLights : room === LND ? lndLights : room === ELV ? elvLights : room === LOB ? lobLights : room === STR ? strLights : room === BAR ? barLights : room === APU ? apuLights : bathLights)(t, power, lvl); }
     else {
     // luz del día de fuera: claridad desde el ventanal que se apaga hacia el centro de la sala
     const fill = ctx.createLinearGradient(26, 0, 190, 0);
@@ -9086,7 +9308,7 @@
     else if (nearFuse()) drawTag(HALL_DEF.FUSE.x + HALL_DEF.FUSE.w / 2, HALL_DEF.FUSE.y + HALL_DEF.FUSE.h, TOUCH ? 'Toca para abrir' : 'Abrir cuadro');
     else if (liftCallNear()) drawTag(LND_DEF.LIFT.x + LND_DEF.LIFT.w / 2, 72, TOUCH ? 'Toca para llamar' : 'Llamar al ascensor');
     else if (barActTag()) {}
-    else if (slotNear()) drawTag(BAR_DEF.SLOT.x + BAR_DEF.SLOT.w / 2, BAR_DEF.MACH_F, TOUCH ? 'Toca para jugar' : 'Jugar a la tragaperras');
+    else if (slotNear()) { const i = apuSlotIdx(); if (room === APU) drawTag(36, APU_DEF.SLOTS[i].yb + 1, TOUCH ? 'Toca para jugar' : 'Jugar a la tragaperras'); else drawTag(BAR_DEF.SLOT.x + BAR_DEF.SLOT.w / 2, BAR_DEF.MACH_F, TOUCH ? 'Toca para jugar' : 'Jugar a la tragaperras'); }
     else if (furnNear()) { const f = furnNear(); drawTag(f.rect.x + f.rect.w / 2, f.rect.y + f.rect.h, TOUCH ? 'Toca para mirar' : f.label); }
     else { const a = jrNear(); if (a) drawTag(a.rect.x + a.rect.w / 2, a.rect.y + a.rect.h, a.label); }
     if (panel) drawFusePanel(t);
@@ -9161,11 +9383,11 @@
     if (from === 'dif') addMission('dif'); else if (from === 'apostar' || (from === 'llaves' && !(jr.wallet && jr.card))) addMission('apostar');
     if (from === 'llaves' && jr.keys && !jr.keyGot) addMission('llaves');
     if (from === 'llaves' && jr.keyGot) {
-      if (room === BAR) { if (!jr.tabacoDone) addMission('bar'); } else addMission('bajar');   // en el bar: la misión del tabaco
-      const outside = ['rellano', 'ascensor', 'portal', 'calle', 'bar'].includes(room.name);
+      if (room === BAR || room === APU) { if (!jr.tabacoDone) addMission('bar'); } else addMission('bajar');   // en el bar: la misión del tabaco
+      const outside = ['rellano', 'ascensor', 'portal', 'calle', 'bar', 'apuestas'].includes(room.name);
       if (PH && !PH.bajarDone) { if (outside) PH.completeBajar(); else PH.pingBajar(); }   // partidas viejas / mensaje pendiente
     } else renderTodo();
-    if (room === STR || room === BAR) Object.assign(dan, { x: P.x + 14, y: P.y + 2, dir: 'down' });   // en la calle, Daniel a su lado
+    if (room === STR || room === BAR || room === APU) Object.assign(dan, { x: P.x + 14, y: P.y + 2, dir: 'down' });   // en la calle, Daniel a su lado
     t0 = performance.now() / 1000; last = performance.now();
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   }
