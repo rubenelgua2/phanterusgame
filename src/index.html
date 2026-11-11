@@ -3892,11 +3892,17 @@
     DOOR_BAR: { x: 29, w: 44, y: 240, h: 16 }, DOOR_ST: { x: 210, w: 40 },   // la puerta del bar: doble, grande, de cristal y centrada
     BARRA: { x: 85, y: 124, w: 12, h: 39 }, ALC: { x: 97, y: 124, w: 62 }, STAFF: { x: 70, y: 152 },   // el mostrador ES la pared; la empleada, dentro
     PRIV: { x: 93, y: 275, w: 5, h: 70 },
-    SLOTS: [{ yb: 304 }, { yb: 326 }, { yb: 348 }, { yb: 370 }]   // a 1 m de la puerta y con hueco junto a la pared de abajo (para más máquinas)
+    SLOTS: [{ yb: 304 }, { yb: 326 }, { yb: 348 }, { yb: 370 }],  // las 4 AZULES de perfil, mirando al este
+    PRIV2: { x: 93, y: 345, w: 90, h: 5 },                          // la extensión del altillo, hacia el este
+    SOUTH: [0, 1, 2, 3, 4, 5, 6, 7].map(k => ({ x: 22 + k * 20, kind: k < 4 ? 'classic' : 'modern' })),   // la fila de la pared de abajo, mirando al norte (de espaldas)
+    SOUTH_B: 396
   };
   const APU = {
-    name: 'apuestas', w: APU_DEF.w, h: APU_DEF.h, walk: APU_DEF.walk, floor: APU_DEF.floor, lit: APU_DEF.floor.concat(APU_DEF.faces),
+    name: 'apuestas', w: APU_DEF.w, h: APU_DEF.h, walk: APU_DEF.walk, floor: APU_DEF.floor, lit: APU_DEF.floor.concat(APU_DEF.faces, [{ x: 92, y: 344, w: 92, h: 20 }]),   // el altillo extendido: no oscurece a quien juega detrás
+   
     solid: [{ x: 84, y: 124, w: 13, h: 45 }, { x: 159, y: 118, w: 4, h: 48 }, { x: 92, y: 275, w: 7, h: 84 }]
+      .concat([{ x: 92, y: 345, w: 92, h: 12 }])                    // la extensión del altillo
+      .concat(APU_DEF.SOUTH.map(M => ({ x: M.x - 1, y: 386, w: 18, h: 11 })))   // la fila del sur
       .concat(APU_DEF.SLOTS.map(M => ({ x: 16, y: M.yb - 13, w: 30, h: 12 })))   // el mueble y la botonera   // la barra, el remate, el altillo y las máquinas
   };
   const ROOMS = { apuestas: APU, sala: SALA, entrada: HALL, madre: MOM, bano: BATH, balcon: BALC, juanjo: JR, rellano: LND, ascensor: ELV, portal: LOB, calle: STR, bar: BAR };
@@ -5424,7 +5430,7 @@
     { const f = furnNear(); if (f && inBox(tp, f.rect, 3) && openFurn(f)) { e.preventDefault(); return; } }   // tocar un mueble al lado
     if (liftCallNear() && inBox(tp, { x: 70, y: 48, w: 44, h: 26 }, 2) && callLift()) { e.preventDefault(); return; }
     if (barActTap(tp)) { e.preventDefault(); return; }   // en el bar: el camarero, la máquina de tabaco
-    if (slotNear() && room === APU && inBox(tp, { x: 16, y: APU_DEF.SLOTS[apuSlotIdx()].yb - 44, w: 32, h: 46 }, 2) && openSlot()) { e.preventDefault(); return; }   // tocar una de las 4
+    if (slotNear() && room === APU && inBox(tp, apuSlotSpot(apuSlotIdx()).box, 2) && openSlot()) { e.preventDefault(); return; }   // tocar una de las 4
     if (slotNear() && room === BAR && inBox(tp, { x: BAR_DEF.SLOT.x - 2, y: BAR_DEF.MACH_Y - 8, w: BAR_DEF.SLOT.w + 8, h: BAR_DEF.MACH_F - BAR_DEF.MACH_Y + 8 }, 2) && openSlot()) { e.preventDefault(); return; }   // tocar la tragaperras   // el botón del ascensor                  // en su cuarto: el armario, la cama, la ropa, la cartera
     // con teclado/ratón el clic NO mueve: solo interacciones (muebles, botones…). En táctil, el joystick.
   });
@@ -7310,9 +7316,13 @@
     // EL ALTILLO DE PRIVACIDAD: panel negro brillante (el LED se enciende en cada fotograma)
     const PV = D.PRIV; R(PV.x - 1, PV.y - 1, PV.w + 2, PV.h + 2, '#000'); R(PV.x, PV.y, PV.w, PV.h, '#1a1a22'); R(PV.x, PV.y, 1, PV.h, '#4a4a56');
     R(PV.x - 1, PV.y + PV.h, PV.w + 2, 14, '#000'); { const g = b.createLinearGradient(0, PV.y + PV.h, 0, PV.y + PV.h + 13); g.addColorStop(0, '#24242c'); g.addColorStop(1, '#0a0a0e'); b.fillStyle = g; b.fillRect(PV.x, PV.y + PV.h, PV.w, 13); }
+    { const P2 = D.PRIV2;                                            // la extensión: el mismo panel negro brillante, girando hacia el este
+      R(P2.x - 1, P2.y - 1, P2.w + 2, P2.h + 2, '#000'); R(P2.x, P2.y, P2.w, P2.h, '#1a1a22'); R(P2.x, P2.y, P2.w, 1, '#4a4a56'); R(PV.x, PV.y, PV.w, P2.y - PV.y + 1, '#1a1a22'); R(PV.x, PV.y, 1, P2.y - PV.y + 1, '#4a4a56');
+      R(P2.x - 1, P2.y + P2.h, P2.w + 2, 14, '#000'); const g = b.createLinearGradient(0, P2.y + P2.h, 0, P2.y + P2.h + 13); g.addColorStop(0, '#24242c'); g.addColorStop(1, '#0a0a0e'); b.fillStyle = g; b.fillRect(P2.x, P2.y + P2.h, P2.w, 13);
+      R(P2.x, P2.y + P2.h, P2.w, 1, '#ffffff', 0.08); R(P2.x + P2.w - 1, P2.y + P2.h, 1, 13, '#6a0a12'); }
   }
   // las tragaperras: la cara se pinta de frente en un lienzo y se tuerce hacia la sala ("/"), con su costado y su taburete
-  const APU_ACC = ['#ff2a8a', '#2ad8ff', '#ffd82a', '#4aff6a'];
+  const APU_ACC = ['#2a8aff', '#2ad8ff', '#4a6aff', '#2ab8ff'];   // todas AZULES
   function apuMachFace(i, t) {                                       // la cara de frente (18 x 32): copete, pantalla, botonera y base
     if (!apuMachCv) apuMachCv = offCv(18, 32);
     const g = apuMachCv.getContext('2d'), R = (x, y, w, h, c, a) => { g.globalAlpha = a == null ? 1 : a; g.fillStyle = c; g.fillRect(x, y, w, h); g.globalAlpha = 1; };
@@ -7335,6 +7345,52 @@
     ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(sx, sy - 5, 4.5, 1.5, 0, 0, Math.PI * 2); ctx.stroke();
     slEll(sx, sy - 12, 6.5, 2.8, '#6a0a10'); slEll(sx, sy - 13, 6, 2.4, '#d4161e'); PP(sx - 3, sy - 14, '#ff8a8a');
   }
+  function drawGamerChair(sx, sy) {                                  // silla gamer ROJA mirando a la máquina (oeste): ruedas, pistón, reposabrazos y respaldo alto
+    slEll(sx, sy, 8, 2.4, '#000', 0.3);
+    ctx.strokeStyle = '#1a1a1e'; ctx.lineWidth = 1.2; ctx.beginPath();
+    for (const [dx, dy] of [[-6, 0], [6, 0], [-4, 2], [4, 2], [0, -2]]) { ctx.moveTo(sx, sy - 1); ctx.lineTo(sx + dx, sy - 1 + dy); } ctx.stroke();   // la base de estrella
+    for (const [dx, dy] of [[-6, 0], [6, 0], [-4, 2], [4, 2], [0, -2]]) { PR(sx + dx - 1, sy - 1 + dy, 2, 1.5, '#0a0a0c'); PP(sx + dx - 1, sy - 1 + dy, '#4a4a52'); }   // las ruedas
+    PR(sx - 1, sy - 8, 2, 7, '#2a2a30'); PR(sx - 1, sy - 8, 1, 7, '#8a8e94');                       // el pistón
+    slEll(sx, sy - 9, 6.5, 2.8, '#5a060c'); slEll(sx, sy - 10, 6, 2.4, '#d4161e');                   // el asiento
+    PR(sx - 5, sy - 10, 10, 1, '#1a1a1e', 0.8); PP(sx - 3, sy - 11, '#ff8a8a');                      // la costura negra
+    for (const ay of [sy - 13, sy - 7]) { PR(sx, ay - 1, 1, 3, '#1a1a1e'); PR(sx - 3, ay - 2, 6, 1.5, '#1a1a1e'); PR(sx - 3, ay - 2, 6, 0.6, '#5a5a62'); }   // los reposabrazos
+    slPoly([[sx + 3, sy - 9], [sx + 10, sy - 11], [sx + 10, sy - 27], [sx + 7, sy - 29], [sx + 3, sy - 27]], '#0e0e10');   // el respaldo alto, girado hacia la sala
+    slPoly([[sx + 4, sy - 10], [sx + 9, sy - 12], [sx + 9, sy - 26], [sx + 7, sy - 28], [sx + 4, sy - 26]], '#d4161e');
+    PR(sx + 4, sy - 26, 1, 16, '#1a1a1e'); PR(sx + 8, sy - 26, 1, 15, '#1a1a1e');                  // los laterales negros
+    PR(sx + 5, sy - 25, 3, 3, '#1a1a1e'); PR(sx + 6, sy - 24, 1, 1, '#d4161e');                    // el hueco del cinturón
+    PR(sx + 5, sy - 20, 3, 2, '#1a1a1e', 0.7); PR(sx + 5, sy - 15, 3, 2, '#1a1a1e', 0.5);          // el cojín cervical y el lumbar
+    PR(sx + 5, sy - 26, 1, 6, '#ff8a8a', 0.6);
+  }
+  function drawSouthSlot(k, t) {                                     // la fila del sur: de espaldas (mirando al norte); se ve la espalda, el copete y la luz de la pantalla
+    const M = APU_DEF.SOUTH[k], x = M.x, B = APU_DEF.SOUTH_B, on = 0.6 + 0.4 * Math.sin(t * 4 + k);
+    PR(x - 1, B - 1, 18, 2, '#000', 0.45);
+    ctx.save(); ctx.translate(0, B); ctx.scale(1, 0.7); ctx.translate(0, -B);   // más bajas, para que se vea quien juega
+    if (M.kind === 'classic') {                                     // CLÁSICA de botones: mueble rojo cuadrado, copete en arco y la palanca
+      const gl = ctx.createRadialGradient(x + 8, B - 30, 1, x + 8, B - 30, 14); gl.addColorStop(0, `rgba(255,216,74,${(0.25 + 0.1 * Math.sin(t * 7 + k)).toFixed(2)})`); gl.addColorStop(1, 'rgba(255,216,74,0)'); ctx.fillStyle = gl; ctx.fillRect(x - 6, B - 44, 28, 28);   // la luz de la pantalla, por detrás
+      PR(x, B - 8, 16, 8, '#4a060c'); PR(x, B - 8, 16, 1, '#8a1018');                              // el zócalo
+      PR(x, B - 28, 16, 20, '#a0101a'); PR(x, B - 28, 1, 20, '#d42a30'); PR(x + 15, B - 28, 1, 20, '#5a060c');   // la espalda
+      PR(x, B - 31, 16, 3, '#c8202a'); PR(x, B - 31, 16, 1, '#c8ccd2'); PR(x, B - 28, 16, 1, '#8a8e94');        // la tapa de arriba con su canto cromado
+      for (let y = B - 25; y < B - 15; y += 3) PR(x + 3, y, 10, 1, '#5a060c');                      // las rejillas
+      PR(x + 4, B - 13, 8, 3, '#e8e0c8'); PR(x + 5, B - 12, 3, 1, '#4a4a52'); PR(x + 9, B - 12, 2, 1, '#d4161e');   // la pegatina del número de serie
+      ctx.save(); ctx.beginPath(); ctx.ellipse(x + 8, B - 31, 7, 6, 0, Math.PI, 0); ctx.closePath(); ctx.fillStyle = '#6a0810'; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x + 8, B - 31, 5.5, 4.5, 0, Math.PI, 0); ctx.closePath(); ctx.fillStyle = `rgba(255,74,58,${on.toFixed(2)})`; ctx.fill(); ctx.restore();   // el copete en arco, encendido por dentro
+      for (let j = 0; j < 5; j++) { const an = Math.PI + (j + 0.5) / 5 * Math.PI; PP(x + 8 + Math.cos(an) * 6.5, B - 31 + Math.sin(an) * 5.5, (Math.floor(t * 6) + j + k) % 2 ? '#ffd84a' : '#ffffff'); }   // sus bombillas
+      PR(x + 16, B - 18, 2, 1, '#c8ccd2'); PR(x + 17, B - 34, 1, 17, '#c8ccd2'); PR(x + 17, B - 34, 1, 17, '#ffffff', 0.4);   // LA PALANCA
+      slEll(x + 17.5, B - 35, 2, 2, '#ff2020'); PP(x + 17, B - 36, '#ffaaaa');
+    } else {                                                         // MODERNA: espalda curva y negra con LED rojo y la pantalla curva por encima
+      const hue = Math.round((t * 60 + k * 40) % 360), gl = ctx.createRadialGradient(x + 8, B - 36, 1, x + 8, B - 36, 16);
+      gl.addColorStop(0, `hsla(${hue},100%,60%,0.3)`); gl.addColorStop(1, `hsla(${hue},100%,60%,0)`); ctx.fillStyle = gl; ctx.fillRect(x - 8, B - 52, 32, 32);   // la luz de la pantalla, por detrás
+      PR(x + 1, B - 8, 14, 8, '#0e0e12'); PR(x + 1, B - 1, 14, 1, '#ff2a3a', on);                  // la base, con su LED
+      ctx.save(); ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, B - 32, 16, 25, 4) : ctx.rect(x, B - 32, 16, 25);
+      const gb = ctx.createLinearGradient(x, 0, x + 16, 0); gb.addColorStop(0, '#3a0a10'); gb.addColorStop(0.5, '#a0101a'); gb.addColorStop(1, '#2a0608'); ctx.fillStyle = gb; ctx.fill(); ctx.restore();   // la espalda curva, roja
+      PR(x, B - 29, 1, 21, '#ff2a3a', on); PR(x + 15, B - 29, 1, 21, '#ff2a3a', on);               // las tiras LED de los cantos
+      PR(x + 3, B - 29, 1, 19, '#ffffff', 0.18); PR(x + 7, B - 22, 2, 2, '#ff6a7a'); PR(x + 6, B - 21, 4, 0.6, '#ff6a7a', 0.6);   // el brillo y el rombo del logo
+      ctx.save(); ctx.beginPath(); ctx.ellipse(x + 8, B - 32, 9, 7, 0, Math.PI, 0); ctx.closePath(); ctx.fillStyle = '#160608'; ctx.fill();   // la pantalla curva, de espaldas
+      ctx.strokeStyle = `hsl(${hue},100%,65%)`; ctx.globalAlpha = 0.8; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(x + 8, B - 32, 9, 7, 0, Math.PI, 0); ctx.stroke(); ctx.globalAlpha = 1; ctx.restore();   // el canto, con la luz de la pantalla
+      PR(x + 4, B - 40, 8, 1, '#ff6a7a', on);                        // la corona LED
+    }
+    ctx.restore();
+  }
   function drawApuMachine(i, t) {                                   // de perfil, mirando al este: espalda en la pared y pantallas hacia la sala
     const M = APU_DEF.SLOTS[i], yb = M.yb, A = APU_ACC[i], x0 = 17, on = 0.6 + 0.4 * Math.sin(t * 4 + i);
     const X = v => x0 + v, Y = v => yb - v;                          // x hacia la sala, y hacia arriba
@@ -7342,28 +7398,28 @@
     { const gl = ctx.createRadialGradient(X(28), Y(18), 2, X(28), Y(18), 26); gl.addColorStop(0, A + '55'); gl.addColorStop(1, A + '00'); ctx.fillStyle = gl; ctx.fillRect(X(0), Y(46), 56, 52); }   // la luz de las pantallas
     PR(X(-1), Y(2), 27, 4, '#000', 0.45);                            // la sombra
     // la base: mueble negro con el frente redondeado, el LED de abajo y el billetero
-    PR(X(0), Y(14), 21, 14, '#0c0c10'); PR(X(0), Y(14), 21, 1, '#3a3a44'); PR(X(19), Y(13), 2, 12, '#1c1c22'); PR(X(20), Y(12), 1, 10, '#4a4a56');
+    PR(X(0), Y(14), 21, 14, '#0a1a44'); PR(X(0), Y(14), 21, 1, '#4a7ad8'); PR(X(19), Y(13), 2, 12, '#12306e'); PR(X(20), Y(12), 1, 10, '#6a9aff');
     PR(X(0), Y(3), 21, 1, A, on); PR(X(2), Y(10), 14, 5, A, 0.12); PR(X(2), Y(10), 14, 1, A, 0.4);   // el LED y el vinilo de abajo
-    PR(X(17), Y(10), 3, 4, '#2a2a32'); PR(X(18), Y(9), 1, 2, '#4aff6a');                            // el billetero
+    PR(X(17), Y(10), 3, 4, '#1a3a7a'); PR(X(18), Y(9), 1, 2, '#4aff6a');                            // el billetero
     // el mueble de las pantallas: costado con su vinilo en diagonal y el canto cromado
-    slPoly([[X(0), Y(14)], [X(17), Y(14)], [X(14), Y(36)], [X(0), Y(36)]], '#18181e');
+    slPoly([[X(0), Y(14)], [X(17), Y(14)], [X(14), Y(36)], [X(0), Y(36)]], '#164090');
     slPoly([[X(1), Y(18)], [X(9), Y(30)], [X(12), Y(30)], [X(4), Y(18)]], A + '55'); slPoly([[X(4), Y(18)], [X(12), Y(30)], [X(13), Y(28)], [X(6), Y(18)]], A + '22');   // la franja del vinilo
     ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(17.5), Y(14)); ctx.lineTo(X(14.5), Y(36)); ctx.stroke();   // el canto cromado
     ctx.strokeStyle = A; ctx.globalAlpha = on; ctx.beginPath(); ctx.moveTo(X(16.5), Y(14)); ctx.lineTo(X(13.5), Y(36)); ctx.stroke(); ctx.globalAlpha = 1;   // y su LED
     // LA PANTALLA GRANDE, vista de canto: el marco y la luz de los rodillos que se mueve
-    slPoly([[X(17), Y(15)], [X(21), Y(15)], [X(18), Y(35)], [X(14), Y(35)]], '#06060a');
+    slPoly([[X(17), Y(15)], [X(21), Y(15)], [X(18), Y(35)], [X(14), Y(35)]], '#040a1e');
     const cols = ['#d4161e', '#ffd84a', '#4aff6a', '#4a8aff', '#ff8a2a', '#c86aff'];
     for (let k = 0; k < 5; k++) { const yy = 16 + ((k * 4 + t * 14 + i * 3) % 19), xo = (yy - 15) * 0.15; PR(X(18.5 - xo), Y(yy), 2, 2, cols[(k + i) % 6], 0.9); }
     PR(X(20), Y(17), 1, 1, '#ffffff', 0.7);
     // la botonera: repisa con relieve que sale hacia el jugador, con sus botones encendidos
-    slPoly([[X(15), Y(17)], [X(29), Y(15)], [X(29), Y(12)], [X(15), Y(13)]], '#24242c');
+    slPoly([[X(15), Y(17)], [X(29), Y(15)], [X(29), Y(12)], [X(15), Y(13)]], '#1a3a8a');
     slPoly([[X(15), Y(17)], [X(29), Y(15)], [X(28), Y(14)], [X(15), Y(16)]], '#c8ccd2');
     PR(X(28), Y(15), 1, 3, '#eef0f2');
     [['#d4161e', 18], ['#ffd84a', 21], ['#4aff6a', 24], ['#4a8aff', 26]].forEach(([c, x], k) => { PP(X(x), Y(16 - Math.round((x - 15) * 0.13)), c); if (Math.sin(t * 5 + k + i) > 0.6) PP(X(x), Y(17 - Math.round((x - 15) * 0.13)), '#ffffff'); });
     // la pantalla de arriba (la segunda) y el copete luminoso con la baliza
-    PR(X(1), Y(44), 13, 8, '#14141a'); PR(X(1), Y(44), 13, 1, '#3a3a44');
+    PR(X(1), Y(44), 13, 8, '#10285e'); PR(X(1), Y(44), 13, 1, '#4a7ad8');
     slPoly([[X(14), Y(44)], [X(16), Y(44)], [X(16), Y(37)], [X(14), Y(37)]], Math.floor(t * 3 + i) % 2 ? A : '#ffffff');   // su pantalla, de canto
-    PR(X(0), Y(51), 16, 7, '#0a0a0e'); PR(X(1), Y(50), 14, 5, A, 0.75); PR(X(1), Y(50), 14, 1, '#ffffff', 0.5);   // el copete, encendido
+    PR(X(0), Y(51), 16, 7, '#081638'); PR(X(1), Y(50), 14, 5, A, 0.75); PR(X(1), Y(50), 14, 1, '#ffffff', 0.5);   // el copete, encendido
     for (let k = 0; k < 4; k++) PR(X(2 + k * 3), Y(48), 2, 2, (Math.floor(t * 6) + k + i) % 3 ? '#ffffff' : '#000', 0.7);   // sus luces corriendo
     const bea = Math.floor(t * 3 + i * 0.7) % 2; slEll(X(8), Y(53), 2.2, 1.6, bea ? '#ff3a3a' : '#5a0a0a'); if (bea) slEll(X(8), Y(53), 4, 3, '#ff3a3a', 0.25);   // la baliza
     ctx.restore();
@@ -7377,11 +7433,13 @@
     for (let x = 17; x < 87; x += 3) if (x < D.DOOR_BAR.x - 3 || x > D.DOOR_BAR.x + D.DOOR_BAR.w + 2) PR(x, D.DOOR_BAR.y + 12, 2, 2, Math.floor(x / 3 - t * 10) % 6 < 2 ? '#ff4a5a' : '#5a0a12');   // la pared del bar
     const BR = D.BARRA; PR(BR.x + BR.w - 2, BR.y, 2, BR.h, '#ff3a4a', 0.3 + 0.3 * Math.sin(t * 4));   // el canto de la barra, respirando
     const PV = D.PRIV; for (let y = PV.y + 2; y < PV.y + PV.h; y += 3) PR(PV.x + 2, y, 1, 2, `hsl(${Math.round(((y / 3 - t * 14) % 36 + 36) % 36 * 10)},100%,60%)`);   // el altillo
-    PR(PV.x, PV.y + PV.h + 4, PV.w, 2, '#ff2a3a', 0.6 + 0.4 * Math.sin(t * 5));
+    const P2 = D.PRIV2; for (let x = P2.x + 6; x < P2.x + P2.w - 1; x += 3) PR(x, P2.y + 2, 2, 1, `hsl(${Math.round(((x / 3 + t * 14) % 36 + 36) % 36 * 10)},100%,60%)`);   // su LED sigue por arriba
+    PR(P2.x, P2.y + P2.h + 4, P2.w, 2, '#ff2a3a', 0.6 + 0.4 * Math.sin(t * 5));   // y la franja roja del frente
     for (let i = 0; i < 4; i++) drawApuMachine(i, t);
   }
   function apuActors(front) {
-    const list = APU_DEF.SLOTS.map(M => ({ y: M.yb - 2, f: () => drawStool(52, M.yb - 2) }));
+    const list = APU_DEF.SLOTS.map(M => ({ y: M.yb - 2, f: () => drawGamerChair(52, M.yb - 2) }));
+    APU_DEF.SOUTH.forEach((M, k) => { list.push({ y: 377, f: () => drawStool(M.x + 8, 377) }); list.push({ y: APU_DEF.SOUTH_B, f: () => drawSouthSlot(k, tNow) }); });
     list.push({ y: APU_DEF.STAFF.y, f: () => drawApuStaff(tNow) });
     list.push({ y: dan.y, f: () => drawActor(JJ_DAN, dan.x, dan.y, dan.dir, dan.moving, dan.phase) });
     list.filter(a => front ? a.y > P.y : a.y <= P.y).sort((a, b) => a.y - b.y).forEach(a => a.f());
@@ -7390,6 +7448,8 @@
     const g = ctx.createLinearGradient(0, 30, 0, 90); g.addColorStop(0, 'rgba(255,40,60,0.14)'); g.addColorStop(1, 'rgba(255,40,60,0)'); ctx.fillStyle = g; ctx.fillRect(16, 30, 343, 60);
     { const BR = APU_DEF.BARRA, gb = ctx.createRadialGradient(BR.x + BR.w, BR.y + 24, 2, BR.x + BR.w, BR.y + 24, 40); gb.addColorStop(0, 'rgba(255,60,80,0.18)'); gb.addColorStop(1, 'rgba(255,60,80,0)'); ctx.fillStyle = gb; ctx.fillRect(BR.x - 20, BR.y - 16, 80, 80); }
     APU_DEF.SLOTS.forEach((M, i) => { const gl = ctx.createRadialGradient(50, M.yb - 6, 2, 50, M.yb - 6, 34); gl.addColorStop(0, APU_ACC[i] + '30'); gl.addColorStop(1, APU_ACC[i] + '00'); ctx.fillStyle = gl; ctx.fillRect(6, M.yb - 34, 70, 68); });
+    APU_DEF.SOUTH.forEach(M => { const gs = ctx.createRadialGradient(M.x + 8, 380, 2, M.x + 8, 380, 20); gs.addColorStop(0, 'rgba(255,50,60,0.2)'); gs.addColorStop(1, 'rgba(255,50,60,0)'); ctx.fillStyle = gs; ctx.fillRect(M.x - 12, 360, 40, 40); });
+    { const P2 = APU_DEF.PRIV2, g2 = ctx.createLinearGradient(0, P2.y + 18, 0, P2.y + 30); g2.addColorStop(0, 'rgba(255,40,60,0.14)'); g2.addColorStop(1, 'rgba(255,40,60,0)'); ctx.fillStyle = g2; ctx.fillRect(P2.x, P2.y + 18, P2.w, 12); }
     const PV = APU_DEF.PRIV, gp = ctx.createRadialGradient(PV.x + 2, PV.y + PV.h / 2, 2, PV.x + 2, PV.y + PV.h / 2, 60); gp.addColorStop(0, 'rgba(200,80,255,0.12)'); gp.addColorStop(1, 'rgba(200,80,255,0)'); ctx.fillStyle = gp; ctx.fillRect(PV.x - 60, PV.y, 120, PV.h);
   }
   const APU_STAFF = npcLook({ H: '#2a1a12', h: '#3a2418', T: '#c41a22', t: '#8a0c12', P: '#141418', K: '#0e0e10', E: '#2a1a14', M: '#b0605a' }, { hairLong: true, thin: true });
@@ -7400,9 +7460,14 @@
     drawActor(APU_STAFF, S.x, S.y, apuStaff.dir, false, 0);
     if (apuStaff.dir === 'up' && Math.sin(t * 8) > 0) PP(S.x + 3, S.y - 12, '#c8a040');   // contando monedas
   }
+  function apuSlotSpot(i) {                                          // dónde va la etiqueta y qué se puede tocar de cada máquina
+    if (i < 4) { const yb = APU_DEF.SLOTS[i].yb; return { tx: 36, ty: yb + 1, box: { x: 16, y: yb - 44, w: 32, h: 46 } }; }
+    const M = APU_DEF.SOUTH[i - 4]; return { tx: M.x + 8, ty: 341, box: { x: M.x - 2, y: APU_DEF.SOUTH_B - 42, w: 20, h: 44 } };
+  }
   function apuSlotIdx() {                                            // ¿al lado de qué tragaperras está?
     if (room !== APU) return -1;
-    let best = -1, bd = 99; APU_DEF.SLOTS.forEach((M, i) => { const d = Math.abs(P.y - (M.yb - 5)); if (P.x < 60 && d < 8 && d < bd) { best = i; bd = d; } });   // pegado a la máquina, junto a su taburete
+    let best = -1, bd = 99; APU_DEF.SLOTS.forEach((M, i) => { const d = Math.abs(P.y - (M.yb - 5)); if (P.x < 60 && d < 8 && d < bd) { best = i; bd = d; } });   // pegado a la máquina, junto a su silla
+    APU_DEF.SOUTH.forEach((M, k) => { const d = Math.abs(P.x - (M.x + 8)); if (P.y > 366 && d < 8 && d < bd) { best = 4 + k; bd = d; } });   // la fila del sur: de pie en su taburete
     return best;
   }
   // ---------- LA MÚSICA DEL BAR: una rumbita de garito en 8 bits (Do mayor, 112 bpm, 8 compases en bucle) ----------
@@ -7720,7 +7785,7 @@
   };
   const inC = (p, c, pad) => Math.hypot(p.x - c.cx, p.y - c.cy) <= c.r + (pad || 0);
   function slotNear() {
-    if (room === APU) return !swap && !fp && !panel && !slotUI && !walletUI && apuSlotIdx() >= 0;   // una de las 4 de la zona de apuestas
+    if (room === APU) return !swap && !fp && !panel && !slotUI && !walletUI && apuSlotIdx() >= 0;   // una de las 12 de la zona de apuestas
     if (room !== BAR || swap || fp || panel || slotUI || walletUI || slotGuyOn() || tabacoScene) return false;
     const S = BAR_DEF.SLOT; return P.x > S.x - 6 && P.x < S.x + S.w + 6 && P.y < BAR_DEF.MACH_F + 14;
   }
@@ -9308,7 +9373,7 @@
     else if (nearFuse()) drawTag(HALL_DEF.FUSE.x + HALL_DEF.FUSE.w / 2, HALL_DEF.FUSE.y + HALL_DEF.FUSE.h, TOUCH ? 'Toca para abrir' : 'Abrir cuadro');
     else if (liftCallNear()) drawTag(LND_DEF.LIFT.x + LND_DEF.LIFT.w / 2, 72, TOUCH ? 'Toca para llamar' : 'Llamar al ascensor');
     else if (barActTag()) {}
-    else if (slotNear()) { const i = apuSlotIdx(); if (room === APU) drawTag(36, APU_DEF.SLOTS[i].yb + 1, TOUCH ? 'Toca para jugar' : 'Jugar a la tragaperras'); else drawTag(BAR_DEF.SLOT.x + BAR_DEF.SLOT.w / 2, BAR_DEF.MACH_F, TOUCH ? 'Toca para jugar' : 'Jugar a la tragaperras'); }
+    else if (slotNear()) { const i = apuSlotIdx(); if (room === APU) drawTag(apuSlotSpot(i).tx, apuSlotSpot(i).ty, TOUCH ? 'Toca para jugar' : 'Jugar a la tragaperras'); else drawTag(BAR_DEF.SLOT.x + BAR_DEF.SLOT.w / 2, BAR_DEF.MACH_F, TOUCH ? 'Toca para jugar' : 'Jugar a la tragaperras'); }
     else if (furnNear()) { const f = furnNear(); drawTag(f.rect.x + f.rect.w / 2, f.rect.y + f.rect.h, TOUCH ? 'Toca para mirar' : f.label); }
     else { const a = jrNear(); if (a) drawTag(a.rect.x + a.rect.w / 2, a.rect.y + a.rect.h, a.label); }
     if (panel) drawFusePanel(t);
