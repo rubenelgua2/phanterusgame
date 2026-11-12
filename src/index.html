@@ -3867,6 +3867,7 @@
     faces: [{ x: 16, y: 32, w: 118, h: 28 }, { x: 140, y: 2, w: 250, h: 18 }],
     floor: [{ x: 16, y: 60, w: 234, h: 156 }, { x: 250, y: 60, w: 140, h: 56 }],
     walk: [{ x: 17, y: 63, w: 232, h: 152 }, { x: 249, y: 63, w: 140, h: 52 }],
+    ATM: { x: 42, w: 22 },                                           // el cajero, a la izquierda de la de tabaco
     TOBACCO: { x: 68, w: 30 }, SLOT: { x: 102, w: 28 }, MACH_Y: 30, MACH_F: 72,   // las máquinas: arriba de su frente y su pie
     COUNTER: { x: 140, w: 250, y: 42 }, TV: { x: 26, y: 68, w: 30, h: 18 },
     TERMS: [{ x: 20, y: 104 }, { x: 20, y: 152 }], TABLES: [{ x: 104, y: 112 }, { x: 104, y: 174 }, { x: 196, y: 174 }],
@@ -3874,7 +3875,7 @@
   };
   const BAR = {
     name: 'bar', w: BAR_DEF.w, h: BAR_DEF.h, walk: BAR_DEF.walk, floor: BAR_DEF.floor, lit: BAR_DEF.floor.concat(BAR_DEF.faces),
-    solid: [{ x: 66, y: 62, w: 66, h: 11 }, { x: BAR_DEF.PILLAR.x, y: BAR_DEF.PILLAR.y, w: BAR_DEF.PILLAR.s, h: BAR_DEF.PILLAR.s }]
+    solid: [{ x: 66, y: 62, w: 66, h: 11 }, { x: 40, y: 62, w: 26, h: 11 }, { x: BAR_DEF.PILLAR.x, y: BAR_DEF.PILLAR.y, w: BAR_DEF.PILLAR.s, h: BAR_DEF.PILLAR.s }]
       .concat(BAR_DEF.TABLES.map(T => ({ x: T.x - 14, y: T.y - 8, w: 28, h: 12 })))   // máquinas, pilar, máquinas de apuestas y mesas
   };
   const APU_DEF = {                                                  // LA ZONA DE APUESTAS, según el plano (a escala; más grande que la pantalla: cámara)
@@ -5044,7 +5045,21 @@
       R(16, y + 6, 4, 2, '#1a1a1e'); Pt(20, y + 6, '#c8a040'); Pt(20, y + 7, '#c8202a'); R(16, y + 5, 3, 1, '#d8d8d0', 0.8);   // el cable cortado, con cinta
       R(x + 8, y + h + 1, 6, 1, '#8a7a64', 0.25); R(x + 15, y + h + 3, 4, 1, '#8a7a64', 0.2);                  // marcas de arrastrarla
     });
-    tobacco(); slot(); door2();   // (las máquinas de apuestas y la tele se pintan en cada fotograma)   // (el letrero cuelga del techo: se pinta delante, en cada fotograma)
+    const atm = () => {                                               // EL CAJERO: mueble gris azulado con rótulo, pantalla, tarjeta, teclado y la boca de los billetes
+      const A = D.ATM, ya = y0 + 6, h = y1 - ya;
+      box3d(A.x, ya, A.w, h, '#5a6a7a', '#1e2834', '#8a9aaa');
+      R(A.x - 1, ya - 1, A.w + 2, h + 2, '#0e1218'); R(A.x, ya, A.w, h, '#3a4858'); R(A.x, ya, A.w, 1, '#7a8a9a'); R(A.x, ya, 1, h, '#5a6a7a'); R(A.x + A.w - 2, ya, 2, h, '#26303c');
+      R(A.x + 1, ya + 1, A.w - 2, 6, '#0a4a9a'); R(A.x + 1, ya + 1, A.w - 2, 1, '#4a8ad8'); text('€', A.x + A.w / 2 - 2, ya + 1, '#f4f4f0');   // el rótulo con luz
+      R(A.x + 2, ya + 9, A.w - 4, 13, '#141a22'); R(A.x + 3, ya + 10, A.w - 6, 11, '#0a2a5a');                // la pantalla, metida
+      R(A.x + 4, ya + 11, A.w - 8, 2, '#4aa0ff'); R(A.x + 4, ya + 15, 6, 1, '#c8e0ff'); R(A.x + 4, ya + 17, 9, 1, '#c8e0ff'); R(A.x + 3, ya + 10, 1, 11, '#ffffff', 0.12);
+      for (let k = 0; k < 2; k++) { R(A.x, ya + 14 + k * 4, 2, 2, '#8a9aaa'); R(A.x + A.w - 2, ya + 14 + k * 4, 2, 2, '#8a9aaa'); }   // los botones de los lados
+      R(A.x + 2, ya + 24, A.w - 4, 9, '#2a3440');                                                                // la repisa
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) R(A.x + 3 + c * 3, ya + 25 + r * 3, 2, 2, '#c8ccd2');   // el teclado
+      R(A.x + 13, ya + 25, 6, 2, '#0a0a0e'); R(A.x + 13, ya + 27, 6, 1, '#6a7a8a'); R(A.x + 19, ya + 25, 1, 2, '#4aff6a');   // la ranura de la tarjeta
+      R(A.x + 13, ya + 29, 6, 1, '#d8c070'); R(A.x + 13, ya + 31, 6, 1, '#8a9aaa');
+      R(A.x + 3, ya + 35, A.w - 6, 3, '#6a7a8a'); R(A.x + 4, ya + 36, A.w - 8, 1, '#06080c');                    // la boca de los billetes
+    };
+    atm(); tobacco(); slot(); door2();   // (las máquinas de apuestas y la tele se pintan en cada fotograma)   // (el letrero cuelga del techo: se pinta delante, en cada fotograma)
     // la puerta de la calle (abajo) y el felpudo
     const D1 = D.DOOR; R(D1.x, 216, D1.w, 6, '#1a0a0c'); for (let k = 0; k < 2; k++) { const x = D1.x + k * D1.w / 2; R(x, 217, D1.w / 2, 4, '#e4e6e2'); for (let xx = x + 2; xx < x + D1.w / 2 - 1; xx += 3) R(xx, 218, 2, 2, '#c8202a'); }
     R(D1.x - 2, 206, D1.w + 4, 9, '#2a2a2e'); for (let x = D1.x - 1; x < D1.x + D1.w + 2; x += 2) R(x, 207, 1, 7, '#4a4a50');
@@ -5390,11 +5405,12 @@
 
   // ---------- controles: flechas/WASD; con ratón, clic (o arrastrar) adonde ir; en móvil, joystick ----------
   const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
-  const busy = () => !running || panel || fp || slotUI || walletUI || document.getElementById('settings').classList.contains('open') || document.getElementById('phoneUI').classList.contains('open');
+  const busy = () => !running || panel || fp || slotUI || walletUI || atmUI || document.getElementById('settings').classList.contains('open') || document.getElementById('phoneUI').classList.contains('open');
   addEventListener('keydown', e => {
     if (fp && running) { if (furnKey(e.code)) e.preventDefault(); return; }   // un mueble abierto
     if (slotUI && running) { if (slotKey(e.code)) e.preventDefault(); return; }   // la tragaperras abierta
     if (walletUI && running) { if (['Escape', 'KeyQ', 'KeyF'].includes(e.code)) walletUI = null; e.preventDefault(); return; }   // la cartera abierta
+    if (atmUI && running) { atmKey(e.code); e.preventDefault(); return; }   // el cajero
     if (e.code === 'KeyQ' && !busy() && jr.wallet) { openWallet(); e.preventDefault(); return; }
     if (panel && running) {                                          // cuadro de luz abierto: W/S (o flechas) el DIF; F o Escape, cerrar
       if (e.code === 'KeyF' || e.code === 'Escape') closeFuse();
@@ -5419,6 +5435,7 @@
     if (panel && running) { panelTap(tp); e.preventDefault(); return; }
     if (fp && running) { furnDown(tp, e); e.preventDefault(); return; }
     if (slotUI && running) { slotDown(tp); e.preventDefault(); return; }   // la tragaperras: botones
+    if (atmUI && running) { atmDown(tp); e.preventDefault(); return; }   // el cajero
     if (walletUI && running) { walletDown(tp); e.preventDefault(); return; }   // la cartera abierta   // un mueble abierto: su minijuego, coger algo o salir   // con el cuadro abierto: interruptores o cerrar
     if (running && notifHit(tp) && openNotifPhone()) { e.preventDefault(); return; }   // tocar la notificación: abre el chat
     if (busy()) return;
@@ -7129,6 +7146,7 @@
     const SL = BAR_DEF.SLOT, y0 = BAR_DEF.MACH_Y;                     // la tragaperras: su pantalla y sus botones parpadean
     if (Math.sin(t * 5) > 0) PR(SL.x + 3, y0 + 2, SL.w - 6, 8, '#ffd84a', 0.22);
     drawTabacoLights(t);
+    { const A = BAR_DEF.ATM, ya = y0 + 6; PR(A.x + 3, ya + 10, A.w - 6, 11, '#4aa0ff', 0.08 + 0.06 * Math.sin(t * 2)); if (Math.sin(t * 4) > 0) PR(A.x + 19, ya + 25, 1, 2, '#c8ffc8'); if (atmUI && atmUI.step === 'count') PR(A.x + 4, ya + 36, A.w - 8, 1, '#4aff6a', 0.8); }
     for (let k = 0; k < 5; k++) if (Math.sin(t * 6 + k) > 0.3) PR(SL.x + 2 + k * 5, y0 + 27, 4, 3, '#ffffff', 0.5);
   }
   // las MESAS del bar: bajas, de madera, para comer o tomar algo, con cuatro sillas rojas (dos a cada lado), platos,
@@ -7526,11 +7544,12 @@
   let tabacoScene = null, tabacoFx = null;                           // tabacoFx: { t } la máquina vendiendo (luces y el paquete cayendo)
   const BAR_ACTS = [
     { rect: { x: 150, y: 58, w: 236, h: 6 }, m: 8, label: 'Hablar con el camarero', can: () => missionOn('bar') && !jr.tabaco, run: talkBarman },
+    { rect: { x: 42, y: 64, w: 22, h: 10 }, m: 10, label: 'Sacar dinero', can: () => !!jr.wallet, run: openAtm },
     { rect: { x: 68, y: 64, w: 30, h: 10 }, m: 10, label: 'Comprar tabaco', can: () => jr.tabaco && !jr.tabacoDone, run: buyTabaco },
     { rect: { x: 104, y: 64, w: 26, h: 10 }, m: 10, label: 'Tragaperras ocupada', can: () => slotGuy.state === 'play', run: t => say('Está ocupada. Este señor no la suelta.', 2.4, t + 0.1) }
   ];
   function barActNear() {
-    if (room !== BAR || swap || fp || slotUI || walletUI || tabacoScene) return null;
+    if (room !== BAR || swap || fp || slotUI || walletUI || atmUI || tabacoScene) return null;
     let best = null, bd = Infinity;
     for (const a of BAR_ACTS) { if (!a.can()) continue; const d = rectDist(P.x, P.y - 2, a.rect); if (d < a.m && d < bd) { best = a; bd = d; } }
     return best;
@@ -7772,7 +7791,7 @@
   // Arriba la PANTALLA (el selector de juegos, el juego y el riesgo); abajo el PANEL: la ranura de BILLETES, la de MONEDAS,
   // la BANDEJA, el visor (crédito, apuesta, cartera), APUESTA, CARTERA, el botón verde COBRO, el naranja JUEGO y el rojo
   // GIRAR. Se juega con el CRÉDITO que metes (billetes o monedas de la cartera); COBRO lo devuelve en monedas a la cartera.
-  let slotUI = null, walletUI = null;
+  let slotUI = null, walletUI = null, atmUI = null;
   const SCR_H = 128;                                                 // alto de la pantalla; debajo, el panel
   const slGeo = G => G.ways ? { x: 80, y: 28, cw: 40, ch: 24, n: 4 } : G.lines ? { x: 100, y: 28, cw: 40, ch: 24, n: 3 } : { x: 80, y: 28, cw: 32, ch: 24, n: 5 };
   const slMoney = c => (c / 100).toFixed(2).replace('.', ',') + ' €';
@@ -8298,6 +8317,80 @@
     ctx.save(); ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;
     PR(0, 0, W, H, '#000', 0.6); drawWalletBox(t, walletUI.items, null);
     slTxt(TOUCH ? 'TOCA FUERA PARA CERRAR' : 'Q O ESC: CERRAR', 160, 122, '#c8c8d0', 1, true, '#000');
+    ctx.restore();
+  }
+  // --- EL CAJERO del bar (para probar las tragaperras): se elige el importe (máximo 100 € por operación) y salen los billetes ---
+  const ATM_OPTS = [1000, 2000, 5000, 10000];
+  function openAtm() { purse(); atmUI = { step: 'menu', sel: 0, t0: tNow, amount: 0, items: [] }; Object.assign(P, { dir: 'up', ang: -Math.PI / 2, moving: false, phase: 0, tx: null }); keys.clear(); joyEnd(); sfx(900, 0.05, 'square', 0.03, 1100); }
+  function atmPick(i) {
+    const U = atmUI; if (!U || U.step !== 'menu') return;
+    if (i === 4) { atmUI = null; sfx(500, 0.06, 'square', 0.03, 300); return; }
+    U.sel = i; U.amount = ATM_OPTS[i]; U.step = 'count'; U.t0 = tNow; sfx(1200, 0.06, 'square', 0.03, 1200);
+    for (let k = 0; k < 8; k++) setTimeout(() => sfx(180 + (k % 2) * 40, 0.09, 'sawtooth', 0.025, 140), 300 + k * 140);   // contando billetes
+  }
+  function atmTake() { const U = atmUI; if (!U || U.step !== 'take') return; purseAdd(U.amount, true); popup = { t: tNow, text: 'Has sacado ' + U.amount / 100 + ' €. En la cartera: ' + (purseTotal() / 100).toFixed(2).replace('.', ',') + ' €.' }; sfx(700, 0.05, 'square', 0.03, 900); setTimeout(() => sfx(1000, 0.08, 'square', 0.03, 1300), 80); U.step = 'menu'; U.t0 = tNow; }
+  function atmKey(code) {
+    const U = atmUI;
+    if (code === 'Escape' || code === 'KeyQ') { if (U.step === 'take') atmTake(); atmUI = null; return; }
+    if (U.step === 'take') { if (['Space', 'Enter', 'KeyF'].includes(code)) atmTake(); return; }
+    if (U.step !== 'menu') return;
+    const d = { ArrowLeft: -1, KeyA: -1, ArrowRight: 1, KeyD: 1, ArrowUp: -2, KeyW: -2, ArrowDown: 2, KeyS: 2 }[code];
+    if (d) { U.sel = U.sel === 4 ? (d < 0 ? 2 : 0) : U.sel + d; if (U.sel > 3) U.sel = 4; if (U.sel < 0) U.sel = 0; sfx(800, 0.03, 'square', 0.02, 800); return; }
+    if (['Space', 'Enter', 'KeyF'].includes(code)) atmPick(U.sel);
+  }
+  function atmDown(p) {
+    const U = atmUI, it = U.items.find(i => slIn(p, i));
+    if (U.step === 'take') { atmTake(); return; }
+    if (!it) { if (U.step === 'menu' && (p.x < 52 || p.x > 268 || p.y < 6 || p.y > 174)) atmUI = null; return; }
+    atmPick(it.i);
+  }
+  function drawAtmOverlay(t) {
+    const U = atmUI; ctx.save(); ctx.setTransform(RES, 0, 0, RES, 0, 0); ctx.imageSmoothingEnabled = false;
+    PR(0, 0, W, H, '#000', 0.65);
+    const X = 60, Y = 3, Wd = 200, Hd = 162; U.items = [];
+    PR(X - 2, Y - 2, Wd + 4, Hd + 4, '#0e1218'); PR(X, Y, Wd, Hd, '#4a5868'); PR(X, Y, Wd, 2, '#9aaaba'); PR(X, Y, 2, Hd, '#7a8a9a'); PR(X + Wd - 3, Y, 3, Hd, '#2a3440');   // el frontal de acero
+    PR(X + 6, Y + 5, Wd - 12, 12, '#0a4a9a'); PR(X + 6, Y + 5, Wd - 12, 1, '#4a8ad8'); slTxt('CAJERO AUTOMATICO', X + Wd / 2, Y + 8, '#f4f4f0', 1, true, '#062a5a');   // el rótulo
+    const SX = X + 14, SY = Y + 22, SW = Wd - 28, SH = 92;                                                       // la pantalla
+    PR(SX - 3, SY - 3, SW + 6, SH + 6, '#141a22'); const g = ctx.createLinearGradient(0, SY, 0, SY + SH); g.addColorStop(0, '#0e3a7a'); g.addColorStop(1, '#06204a'); ctx.fillStyle = g; ctx.fillRect(SX, SY, SW, SH);
+    PR(SX, SY, SW, 1, '#ffffff', 0.15); PR(SX + 2, SY + 2, 2, SH - 4, '#ffffff', 0.06);
+    if (U.step === 'menu') {
+      slTxt('ELIGE EL IMPORTE', SX + SW / 2, SY + 6, '#ffffff', 1, true);
+      slTxt('MAXIMO 100 € POR OPERACION', SX + SW / 2, SY + 15, '#8ac0ff', 1, true);
+      ATM_OPTS.forEach((v, i) => {
+        const bx = SX + 8 + (i % 2) * (SW / 2 - 4), by = SY + 26 + Math.floor(i / 2) * 22, bw = SW / 2 - 12, bh = 18, on = U.sel === i;
+        PR(bx, by, bw, bh, on ? '#ffd84a' : '#1a5ab0'); PR(bx + 1, by + 1, bw - 2, bh - 2, on ? '#3a2a00' : '#0a2a6a'); PR(bx + 1, by + 1, bw - 2, 1, '#ffffff', 0.2);
+        slTxt(v / 100 + ' €', bx + bw / 2, by + 6, on ? '#ffd84a' : '#ffffff', 1, true);
+        if (on && Math.sin(t * 8) > 0) PR(bx - 4, by + 7, 2, 4, '#ffd84a');
+        U.items.push({ x: bx, y: by, w: bw, h: bh, i });
+      });
+      const ex = SX + SW / 2 - 24, ey = SY + 72, on = U.sel === 4;
+      PR(ex, ey, 48, 14, on ? '#ff6a6a' : '#8a1a1a'); PR(ex + 1, ey + 1, 46, 12, on ? '#5a0a0a' : '#3a0608'); slTxt('SALIR', ex + 24, ey + 4, '#ffffff', 1, true);
+      U.items.push({ x: ex, y: ey, w: 48, h: 14, i: 4 });
+    } else if (U.step === 'count') {
+      slTxt('PROCESANDO...', SX + SW / 2, SY + 24, '#ffffff', 1, true);
+      slTxt('SACANDO ' + U.amount / 100 + ' €', SX + SW / 2, SY + 38, '#ffd84a', 1, true);
+      for (let k = 0; k < 3; k++) PR(SX + SW / 2 - 10 + k * 8, SY + 56, 4, 4, Math.floor(t * 6) % 3 === k ? '#ffffff' : '#2a5aa0');
+      if (t - U.t0 > 1.6) { U.step = 'take'; U.t0 = t; sfx(400, 0.15, 'sawtooth', 0.03, 600); }
+    } else {
+      slTxt('RETIRA TU DINERO', SX + SW / 2, SY + 24, '#ffffff', 1, true);
+      slTxt(U.amount / 100 + ' €', SX + SW / 2, SY + 38, '#ffd84a', 2, true);
+      if (Math.sin(t * 6) > 0) slTxt(TOUCH ? 'TOCA PARA COGERLO' : 'ESPACIO: COGERLO', SX + SW / 2, SY + 70, '#8ac0ff', 1, true);
+    }
+    // la repisa: el teclado, la ranura de la tarjeta y la boca de los billetes
+    const KY = Y + 120; PR(X + 14, KY, 60, 38, '#2a3440'); PR(X + 14, KY, 60, 1, '#6a7a8a');
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) { PR(X + 18 + c * 12, KY + 3 + r * 9, 10, 7, '#c8ccd2'); PR(X + 18 + c * 12, KY + 9 + r * 9, 10, 1, '#6a7076'); }
+    PR(X + 56, KY + 3, 14, 7, '#2ab04a'); PR(X + 56, KY + 12, 14, 7, '#d8b020'); PR(X + 56, KY + 21, 14, 7, '#c8202a');
+    PR(X + 92, KY + 4, 34, 4, '#0a0a0e'); PR(X + 92, KY + 8, 34, 1, '#8a9aaa'); PR(X + 128, KY + 4, 3, 4, Math.sin(t * 5) > 0 ? '#4aff6a' : '#1a5a2a');   // la tarjeta
+    PR(X + 86, KY + 20, 100, 12, '#6a7a8a'); PR(X + 90, KY + 24, 92, 4, '#06080c');                          // la boca de los billetes
+    if (U.step === 'count' || U.step === 'take') {
+      const bills = []; let c = U.amount; for (const v of BILL_V) while (c >= v) { bills.push(v); c -= v; }
+      const out = U.step === 'take' ? 1 : clamp((t - U.t0 - 1.0) / 0.6, 0, 1);
+      if (U.step === 'take') PR(X + 90, KY + 24, 92, 4, '#4aff6a', 0.25 + 0.2 * Math.sin(t * 6));
+      ctx.save(); ctx.beginPath(); ctx.rect(X + 80, Y, 112, KY + 26 - Y); ctx.clip();
+      bills.forEach((v, k) => drawBill(v, X + 98 + k * 4, KY + 26 - 22 * out - k * 2, 72, 20));
+      ctx.restore();
+    }
+    slTxt(TOUCH ? 'TOCA FUERA PARA SALIR' : 'FLECHAS Y ESPACIO - ESC: SALIR', 160, 170, '#c8c8d0', 1, true, '#000');
     ctx.restore();
   }
   // --- acabados de máquina: bombillas que corren, cristal con reflejo, placas cromadas, rayos de premio ---
@@ -9380,6 +9473,7 @@
     if (fp) drawFurn(t);
     if (slotUI) drawSlot(t);
     if (walletUI) drawWalletOverlay(t);
+    if (atmUI) drawAtmOverlay(t);
     drawClockShow(t);                                                // el aviso de la hora, por encima de todo
     if (saveToast != null && t - saveToast < 3) {                     // PARTIDA GUARDADA, con su disquete que parpadea
       const e = t - saveToast, a = Math.min(1, e / 0.3, (3 - e) / 0.5), k = textK(), PDx = window.PD, x = 6 * RES, y = (H - 22) * RES;
